@@ -1,5 +1,7 @@
-node_modules
-dist
+.DS_Store
+.data/
 .env*
-!.env.example
 /index.test.ts
+dist
+node_modules
+!.env.example

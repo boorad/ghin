@@ -15,7 +15,9 @@ const schemaCourseSearchRequest = z
     ({ country, state, facility_id, updated_at }) => {
       switch (true) {
         case Boolean(country && state):
+          return true
         case Boolean(facility_id):
+          return true
         case Boolean(updated_at):
           return true
         default:
@@ -24,16 +26,21 @@ const schemaCourseSearchRequest = z
     },
     {
       message:
-        'At least one of the following are required: country, name, state, facility_id, or updated_at must be provided',
+        'At least one of the following are required: country + state, facility_id, or updated_at must be provided',
     }
   )
 
 type CourseSearchRequest = z.infer<typeof schemaCourseSearchRequest>
 
-const schemaCourseDetailsRequest = z.object({
-  course_id: number,
-  include_altered_tees: boolean.optional(),
-})
+const schemaCourseDetailsRequest = z
+  .object({
+    course_id: number,
+    include_altered_tees: boolean.optional(),
+  })
+  .transform((data) => ({
+    ...data,
+    include_altered_tees: data.include_altered_tees ?? false,
+  }))
 
 type CourseDetailsRequest = z.infer<typeof schemaCourseDetailsRequest>
 
