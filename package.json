@@ -12,6 +12,7 @@
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
+  "type": "module",
   "packageManager": "pnpm@8.15.6",
   "license": "MIT",
   "scripts": {

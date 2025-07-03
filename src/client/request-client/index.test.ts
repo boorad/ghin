@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { RequestClient } from './index'
 import { InMemoryCacheClient } from '../in-memory-cache-client'
+import type { ZodSchema } from 'zod'
 
 // Mock fetch globally
 global.fetch = vi.fn()
@@ -39,7 +40,8 @@ describe('RequestClient', () => {
         new RequestClient({
           username: '',
           password: 'testpass',
-        } as unknown as { username: string; password: string })
+          cache: mockCache,
+        } as unknown as { username: string; password: string; cache: typeof mockCache })
       }).toThrow('Invalid RequestClientConfig')
     })
   })
@@ -76,7 +78,7 @@ describe('RequestClient', () => {
           json: async () => mockApiResponse,
         } as Response)
 
-      const schema = { safeParse: vi.fn().mockReturnValue({ success: true, data: mockApiResponse }) }
+      const schema = { safeParse: vi.fn().mockReturnValue({ success: true, data: mockApiResponse }) } as unknown as ZodSchema
 
       const result = await requestClient.fetch({
         entity: 'golfer',
@@ -115,7 +117,7 @@ describe('RequestClient', () => {
           json: async () => mockApiResponse,
         } as Response)
 
-      const schema = { safeParse: vi.fn().mockReturnValue({ success: true, data: mockApiResponse }) }
+      const schema = { safeParse: vi.fn().mockReturnValue({ success: true, data: mockApiResponse }) } as unknown as ZodSchema
 
       const result = await requestClient.fetch({
         entity: 'golfer',
@@ -155,7 +157,7 @@ describe('RequestClient', () => {
           json: async () => ({ error: 'Not found' }),
         } as Response)
 
-      const schema = { safeParse: vi.fn() }
+      const schema = { safeParse: vi.fn() } as unknown as ZodSchema
 
       await expect(
         requestClient.fetch({
@@ -197,7 +199,7 @@ describe('RequestClient', () => {
           success: false, 
           error: { message: 'Validation failed' } 
         }) 
-      }
+      } as unknown as ZodSchema
 
       await expect(
         requestClient.fetch({
