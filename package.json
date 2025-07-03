@@ -20,16 +20,23 @@
     "dev": "pnpm --package=tsx --package=dotenv -s dlx tsx -r dotenv/config playground.ts",
     "format": "biome check --write ./src",
     "lint": "biome lint ./src && tsc",
-    "release": "pnpm run build && changeset publish"
+    "release": "pnpm run build && changeset publish",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:ui": "vitest --ui"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.6.4",
     "@changesets/cli": "^2.27.1",
     "@types/node": "^20.12.7",
+    "@vitest/coverage-v8": "^2.1.8",
+    "@vitest/ui": "^2.1.8",
     "dotenv": "^16.4.5",
     "tsup": "^8.0.2",
     "tsx": "^4.7.2",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "vitest": "^2.1.8"
   },
   "dependencies": {
     "async-mutex": "^0.5.0",
