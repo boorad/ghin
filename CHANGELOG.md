@@ -4,7 +4,7 @@
 
 ### Minor Changes
 
-- 9729d83: ✨ Improve interal code and add full test coverage
+- 9729d83: ✨ Improve internal code and add full test coverage
 
 ## 0.6.0
 
