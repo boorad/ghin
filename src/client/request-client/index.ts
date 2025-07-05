@@ -1,6 +1,17 @@
 import { Mutex } from 'async-mutex'
 import { type JwtPayload, jwtDecode } from 'jwt-decode'
+import type { Result } from 'neverthrow'
+import { err, ok } from 'neverthrow'
 import type { ZodSchema } from 'zod'
+import {
+  AuthenticationError,
+  CacheError,
+  ConfigurationError,
+  NetworkError,
+  RateLimitError,
+  ValidationError,
+} from '../../errors'
+import { withRetry } from '../../utils/retry'
 import {
   type AccessToken,
   type ClientConfig,
@@ -74,7 +85,7 @@ class RequestClient {
     const results = schemaClientConfig.safeParse(config)
 
     if (!results.success) {
-      throw new Error(`Invalid RequestClientConfig: ${results.error.message}`)
+      throw new ConfigurationError(`Invalid RequestClientConfig: ${results.error.message}`)
     }
 
     this.lock = new Mutex()
@@ -89,38 +100,87 @@ class RequestClient {
     options: RequestInit
     schema: ZodSchema
     url: URL
-  }): Promise<T> {
-    const response = await fetch(url.toString(), options)
+  }): Promise<Result<T, Error>> {
+    try {
+      const response = await fetch(url.toString(), options)
 
-    if (!response.ok || response.status >= 400) {
-      const body = await response.json()
+      if (!response.ok || response.status >= 400) {
+        let body: unknown
+        try {
+          body = await response.json()
+        } catch {
+          body = await response.text()
+        }
 
-      throw new Error(
-        `${options.method?.toUpperCase() ?? 'GET'} request failed: ${response.status} ${
-          response.statusText
-        } / ${url.toString()} / ${JSON.stringify(body)}`
-      )
+        // Handle specific error types
+        if (response.status === 401 || response.status === 403) {
+          return err(
+            new AuthenticationError(
+              `Authentication failed: ${response.status} ${response.statusText}`,
+              response.status,
+              new Error(JSON.stringify(body))
+            )
+          )
+        }
+
+        if (response.status === 429) {
+          const retryAfter = response.headers.get('Retry-After')
+          const retryAfterSeconds = retryAfter ? Number.parseInt(retryAfter, 10) : undefined
+          return err(
+            new RateLimitError(
+              `Rate limit exceeded: ${response.status} ${response.statusText}`,
+              retryAfterSeconds,
+              new Error(JSON.stringify(body))
+            )
+          )
+        }
+
+        if (response.status >= 500) {
+          return err(
+            new NetworkError(
+              `Server error: ${response.status} ${response.statusText}`,
+              response.status,
+              new Error(JSON.stringify(body))
+            )
+          )
+        }
+
+        return err(
+          new NetworkError(
+            `Request failed: ${response.status} ${response.statusText}`,
+            response.status,
+            new Error(JSON.stringify(body))
+          )
+        )
+      }
+
+      const raw = await response.json()
+      const parsed = schema.safeParse(raw)
+
+      if (!parsed.success) {
+        return err(
+          new ValidationError(
+            `Response validation failed: ${JSON.stringify(parsed.error)}`,
+            undefined,
+            new Error(`URL: ${url.toString()}`)
+          )
+        )
+      }
+
+      return ok(parsed.data)
+    } catch (error) {
+      if (error instanceof Error) {
+        return err(new NetworkError(`Network request failed: ${error.message}`, undefined, error))
+      }
+      return err(new NetworkError(`Unknown network error: ${String(error)}`))
     }
-
-    const raw = await response.json()
-    const parsed = schema.safeParse(raw)
-
-    if (!parsed.success) {
-      throw new Error(
-        `${options.method?.toUpperCase() ?? 'GET'} response failed to parse: ${JSON.stringify(
-          parsed.error
-        )} / ${url.toString()}`
-      )
-    }
-
-    return parsed.data
   }
 
-  private async refreshSessionToken(): Promise<AccessToken> {
+  private async refreshSessionToken(): Promise<Result<AccessToken, Error>> {
     const url = new URL(FIREBASE_SESSION_URL)
     const body = JSON.stringify(SESSION_DEFAULTS)
 
-    const { authToken: accessToken } = await this._fetch<SessionResponse>({
+    const result = await this._fetch<SessionResponse>({
       options: {
         body,
         headers: {
@@ -133,7 +193,7 @@ class RequestClient {
       url,
     })
 
-    return accessToken
+    return result.map((response) => response.authToken)
   }
 
   private isAccessTokenValid(accessToken?: string): boolean {
@@ -141,42 +201,70 @@ class RequestClient {
       return false
     }
 
-    const decoded = jwtDecode<Pick<JwtPayload, 'exp'>>(accessToken)
-    const expirationDate = new Date((decoded.exp as number) * 1_000)
-
-    return expirationDate > new Date()
+    try {
+      const decoded = jwtDecode<Pick<JwtPayload, 'exp'>>(accessToken)
+      const expirationDate = new Date((decoded.exp as number) * 1_000)
+      return expirationDate > new Date()
+    } catch {
+      return false
+    }
   }
 
-  private async getAccessToken(): Promise<string> {
+  private async getAccessToken(): Promise<Result<string, Error>> {
     const isAccessTokenValid = this.isAccessTokenValid(this.accessToken)
 
     if (isAccessTokenValid) {
-      return this.accessToken as string
+      return ok(this.accessToken as string)
     }
 
-    const cachedAccessToken = await this.config.cache.read()
-    const isCachedTokenValid = this.isAccessTokenValid(cachedAccessToken)
+    try {
+      const cachedAccessToken = await this.config.cache.read()
+      const isCachedTokenValid = this.isAccessTokenValid(cachedAccessToken)
 
-    if (isCachedTokenValid) {
-      this.accessToken = cachedAccessToken
-
-      return cachedAccessToken as string
+      if (isCachedTokenValid) {
+        this.accessToken = cachedAccessToken
+        return ok(cachedAccessToken as string)
+      }
+    } catch (error) {
+      return err(
+        new CacheError(
+          `Failed to read from cache: ${error instanceof Error ? error.message : String(error)}`,
+          error instanceof Error ? error : undefined
+        )
+      )
     }
 
-    const accessToken = await this.refreshAccessToken()
+    const refreshResult = await this.refreshAccessToken()
+    if (refreshResult.isErr()) {
+      return refreshResult
+    }
 
+    const accessToken = refreshResult.value
     this.accessToken = accessToken
 
-    await this.config.cache.write(accessToken)
+    try {
+      await this.config.cache.write(accessToken)
+    } catch (error) {
+      return err(
+        new CacheError(
+          `Failed to write to cache: ${error instanceof Error ? error.message : String(error)}`,
+          error instanceof Error ? error : undefined
+        )
+      )
+    }
 
-    return accessToken
+    return ok(accessToken)
   }
 
-  private async refreshAccessToken(): Promise<string> {
-    this.sessionToken = await this.refreshSessionToken()
+  private async refreshAccessToken(): Promise<Result<string, Error>> {
+    const sessionResult = await this.refreshSessionToken()
+    if (sessionResult.isErr()) {
+      return err(sessionResult.error)
+    }
+
+    this.sessionToken = sessionResult.value
 
     const url = toFullApiUrl(this.baseUrl, 'login')
-
     const body = JSON.stringify({
       token: this.sessionToken.token,
       user: {
@@ -195,11 +283,20 @@ class RequestClient {
       url,
     })
 
-    return response?.golfer_user?.golfer_user_token
+    return response.map((resp) => resp?.golfer_user?.golfer_user_token)
   }
 
-  async fetch<RequestReturnType>({ entity, schema, options = {} }: FetchParameters): Promise<RequestReturnType> {
-    const accessToken = await this.lock.runExclusive(async () => this.getAccessToken())
+  async fetch<RequestReturnType>({
+    entity,
+    schema,
+    options = {},
+  }: FetchParameters): Promise<Result<RequestReturnType, Error>> {
+    const accessTokenResult = await this.lock.runExclusive(async () => this.getAccessToken())
+    if (accessTokenResult.isErr()) {
+      return err(accessTokenResult.error)
+    }
+
+    const accessToken = accessTokenResult.value
     const url = toFullApiUrl(this.baseUrl, entity)
     const { headers, searchParams, ...requestInitOptions } = options
 
@@ -212,7 +309,7 @@ class RequestClient {
       url.search = searchParams.toString()
     }
 
-    return this._fetch<RequestReturnType>({ options: actualOptions, schema, url })
+    return withRetry(() => this._fetch<RequestReturnType>({ options: actualOptions, schema, url }))
   }
 }
 

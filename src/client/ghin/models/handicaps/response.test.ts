@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { schemaGolferHandicapResponse } from './response'
 
 describe('Handicap Response Schemas', () => {
@@ -41,4 +41,4 @@ describe('Handicap Response Schemas', () => {
       expect(result.success).toBe(false)
     })
   })
-}) 
+})

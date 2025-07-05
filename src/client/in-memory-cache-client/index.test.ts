@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { InMemoryCacheClient } from './index'
 
 describe('InMemoryCacheClient', () => {
@@ -32,9 +32,9 @@ describe('InMemoryCacheClient', () => {
 
   it('should handle empty string values', async () => {
     const cache = new InMemoryCacheClient()
-    
+
     // Write empty string
     await cache.write('')
     expect(await cache.read()).toBe('')
   })
-}) 
+})

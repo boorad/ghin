@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { RequestClient } from './index'
-import { InMemoryCacheClient } from '../in-memory-cache-client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ZodSchema } from 'zod'
+import { NetworkError, ValidationError } from '../../errors'
+import { InMemoryCacheClient } from '../in-memory-cache-client'
+import { RequestClient } from './index'
 
 // Mock fetch globally
 global.fetch = vi.fn()
@@ -18,7 +19,7 @@ describe('RequestClient', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockCache = new InMemoryCacheClient()
-    
+
     requestClient = new RequestClient({
       username: 'testuser',
       password: 'testpass',
@@ -54,9 +55,9 @@ describe('RequestClient', () => {
 
       // Mock successful responses
       const mockSessionResponse = {
-        authToken: { 
+        authToken: {
           token: 'session-token',
-          expiresIn: '3600s'
+          expiresIn: '3600s',
         },
       }
       const mockLoginResponse = {
@@ -78,7 +79,9 @@ describe('RequestClient', () => {
           json: async () => mockApiResponse,
         } as Response)
 
-      const schema = { safeParse: vi.fn().mockReturnValue({ success: true, data: mockApiResponse }) } as unknown as ZodSchema
+      const schema = {
+        safeParse: vi.fn().mockReturnValue({ success: true, data: mockApiResponse }),
+      } as unknown as ZodSchema
 
       const result = await requestClient.fetch({
         entity: 'golfer',
@@ -88,7 +91,10 @@ describe('RequestClient', () => {
         },
       })
 
-      expect(result).toEqual(mockApiResponse)
+      expect(result.isOk()).toBe(true)
+      if (result.isOk()) {
+        expect(result.value).toEqual(mockApiResponse)
+      }
       expect(fetch).toHaveBeenCalledTimes(3)
     })
 
@@ -117,14 +123,19 @@ describe('RequestClient', () => {
           json: async () => mockApiResponse,
         } as Response)
 
-      const schema = { safeParse: vi.fn().mockReturnValue({ success: true, data: mockApiResponse }) } as unknown as ZodSchema
+      const schema = {
+        safeParse: vi.fn().mockReturnValue({ success: true, data: mockApiResponse }),
+      } as unknown as ZodSchema
 
       const result = await requestClient.fetch({
         entity: 'golfer',
         schema,
       })
 
-      expect(result).toEqual(mockApiResponse)
+      expect(result.isOk()).toBe(true)
+      if (result.isOk()) {
+        expect(result.value).toEqual(mockApiResponse)
+      }
       expect(fetch).toHaveBeenCalled()
     })
 
@@ -159,12 +170,16 @@ describe('RequestClient', () => {
 
       const schema = { safeParse: vi.fn() } as unknown as ZodSchema
 
-      await expect(
-        requestClient.fetch({
-          entity: 'golfer',
-          schema,
-        })
-      ).rejects.toThrow('GET request failed: 404 Not Found')
+      const result = await requestClient.fetch({
+        entity: 'golfer',
+        schema,
+      })
+
+      expect(result.isErr()).toBe(true)
+      if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(NetworkError)
+        expect(result.error.message).toContain('Request failed: 404 Not Found')
+      }
     })
 
     it('should handle schema validation errors', async () => {
@@ -194,19 +209,23 @@ describe('RequestClient', () => {
           json: async () => ({ invalid: 'data' }),
         } as Response)
 
-      const schema = { 
-        safeParse: vi.fn().mockReturnValue({ 
-          success: false, 
-          error: { message: 'Validation failed' } 
-        }) 
+      const schema = {
+        safeParse: vi.fn().mockReturnValue({
+          success: false,
+          error: { message: 'Validation failed' },
+        }),
       } as unknown as ZodSchema
 
-      await expect(
-        requestClient.fetch({
-          entity: 'golfer',
-          schema,
-        })
-      ).rejects.toThrow('GET response failed to parse')
+      const result = await requestClient.fetch({
+        entity: 'golfer',
+        schema,
+      })
+
+      expect(result.isErr()).toBe(true)
+      if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(ValidationError)
+        expect(result.error.message).toContain('Response validation failed')
+      }
     })
   })
-}) 
+})

@@ -15,7 +15,16 @@ const fn = async () => {
     username: process.env.GHIN_USERNAME as string,
   })
 
-  console.dir(await ghinClient.golfers.getOne(Number(process.env.GHIN_USERNAME)), { depth: null })
+  try {
+    const golfer = await ghinClient.golfers.getOne(Number(process.env.GHIN_USERNAME))
+    if (golfer) {
+      console.dir(golfer, { depth: null })
+    } else {
+      console.log('Golfer not found')
+    }
+  } catch (error) {
+    console.error('Error:', error)
+  }
 }
 
 fn()

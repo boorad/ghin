@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { string, number, boolean, handicap } from './validation'
+import { describe, expect, it } from 'vitest'
+import { boolean, handicap, number, string } from './validation'
 
 describe('Validation', () => {
   describe('string', () => {
@@ -73,4 +73,4 @@ describe('Validation', () => {
       expect(handicap.safeParse('12.555').success).toBe(true) // Any number is valid
     })
   })
-}) 
+})

@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { GhinClient } from './index'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { InMemoryCacheClient } from '../in-memory-cache-client'
+import { GhinClient } from './index'
 
 // Mock the RequestClient
 vi.mock('../request-client', () => ({
@@ -15,7 +15,7 @@ describe('GhinClient', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    
+
     ghinClient = new GhinClient({
       username: 'testuser',
       password: 'testpass',
@@ -86,4 +86,4 @@ describe('GhinClient', () => {
       expect(typeof ghinClient.handicaps.getCoursePlayerHandicaps).toBe('function')
     })
   })
-}) 
+})

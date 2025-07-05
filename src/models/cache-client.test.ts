@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { schemaCacheClient, type CacheClient } from './cache-client'
+import { describe, expect, it } from 'vitest'
+import { type CacheClient, schemaCacheClient } from './cache-client'
 
 describe('CacheClient', () => {
   describe('schemaCacheClient', () => {
@@ -89,4 +89,4 @@ describe('CacheClient', () => {
       expect(result.success).toBe(false)
     })
   })
-}) 
+})

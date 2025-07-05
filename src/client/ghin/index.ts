@@ -1,4 +1,7 @@
+import type { Result } from 'neverthrow'
+import { err } from 'neverthrow'
 import { z } from 'zod'
+import { ConfigurationError, ValidationError } from '../../errors'
 import { type ClientConfig, number, schemaClientConfig } from '../../models'
 import { InMemoryCacheClient } from '../in-memory-cache-client'
 import { CLIENT_SOURCE, RequestClient } from '../request-client'
@@ -60,7 +63,7 @@ class GhinClient {
     const results = schemaClientConfig.safeParse(config)
 
     if (!results.success) {
-      throw new Error(`Invalid GhinClientConfig: ${results.error.message}`)
+      throw new ConfigurationError(`Invalid GhinClientConfig: ${results.error.message}`)
     }
 
     this.httpClient = new RequestClient({
@@ -87,186 +90,271 @@ class GhinClient {
   }
 
   private async coursesGetCountries(): Promise<CourseCountry[]> {
-    const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
-    const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = { searchParams }
+    try {
+      const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
+      const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = { searchParams }
 
-    const { countries } = await this.httpClient.fetch<CourseCountriesResponse>({
-      entity: 'course_countries',
-      options,
-      schema: schemaCourseCountriesResponse,
-    })
+      const result = await this.httpClient.fetch<CourseCountriesResponse>({
+        entity: 'course_countries',
+        options,
+        schema: schemaCourseCountriesResponse,
+      })
 
-    return countries
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value.countries
+    } catch (error) {
+      throw error instanceof Error ? error : new Error(String(error))
+    }
   }
 
   private async courseGetDetails(request: CourseDetailsRequest): Promise<CourseDetailsResponse> {
-    const validRequest = schemaCourseDetailsRequest.parse(request)
-    const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
+    try {
+      const validRequest = schemaCourseDetailsRequest.parse(request)
+      const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
 
-    for (const [key, value] of Object.entries(validRequest)) {
-      searchParams.set(key, value.toString())
+      for (const [key, value] of Object.entries(validRequest)) {
+        searchParams.set(key, value.toString())
+      }
+
+      const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = { searchParams }
+
+      const result = await this.httpClient.fetch<CourseDetailsResponse>({
+        entity: 'course_details',
+        options,
+        schema: schemaCourseDetailsResponse,
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid course details request: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
     }
-
-    const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = { searchParams }
-
-    return this.httpClient.fetch<CourseDetailsResponse>({
-      entity: 'course_details',
-      options,
-      schema: schemaCourseDetailsResponse,
-    })
   }
 
   private async courseSearch(request: CourseSearchRequest): Promise<CourseSearchResponse['courses']> {
-    const validRequest = schemaCourseSearchRequest.parse(request)
-    const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
+    try {
+      const validRequest = schemaCourseSearchRequest.parse(request)
+      const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
 
-    for (const [key, value] of Object.entries(validRequest)) {
-      searchParams.set(key, value.toString())
+      for (const [key, value] of Object.entries(validRequest)) {
+        searchParams.set(key, value.toString())
+      }
+
+      const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = { searchParams }
+
+      const result = await this.httpClient.fetch<CourseSearchResponse>({
+        entity: 'course_search',
+        options,
+        schema: schemaCourseSearchResponse,
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value.courses
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid course search request: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
     }
-
-    const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = { searchParams }
-
-    const { courses } = await this.httpClient.fetch<CourseSearchResponse>({
-      entity: 'course_search',
-      options,
-      schema: schemaCourseSearchResponse,
-    })
-
-    return courses
   }
 
   private async handicapsGetOne(ghin: number): Promise<HandicapResponse['golfer']> {
-    const ghinNumber = number.parse(ghin)
+    try {
+      const ghinNumber = number.parse(ghin)
 
-    const searchParams = new URLSearchParams([
-      ['source', CLIENT_SOURCE],
-      ['ghin', ghinNumber.toString()],
-    ])
+      const searchParams = new URLSearchParams([
+        ['source', CLIENT_SOURCE],
+        ['ghin', ghinNumber.toString()],
+      ])
 
-    const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
-      searchParams,
+      const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
+        searchParams,
+      }
+
+      const result = await this.httpClient.fetch<HandicapResponse>({
+        entity: 'golfer',
+        options,
+        schema: schemaGolferHandicapResponse,
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value.golfer
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid GHIN number: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
     }
-
-    const { golfer } = await this.httpClient.fetch<HandicapResponse>({
-      entity: 'golfer',
-      options,
-      schema: schemaGolferHandicapResponse,
-    })
-
-    return golfer
   }
 
   private async handicapsGetCoursePlayerHandicaps(
     request: GolferCourseHandicapRequest[]
   ): Promise<CoursePlayerHandicapsResponse> {
-    const golfers = z
-      .array(schemaGolferCourseHandicapRequest)
-      .parse(request)
-      .map(({ ghin, ...golfer }) => ({
-        ...golfer,
-        [searchParameters.GOLFER_ID]: ghin,
-      }))
+    try {
+      const golfers = z
+        .array(schemaGolferCourseHandicapRequest)
+        .parse(request)
+        .map(({ ghin, ...golfer }) => ({
+          ...golfer,
+          [searchParameters.GOLFER_ID]: ghin,
+        }))
 
-    const searchParams = new URLSearchParams()
+      const searchParams = new URLSearchParams()
 
-    const courseHandicapRequest: CourseHandicapsRequest = {
-      golfers,
-      source: CLIENT_SOURCE,
+      const courseHandicapRequest: CourseHandicapsRequest = {
+        golfers,
+        source: CLIENT_SOURCE,
+      }
+
+      const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
+        body: JSON.stringify(courseHandicapRequest),
+        method: 'POST',
+        searchParams,
+      }
+
+      const result = await this.httpClient.fetch<CoursePlayerHandicapsResponse>({
+        entity: 'course_handicaps',
+        options,
+        schema: schemaCoursePlayerHandicapsResponse,
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid course handicap request: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
     }
-
-    const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
-      body: JSON.stringify(courseHandicapRequest),
-      method: 'POST',
-      searchParams,
-    }
-
-    return this.httpClient.fetch<CoursePlayerHandicapsResponse>({
-      entity: 'course_handicaps',
-      options,
-      schema: schemaCoursePlayerHandicapsResponse,
-    })
   }
 
   private async golfersSearch(request: GolferSearchRequest): Promise<GolferSearchResponse['golfers']> {
-    const { ghin, ...params } = schemaGolferSearchRequest.parse(request)
-    const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
+    try {
+      const { ghin, ...params } = schemaGolferSearchRequest.parse(request)
+      const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
 
-    const searchDefaults = {
-      from_ghin: true,
-      per_page: 25,
-      sorting_criteria: 'full_name',
-      order: 'asc',
-      page: 1,
+      const searchDefaults = {
+        from_ghin: true,
+        per_page: 25,
+        sorting_criteria: 'full_name',
+        order: 'asc',
+        page: 1,
+      }
+
+      for (const [key, value] of Object.entries(searchDefaults)) {
+        searchParams.set(key, value.toString())
+      }
+
+      if (ghin) {
+        searchParams.set(searchParameters.GOLFER_ID, ghin.toString())
+      }
+
+      const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
+        searchParams,
+      }
+
+      const result = await this.httpClient.fetch<GolferSearchResponse>({
+        entity: 'golfers_search',
+        schema: schemaGolferSearchResponse,
+        options,
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value.golfers
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid golfer search request: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
     }
-
-    for (const [key, value] of Object.entries(searchDefaults)) {
-      searchParams.set(key, value.toString())
-    }
-
-    if (ghin) {
-      searchParams.set(searchParameters.GOLFER_ID, ghin.toString())
-    }
-
-    const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
-      searchParams,
-    }
-
-    const { golfers } = await this.httpClient.fetch<GolferSearchResponse>({
-      entity: 'golfers_search',
-      schema: schemaGolferSearchResponse,
-      options,
-    })
-
-    return golfers
   }
 
   private async golfersGetOne(ghinNumber: number): Promise<GolferSearchResponse['golfers'][number] | undefined> {
-    const ghin = number.parse(ghinNumber)
-    const results = await this.golfersSearch({ ghin: ghin, status: 'Active' })
+    try {
+      const ghin = number.parse(ghinNumber)
+      const results = await this.golfersSearch({ ghin: ghin, status: 'Active' })
 
-    return results.find((golfer) => golfer.status === 'Active')
+      return results.find((golfer) => golfer.status === 'Active')
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid GHIN number: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    }
   }
 
   private async golfersGetScores(ghinNumber: number, request?: ScoresRequest): Promise<ScoresResponse> {
-    const validRequest = schemaScoresRequest.parse(request) ?? {}
-    const ghin = number.parse(ghinNumber)
+    try {
+      const validRequest = schemaScoresRequest.parse(request) ?? {}
+      const ghin = number.parse(ghinNumber)
 
-    const searchParams = new URLSearchParams([
-      [searchParameters.GOLFER_ID, ghin.toString()],
-      ['source', CLIENT_SOURCE],
-    ])
+      const searchParams = new URLSearchParams([
+        [searchParameters.GOLFER_ID, ghin.toString()],
+        ['source', CLIENT_SOURCE],
+      ])
 
-    for (const [key, value] of Object.entries(validRequest)) {
-      if (value === null) {
-        continue
-      }
-
-      if (Array.isArray(value)) {
-        for (const v of value) {
-          searchParams.append(key, v.toString())
+      for (const [key, value] of Object.entries(validRequest)) {
+        if (value === null) {
+          continue
         }
-        continue
+
+        if (Array.isArray(value)) {
+          for (const v of value) {
+            searchParams.append(key, v.toString())
+          }
+          continue
+        }
+
+        if (typeof value === 'object' && value instanceof Date) {
+          searchParams.set(key, value.toISOString().split('T')[0] as string)
+          continue
+        }
+
+        searchParams.set(key, value.toString())
       }
 
-      if (typeof value === 'object' && value instanceof Date) {
-        searchParams.set(key, value.toISOString().split('T')[0] as string)
-        continue
+      const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
+        searchParams,
       }
 
-      searchParams.set(key, value.toString())
+      const result = await this.httpClient.fetch<ScoresResponse>({
+        entity: 'scores',
+        options,
+        schema: schemaScoresResponse,
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid scores request: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
     }
-
-    const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
-      searchParams,
-    }
-
-    const response = await this.httpClient.fetch<ScoresResponse>({
-      entity: 'scores',
-      options,
-      schema: schemaScoresResponse,
-    })
-
-    return response
   }
 }
 

@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { schemaClientConfig, type ClientConfig } from './client-config'
+import { describe, expect, it } from 'vitest'
+import { type ClientConfig, schemaClientConfig } from './client-config'
 
 describe('ClientConfig', () => {
   describe('schemaClientConfig', () => {
@@ -98,4 +98,4 @@ describe('ClientConfig', () => {
       expect(result.success).toBe(false)
     })
   })
-}) 
+})
