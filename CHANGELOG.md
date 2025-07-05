@@ -1,5 +1,11 @@
 # ghin
 
+## 0.7.0
+
+### Minor Changes
+
+- 9729d83: ✨ Improve interal code and add full test coverage
+
 ## 0.6.0
 
 ### Minor Changes
