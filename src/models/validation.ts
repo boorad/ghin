@@ -23,14 +23,14 @@ const handicap = z
       return true
     }
 
-    if (typeof value === 'string' && value === 'NH') {
+    if (typeof value === 'string' && (value === 'NH' || value === '-')) {
       return true
     }
 
     return false
   })
   .transform((value) => {
-    if (value === 'NH') {
+    if (value === 'NH' || value === '-') {
       return null
     }
 

@@ -1,8 +1,11 @@
 import { z } from 'zod'
 import { schemaCacheClient } from './cache-client'
-import { string } from './validation'
+import { boolean, string } from './validation'
 
 const schemaClientConfig = z.object({
+  apiAccess: boolean.optional(),
+  apiVersion: string.optional(),
+  baseUrl: string.optional(),
   cache: schemaCacheClient.optional(),
   password: string,
   username: string,

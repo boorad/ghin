@@ -1,0 +1,17 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "bun",
+            "request": "launch",
+            "name": "playground",
+            "program": "${workspaceFolder}/playground.ts",
+        },
+        {
+            "type": "bun",
+            "request": "launch",
+            "name": "playground (api)",
+            "program": "${workspaceFolder}/playground-api.ts",
+        },
+    ],
+}
