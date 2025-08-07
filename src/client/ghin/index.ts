@@ -403,3 +403,5 @@ export class GhinClient {
     }
   }
 }
+
+export * from './models'
