@@ -32,7 +32,7 @@ const GOOGLE_API_KEY = 'AIzaSyBxgTOAWxiud0HuaE5tN-5NTlzFnrtyz-I' as const
 const DEFAULT_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36' as const
 
-const CLIENT_SOURCE = 'GHINcom'
+export const CLIENT_SOURCE = 'GHINcom'
 
 const SESSION_DEFAULTS = {
   appId: '1:884417644529:web:47fb315bc6c70242f72650',
@@ -76,7 +76,7 @@ const makeAuthHeaders = (accessToken: string) => ({
   Authorization: `Bearer ${accessToken}`,
 })
 
-class RequestClient {
+export class RequestClient {
   private accessToken: string | undefined
   private baseUrl: URL
   private config: ClientConfig
@@ -375,5 +375,3 @@ class RequestClient {
     return withRetry(() => this._fetch<RequestReturnType>({ options: actualOptions, schema, url }))
   }
 }
-
-export { CLIENT_SOURCE, RequestClient }

@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { schemaCacheClient } from './cache-client'
 import { boolean, string } from './validation'
 
-const schemaClientConfig = z.object({
+export const schemaClientConfig = z.object({
   apiAccess: boolean.optional(),
   apiVersion: string.optional(),
   baseUrl: string.optional(),
@@ -11,7 +11,4 @@ const schemaClientConfig = z.object({
   username: string,
 })
 
-type ClientConfig = z.infer<typeof schemaClientConfig>
-
-export type { ClientConfig }
-export { schemaClientConfig }
+export type ClientConfig = z.infer<typeof schemaClientConfig>

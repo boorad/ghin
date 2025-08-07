@@ -39,7 +39,7 @@ const searchParameters = {
   SOURCE: 'source',
 } as const
 
-class GhinClient {
+export class GhinClient {
   private httpClient: RequestClient
 
   courses: {
@@ -403,5 +403,3 @@ class GhinClient {
     }
   }
 }
-
-export { GhinClient }
