@@ -33,14 +33,14 @@ export const schemaGolfersSearchRequest = z
     per_page: number.max(100),
     golfer_id: number.optional(),
     last_name: string.optional(),
-    first_name: string.optional(),
-    state: string.transform((value) => value?.toUpperCase()).optional(),
+    first_name: emptyStringToNull.optional(),
+    state: emptyStringToNull.transform((value) => value?.toUpperCase()).optional(),
     country: string.transform((value) => value?.toUpperCase()).optional(),
-    local_number: string.optional(),
-    email: string.optional(),
-    phone_number: string.optional(),
+    local_number: emptyStringToNull.optional(),
+    email: emptyStringToNull.optional(),
+    phone_number: emptyStringToNull.optional(),
     association_id: number.optional(),
-    club_id: string.optional(),
+    club_id: emptyStringToNull.optional(),
     sorting_criteria: z.enum([
       "first_name",
       "last_name",
@@ -56,7 +56,7 @@ export const schemaGolfersSearchRequest = z
     ]).optional(),
     order: z.enum(["asc", "desc"]).optional(),
     status: schemaStatus.optional(),
-    updated_since: string.optional(),
+    updated_since: emptyStringToNull.optional(),
   })
   .partial();
 

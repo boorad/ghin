@@ -266,7 +266,7 @@ export class GhinClient {
       }
 
       for (const [key, value] of Object.entries(params)) {
-        searchParams.set(key, value.toString())
+        searchParams.set(key, value?.toString() ?? '')
       }
 
       const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
