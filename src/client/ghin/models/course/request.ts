@@ -12,8 +12,10 @@ const schemaCourseSearchRequest = z
     updated_at: date.optional(),
   })
   .refine(
-    ({ country, state, facility_id, updated_at }) => {
+    ({ country, state, facility_id, updated_at, name }) => {
       switch (true) {
+        case Boolean(name):
+          return true
         case Boolean(country && state):
           return true
         case Boolean(facility_id):
@@ -26,7 +28,7 @@ const schemaCourseSearchRequest = z
     },
     {
       message:
-        'At least one of the following are required: country + state, facility_id, or updated_at must be provided',
+        'At least one of the following are required: name, country + state, facility_id, or updated_at must be provided',
     },
   )
 
