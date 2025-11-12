@@ -1,5 +1,11 @@
 # ghin
 
+## 0.8.1
+
+### Patch Changes
+
+- a000ba8: feat: ✨ Add `facilities` search
+
 ## 0.8.0
 
 ### Minor Changes
