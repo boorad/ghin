@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { boolean, float, monthDay, number, string } from '../../../../models'
 import { schemaCourseCountry } from './country'
 import { schemaCourse } from './course'
-import { schemaGeoCoordinate } from './geolocation'
+import { schemaGeoAddress, schemaGeoCoordinate } from './geolocation'
 import { schemaCourseSearchState } from './state'
 
 const schemaStatus = string.transform((value) => value.toUpperCase()).pipe(z.enum(['ACTIVE', 'INACTIVE']))
@@ -24,7 +24,7 @@ const schemaCourseDetailsFacility = z.object({
   FacilityName: string,
   FacilityNumber: number.nullable(),
   FacilityStatus: string,
-  GeoLocationFormattedAddress: string.nullable(),
+  GeoLocationFormattedAddress: schemaGeoAddress,
   GeoLocationLatitude: schemaGeoCoordinate.nullable(),
   GeoLocationLongitude: schemaGeoCoordinate.nullable(),
   GolfAssociationId: number.nullable(),

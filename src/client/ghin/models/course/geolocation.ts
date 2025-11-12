@@ -17,4 +17,12 @@ const schemaGeoCoordinate = z.preprocess((value) => {
   return null
 }, z.number().nullable())
 
-export { schemaGeoCoordinate }
+const schemaGeoAddress = z.preprocess((value) => {
+  // Handle missing, null, or empty values
+  if (value === undefined || value === null || value === '') {
+    return null
+  }
+  return value
+}, z.string().nullable())
+
+export { schemaGeoCoordinate, schemaGeoAddress }
