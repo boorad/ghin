@@ -1,5 +1,11 @@
 # ghin
 
+## 0.8.2
+
+### Patch Changes
+
+- 4ef113d: fix: 🐛 handle missing geo fields
+
 ## 0.8.1
 
 ### Patch Changes
