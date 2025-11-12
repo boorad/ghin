@@ -1,0 +1,28 @@
+# Development files
+src/
+.data/
+.env*
+!.env.example*
+/index.test.ts
+playground.ts
+tsconfig.json
+vitest.config.ts
+biome.json
+
+# Build tools
+.changeset/
+
+# Git
+.git/
+.gitignore
+
+# OS
+.DS_Store
+
+# Dependencies
+node_modules/
+
+# Tests
+**/*.test.ts
+**/*.spec.ts
+coverage/
