@@ -28,11 +28,13 @@ export class NetworkError extends GhinError {
 
 export class ValidationError extends GhinError {
   readonly field?: string
+  readonly response?: unknown
 
-  constructor(message: string, field?: string, cause?: Error) {
+  constructor(message: string, field?: string, cause?: Error, response?: unknown) {
     super(message, 'VALIDATION_ERROR', undefined, cause)
     this.name = 'ValidationError'
     this.field = field
+    this.response = JSON.stringify(response)
   }
 }
 

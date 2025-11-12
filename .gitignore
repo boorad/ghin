@@ -4,4 +4,4 @@
 /index.test.ts
 dist
 node_modules
-!.env.example
+!.env.example*

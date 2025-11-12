@@ -1,6 +1,6 @@
 import type { CacheClient } from '../../models'
 
-class InMemoryCacheClient implements CacheClient {
+export class InMemoryCacheClient implements CacheClient {
   private value: string | undefined = undefined
 
   async read() {
@@ -11,5 +11,3 @@ class InMemoryCacheClient implements CacheClient {
     this.value = value
   }
 }
-
-export { InMemoryCacheClient }

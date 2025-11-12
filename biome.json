@@ -14,8 +14,7 @@
       "enabled": true,
       "lineWidth": 120,
       "quoteStyle": "single",
-      "semicolons": "asNeeded",
-      "trailingCommas": "es5"
+      "semicolons": "asNeeded"
     }
   },
   "linter": {

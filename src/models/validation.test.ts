@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { boolean, handicap, number, string } from './validation'
+import { boolean, date, handicap, number, string } from './validation'
 
 describe('Validation', () => {
   describe('string', () => {
@@ -71,6 +71,114 @@ describe('Validation', () => {
       expect(handicap.safeParse('12').success).toBe(true) // Integer
       expect(handicap.safeParse('12.50').success).toBe(true) // Two decimal places
       expect(handicap.safeParse('12.555').success).toBe(true) // Any number is valid
+    })
+  })
+
+  describe('date', () => {
+    it('should validate Date objects', () => {
+      const validDate = new Date('2022-09-15')
+      const result = date.safeParse(validDate)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBeInstanceOf(Date)
+        expect(result.data?.getTime()).toBe(validDate.getTime())
+      }
+    })
+
+    it('should validate ISO date strings', () => {
+      const isoString = '2022-09-15T00:00:00.000Z'
+      const result = date.safeParse(isoString)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBeInstanceOf(Date)
+        expect(result.data?.toISOString()).toBe(isoString)
+      }
+    })
+
+    it('should validate various valid date string formats', () => {
+      const validFormats = [
+        '2022-09-15',
+        '2022/09/15',
+        'September 15, 2022',
+        'Sep 15 2022',
+        '09/15/2022',
+        '15 Sep 2022',
+        '2022-09-15T10:30:00Z',
+        '2022-09-15T10:30:00-04:00'
+      ]
+
+      for (const dateStr of validFormats) {
+        const result = date.safeParse(dateStr)
+        expect(result.success).toBe(true)
+        if (result.success) {
+          expect(result.data).toBeInstanceOf(Date)
+          expect(result.data?.getTime()).not.toBeNaN()
+        }
+      }
+    })
+
+    it('should reject invalid date strings with proper error message', () => {
+      const invalidDates = [
+        'invalid-date',
+        '2022-13-01', // Invalid month
+        '2022-02-30', // Invalid day for February
+        'not a date',
+        '2022/13/45',
+        'abc123',
+        '2022-00-01', // Month 0
+        '2022-01-00'  // Day 0
+      ]
+
+      for (const invalidDate of invalidDates) {
+        const result = date.safeParse(invalidDate)
+        expect(result.success).toBe(false)
+        if (!result.success) {
+          expect(result.error.issues[0]?.message).toBe('Invalid date')
+        }
+      }
+    })
+
+    it('should handle null and undefined values', () => {
+      const nullResult = date.safeParse(null)
+      expect(nullResult.success).toBe(true)
+      if (nullResult.success) {
+        expect(nullResult.data).toBeUndefined()
+      }
+
+      const undefinedResult = date.safeParse(undefined)
+      expect(undefinedResult.success).toBe(true)
+      if (undefinedResult.success) {
+        expect(undefinedResult.data).toBeUndefined()
+      }
+    })
+
+    it('should handle empty strings', () => {
+      const emptyResult = date.safeParse('')
+      expect(emptyResult.success).toBe(true)
+      if (emptyResult.success) {
+        expect(emptyResult.data).toBeUndefined()
+      }
+    })
+
+    it('should transform valid string dates to Date objects', () => {
+      const dateString = '2022-09-15'
+      const result = date.safeParse(dateString)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBeInstanceOf(Date)
+        expect(result.data?.getFullYear()).toBe(2022)
+        expect(result.data?.getMonth()).toBe(8) // September is month 8 (0-indexed)
+        expect(result.data?.getDate()).toBe(15)
+      }
+    })
+
+    it('should reject non-string, non-Date values', () => {
+      const invalidTypes = [123, true, false, [], {}]
+      
+      for (const value of invalidTypes) {
+        const result = date.safeParse(value)
+        expect(result.success).toBe(false)
+      }
     })
   })
 })

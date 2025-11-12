@@ -1,10 +1,23 @@
 {
-  "name": "ghin",
+  "name": "@spicygolf/ghin",
   "description": "⛳ An unofficial api wrapper for the Golf Handicap and Information Network (GHIN)",
   "version": "0.7.0",
   "author": {
     "name": "Nate Clark",
     "url": "https://github.com/n8io"
+  },
+  "contributors": [
+    {
+      "name": "Brad Anderson",
+      "url": "https://github.com/boorad"
+    }
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/boorad/ghin.git"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "engines": {
     "node": ">=18"
@@ -41,6 +54,8 @@
   },
   "dependencies": {
     "async-mutex": "^0.5.0",
+    "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
     "jwt-decode": "^4.0.0",
     "neverthrow": "^8.2.0",
     "zod": "^3.22.4"

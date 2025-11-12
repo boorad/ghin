@@ -9,12 +9,9 @@ const schemaPromiseOrNonPromiseStringOrUndefined = z.union([
 
 const schemaPromiseOrNonPromiseVoid = z.union([z.promise(z.void()), z.void()])
 
-const schemaCacheClient = z.object({
+export const schemaCacheClient = z.object({
   read: z.function().args().returns(schemaPromiseOrNonPromiseStringOrUndefined),
   write: z.function().args(z.string()).returns(schemaPromiseOrNonPromiseVoid),
 })
 
-type CacheClient = z.infer<typeof schemaCacheClient>
-
-export type { CacheClient }
-export { schemaCacheClient }
+export type CacheClient = z.infer<typeof schemaCacheClient>

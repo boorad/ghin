@@ -1,5 +1,3 @@
-import type { Result } from 'neverthrow'
-import { err } from 'neverthrow'
 import { z } from 'zod'
 import { ConfigurationError, ValidationError } from '../../errors'
 import { type ClientConfig, number, schemaClientConfig } from '../../models'
@@ -15,8 +13,9 @@ import {
   type CourseSearchRequest,
   type CourseSearchResponse,
   type GolferCourseHandicapRequest,
-  type GolferSearchRequest,
-  type GolferSearchResponse,
+  type GolfersGlobalSearchRequest,
+  type GolfersSearchRequest,
+  type GolfersSearchResponse,
   type HandicapResponse,
   type ScoresRequest,
   type ScoresResponse,
@@ -28,8 +27,9 @@ import {
   schemaCourseSearchResponse,
   schemaGolferCourseHandicapRequest,
   schemaGolferHandicapResponse,
-  schemaGolferSearchRequest,
-  schemaGolferSearchResponse,
+  schemaGolfersGlobalSearchRequest,
+  schemaGolfersSearchRequest,
+  schemaGolfersSearchResponse,
   schemaScoresRequest,
   schemaScoresResponse,
 } from './models'
@@ -39,7 +39,7 @@ const searchParameters = {
   SOURCE: 'source',
 } as const
 
-class GhinClient {
+export class GhinClient {
   private httpClient: RequestClient
 
   courses: {
@@ -49,9 +49,10 @@ class GhinClient {
   }
 
   golfers: {
-    getOne: (ghinNumber: number) => Promise<GolferSearchResponse['golfers'][number] | undefined>
+    getOne: (ghinNumber: number) => Promise<GolfersSearchResponse['golfers'][number] | undefined>
     getScores: (ghinNumber: number, request?: ScoresRequest) => Promise<ScoresResponse>
-    search: (request: GolferSearchRequest) => Promise<GolferSearchResponse['golfers']>
+    search: (request: GolfersSearchRequest) => Promise<GolfersSearchResponse['golfers']>
+    globalSearch: (request: GolfersGlobalSearchRequest) => Promise<GolfersSearchResponse['golfers']>
   }
 
   handicaps: {
@@ -86,6 +87,7 @@ class GhinClient {
       getOne: this.golfersGetOne.bind(this),
       getScores: this.golfersGetScores.bind(this),
       search: this.golfersSearch.bind(this),
+      globalSearch: this.golfersGlobalSearch.bind(this),
     }
   }
 
@@ -246,9 +248,53 @@ class GhinClient {
     }
   }
 
-  private async golfersSearch(request: GolferSearchRequest): Promise<GolferSearchResponse['golfers']> {
+  private async golfersSearch(request: GolfersSearchRequest): Promise<GolfersSearchResponse['golfers']> {
     try {
-      const { ghin, ...params } = schemaGolferSearchRequest.parse(request)
+      const params = schemaGolfersSearchRequest.parse(request)
+      const searchParams = new URLSearchParams()
+
+      const searchDefaults = {
+        page: 1,
+        per_page: 25,
+        sorting_criteria: 'last_name_first_name',
+        status: 'Active',
+        order: 'asc',
+      }
+
+      for (const [key, value] of Object.entries(searchDefaults)) {
+        searchParams.set(key, value.toString())
+      }
+
+      for (const [key, value] of Object.entries(params)) {
+        searchParams.set(key, value?.toString() ?? '')
+      }
+
+      const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
+        searchParams,
+      }
+
+      const result = await this.httpClient.fetch<GolfersSearchResponse>({
+        entity: 'golfers_search',
+        schema: schemaGolfersSearchResponse,
+        options,
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value.golfers
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid golfer search request: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  private async golfersGlobalSearch(request: GolfersGlobalSearchRequest): Promise<GolfersSearchResponse['golfers']> {
+    try {
+      const { ghin } = schemaGolfersGlobalSearchRequest.parse(request)
       const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
 
       const searchDefaults = {
@@ -271,9 +317,9 @@ class GhinClient {
         searchParams,
       }
 
-      const result = await this.httpClient.fetch<GolferSearchResponse>({
-        entity: 'golfers_search',
-        schema: schemaGolferSearchResponse,
+      const result = await this.httpClient.fetch<GolfersSearchResponse>({
+        entity: 'golfers_global_search',
+        schema: schemaGolfersSearchResponse,
         options,
       })
 
@@ -290,10 +336,10 @@ class GhinClient {
     }
   }
 
-  private async golfersGetOne(ghinNumber: number): Promise<GolferSearchResponse['golfers'][number] | undefined> {
+  private async golfersGetOne(ghinNumber: number): Promise<GolfersSearchResponse['golfers'][number] | undefined> {
     try {
       const ghin = number.parse(ghinNumber)
-      const results = await this.golfersSearch({ ghin: ghin, status: 'Active' })
+      const results = await this.golfersGlobalSearch({ ghin: ghin, status: 'Active' })
 
       return results.find((golfer) => golfer.status === 'Active')
     } catch (error) {
@@ -358,4 +404,4 @@ class GhinClient {
   }
 }
 
-export { GhinClient }
+export * from './models'
