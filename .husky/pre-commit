@@ -1,0 +1,20 @@
+#!/bin/sh
+# Pre-commit hook that runs the same quality checks as CI
+
+set -e
+
+echo "🎨 Running code quality checks..."
+
+# Check code quality with biome
+echo "  → Running biome check..."
+pnpm exec biome check ./src
+
+# Run linting (biome lint + tsc)
+echo "  → Running lint..."
+pnpm run lint
+
+# Build the project
+echo "  → Running build..."
+pnpm run build
+
+echo "✅ All checks passed!"

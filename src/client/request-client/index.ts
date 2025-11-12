@@ -51,6 +51,7 @@ const apiPathnames = {
   course_details: '/crsCourseMethods.asmx/GetCourseDetails.json',
   course_handicaps: '/playing_handicaps.json',
   course_search: '/crsCourseMethods.asmx/SearchCourses.json',
+  facility_search: '/facilities/search.json',
   golfer: '/search_golfer.json',
   golfers_search: '/golfers/search.json',
   golfers_global_search: '/golfers.json',

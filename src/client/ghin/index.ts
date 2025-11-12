@@ -12,6 +12,8 @@ import {
   type CoursePlayerHandicapsResponse,
   type CourseSearchRequest,
   type CourseSearchResponse,
+  type FacilitySearchRequest,
+  type FacilitySearchResponse,
   type GolferCourseHandicapRequest,
   type GolfersGlobalSearchRequest,
   type GolfersSearchRequest,
@@ -25,6 +27,8 @@ import {
   schemaCoursePlayerHandicapsResponse,
   schemaCourseSearchRequest,
   schemaCourseSearchResponse,
+  schemaFacilitySearchRequest,
+  schemaFacilitySearchResponse,
   schemaGolferCourseHandicapRequest,
   schemaGolferHandicapResponse,
   schemaGolfersGlobalSearchRequest,
@@ -46,6 +50,10 @@ export class GhinClient {
     getCountries: () => Promise<CourseCountry[]>
     getDetails: (request: CourseDetailsRequest) => Promise<CourseDetailsResponse>
     search: (request: CourseSearchRequest) => Promise<CourseSearchResponse['courses']>
+  }
+
+  facilities: {
+    search: (request: FacilitySearchRequest) => Promise<FacilitySearchResponse>
   }
 
   golfers: {
@@ -78,6 +86,10 @@ export class GhinClient {
       search: this.courseSearch.bind(this),
     }
 
+    this.facilities = {
+      search: this.facilitySearch.bind(this),
+    }
+
     this.handicaps = {
       getOne: this.handicapsGetOne.bind(this),
       getCoursePlayerHandicaps: this.handicapsGetCoursePlayerHandicaps.bind(this),
@@ -94,7 +106,9 @@ export class GhinClient {
   private async coursesGetCountries(): Promise<CourseCountry[]> {
     try {
       const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
-      const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = { searchParams }
+      const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
+        searchParams,
+      }
 
       const result = await this.httpClient.fetch<CourseCountriesResponse>({
         entity: 'course_countries',
@@ -121,7 +135,9 @@ export class GhinClient {
         searchParams.set(key, value.toString())
       }
 
-      const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = { searchParams }
+      const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
+        searchParams,
+      }
 
       const result = await this.httpClient.fetch<CourseDetailsResponse>({
         entity: 'course_details',
@@ -151,7 +167,9 @@ export class GhinClient {
         searchParams.set(key, value.toString())
       }
 
-      const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = { searchParams }
+      const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
+        searchParams,
+      }
 
       const result = await this.httpClient.fetch<CourseSearchResponse>({
         entity: 'course_search',
@@ -167,6 +185,38 @@ export class GhinClient {
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new ValidationError(`Invalid course search request: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  private async facilitySearch(request: FacilitySearchRequest): Promise<FacilitySearchResponse> {
+    try {
+      const validRequest = schemaFacilitySearchRequest.parse(request)
+      const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
+
+      for (const [key, value] of Object.entries(validRequest)) {
+        searchParams.set(key, value.toString())
+      }
+
+      const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
+        searchParams,
+      }
+
+      const result = await this.httpClient.fetch<FacilitySearchResponse>({
+        entity: 'facility_search',
+        options,
+        schema: schemaFacilitySearchResponse,
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid facility search request: ${error.message}`)
       }
       throw error instanceof Error ? error : new Error(String(error))
     }
@@ -339,7 +389,10 @@ export class GhinClient {
   private async golfersGetOne(ghinNumber: number): Promise<GolfersSearchResponse['golfers'][number] | undefined> {
     try {
       const ghin = number.parse(ghinNumber)
-      const results = await this.golfersGlobalSearch({ ghin: ghin, status: 'Active' })
+      const results = await this.golfersGlobalSearch({
+        ghin: ghin,
+        status: 'Active',
+      })
 
       return results.find((golfer) => golfer.status === 'Active')
     } catch (error) {
