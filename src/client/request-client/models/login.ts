@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { boolean, emptyStringToNull, string } from "../../../models";
+import { z } from 'zod'
+import { boolean, emptyStringToNull, string } from '../../../models'
 
 export const schemaLoginAPIRequest = z.object({
   user: z.object({
@@ -7,15 +7,15 @@ export const schemaLoginAPIRequest = z.object({
     password: string,
     remember_me: boolean,
   }),
-});
+})
 
-export type LoginRequest = z.infer<typeof schemaLoginAPIRequest>;
+export type LoginRequest = z.infer<typeof schemaLoginAPIRequest>
 
 export const schemaLoginResponse = z.object({
   golfer_user: z.object({
     golfer_user_token: string,
   }),
-});
+})
 
 export const schemaLoginAPIResponse = z.object({
   user: z.object({
@@ -30,8 +30,6 @@ export const schemaLoginAPIResponse = z.object({
     last_sign_in_at: emptyStringToNull.optional(),
   }),
   token: string,
-});
+})
 
-export type LoginResponse =
-  | z.infer<typeof schemaLoginResponse>
-  | z.infer<typeof schemaLoginAPIResponse>;
+export type LoginResponse = z.infer<typeof schemaLoginResponse> | z.infer<typeof schemaLoginAPIResponse>

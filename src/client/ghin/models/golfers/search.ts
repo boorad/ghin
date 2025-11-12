@@ -1,15 +1,7 @@
-import { z } from "zod";
-import {
-  boolean,
-  date,
-  emptyStringToNull,
-  gender,
-  handicap,
-  number,
-  string,
-} from "../../../../models";
+import { z } from 'zod'
+import { boolean, date, emptyStringToNull, gender, handicap, number, string } from '../../../../models'
 
-const schemaStatus = z.enum(["Active", "Inactive"]);
+const schemaStatus = z.enum(['Active', 'Inactive'])
 
 export const schemaGolfersGlobalSearchRequest = z
   .object({
@@ -25,7 +17,7 @@ export const schemaGolfersGlobalSearchRequest = z
     state: string.transform((value) => value?.toUpperCase()),
     status: schemaStatus,
   })
-  .partial();
+  .partial()
 
 export const schemaGolfersSearchRequest = z
   .object({
@@ -41,27 +33,29 @@ export const schemaGolfersSearchRequest = z
     phone_number: emptyStringToNull.optional(),
     association_id: number.optional(),
     club_id: emptyStringToNull.optional(),
-    sorting_criteria: z.enum([
-      "first_name",
-      "last_name",
-      "status",
-      "id",
-      "gender",
-      "date_of_birth",
-      "handicap_index",
-      "status_date",
-      "full_name",
-      "home_club",
-      "last_name_first_name",
-    ]).optional(),
-    order: z.enum(["asc", "desc"]).optional(),
+    sorting_criteria: z
+      .enum([
+        'first_name',
+        'last_name',
+        'status',
+        'id',
+        'gender',
+        'date_of_birth',
+        'handicap_index',
+        'status_date',
+        'full_name',
+        'home_club',
+        'last_name_first_name',
+      ])
+      .optional(),
+    order: z.enum(['asc', 'desc']).optional(),
     status: schemaStatus.optional(),
     updated_since: emptyStringToNull.optional(),
   })
-  .partial();
+  .partial()
 
-export type GolfersSearchRequest = z.infer<typeof schemaGolfersSearchRequest>;
-export type GolfersGlobalSearchRequest = z.infer<typeof schemaGolfersGlobalSearchRequest>;
+export type GolfersSearchRequest = z.infer<typeof schemaGolfersSearchRequest>
+export type GolfersGlobalSearchRequest = z.infer<typeof schemaGolfersGlobalSearchRequest>
 
 export const schemaGolfer = z.object({
   ghin: number,
@@ -94,12 +88,12 @@ export const schemaGolfer = z.object({
   state: emptyStringToNull,
   status: schemaStatus,
   suffix: emptyStringToNull.optional(),
-});
+})
 
-export type Golfer = z.infer<typeof schemaGolfer>;
+export type Golfer = z.infer<typeof schemaGolfer>
 
 export const schemaGolfersSearchResponse = z.object({
   golfers: z.array(schemaGolfer),
-});
+})
 
-export type GolfersSearchResponse = z.infer<typeof schemaGolfersSearchResponse>;
+export type GolfersSearchResponse = z.infer<typeof schemaGolfersSearchResponse>

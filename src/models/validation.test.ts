@@ -104,7 +104,7 @@ describe('Validation', () => {
         '09/15/2022',
         '15 Sep 2022',
         '2022-09-15T10:30:00Z',
-        '2022-09-15T10:30:00-04:00'
+        '2022-09-15T10:30:00-04:00',
       ]
 
       for (const dateStr of validFormats) {
@@ -126,7 +126,7 @@ describe('Validation', () => {
         '2022/13/45',
         'abc123',
         '2022-00-01', // Month 0
-        '2022-01-00'  // Day 0
+        '2022-01-00', // Day 0
       ]
 
       for (const invalidDate of invalidDates) {
@@ -174,7 +174,7 @@ describe('Validation', () => {
 
     it('should reject non-string, non-Date values', () => {
       const invalidTypes = [123, true, false, [], {}]
-      
+
       for (const value of invalidTypes) {
         const result = date.safeParse(value)
         expect(result.success).toBe(false)

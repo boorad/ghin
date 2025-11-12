@@ -11,7 +11,9 @@ import {
   RateLimitError,
   ValidationError,
 } from '../../errors'
+import { type ClientConfig, schemaClientConfig } from '../../models'
 import { withRetry } from '../../utils/retry'
+import { InMemoryCacheClient } from '../in-memory-cache-client'
 import {
   type AccessToken,
   type LoginResponse,
@@ -20,8 +22,6 @@ import {
   schemaLoginResponse,
   schemaSessionResponse,
 } from './models'
-import { type ClientConfig, schemaClientConfig } from '../../models'
-import { InMemoryCacheClient } from '../in-memory-cache-client'
 
 const FIREBASE_SESSION_URL = new URL(
   'https://firebaseinstallations.googleapis.com/v1/projects/ghin-mobile-app/installations',

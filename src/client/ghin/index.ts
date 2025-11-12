@@ -205,7 +205,7 @@ export class GhinClient {
   }
 
   private async handicapsGetCoursePlayerHandicaps(
-    request: GolferCourseHandicapRequest[]
+    request: GolferCourseHandicapRequest[],
   ): Promise<CoursePlayerHandicapsResponse> {
     try {
       const golfers = z

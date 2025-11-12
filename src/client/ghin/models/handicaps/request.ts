@@ -35,7 +35,7 @@ const schemaCourseHandicapsRequest = z.object({
       })
       .extend({
         golfer_id: number.optional(),
-      })
+      }),
   ),
   source: z.literal(CLIENT_SOURCE).default(CLIENT_SOURCE).optional(),
 })

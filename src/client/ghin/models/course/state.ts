@@ -13,7 +13,7 @@ const schemaCourseSearchState = string.refine(
   },
   {
     message: 'Invalid state code format. Expected format: US-OH, LC-01, MX-*A, or *F',
-  }
+  },
 )
 
 export { schemaCourseSearchState }

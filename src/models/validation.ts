@@ -1,5 +1,5 @@
+import { isValid, parse, parseISO } from 'date-fns'
 import { z } from 'zod'
-import { parseISO, isValid, parse } from 'date-fns'
 
 export const boolean = z
   .union([z.boolean(), z.literal('true'), z.literal('false'), z.null()])
@@ -7,62 +7,65 @@ export const boolean = z
 
 export const date = z
   .union([z.date(), z.string(), z.null(), z.undefined()])
-  .refine((value) => {
-    // Handle null, undefined, and empty string as valid (will transform to undefined)
-    if (value === null || value === undefined || value === '') {
-      return true
-    }
-    
-    // If it's already a Date object, check if it's valid
-    if (value instanceof Date) {
-      return isValid(value)
-    }
-    
-    // For strings, try to parse with date-fns
-    if (typeof value === 'string') {
-      // Try ISO format first (most common and reliable)
-      let parsed = parseISO(value)
-      if (isValid(parsed)) {
+  .refine(
+    (value) => {
+      // Handle null, undefined, and empty string as valid (will transform to undefined)
+      if (value === null || value === undefined || value === '') {
         return true
       }
-      
-      // Try common date formats
-      const formats = [
-        'yyyy-MM-dd',
-        'yyyy/MM/dd', 
-        'MM/dd/yyyy',
-        'dd/MM/yyyy',
-        'MMMM dd, yyyy',  // September 15, 2022
-        'MMM dd, yyyy',   // Sep 15, 2022
-        'MMM dd yyyy',    // Sep 15 2022
-        'dd MMM yyyy'     // 15 Sep 2022
-      ]
-      
-      return formats.some(format => {
-        try {
-          parsed = parse(value, format, new Date())
-          return isValid(parsed)
-        } catch {
-          return false
+
+      // If it's already a Date object, check if it's valid
+      if (value instanceof Date) {
+        return isValid(value)
+      }
+
+      // For strings, try to parse with date-fns
+      if (typeof value === 'string') {
+        // Try ISO format first (most common and reliable)
+        let parsed = parseISO(value)
+        if (isValid(parsed)) {
+          return true
         }
-      })
-    }
-    
-    return false
-  }, {
-    message: 'Invalid date',
-  })
+
+        // Try common date formats
+        const formats = [
+          'yyyy-MM-dd',
+          'yyyy/MM/dd',
+          'MM/dd/yyyy',
+          'dd/MM/yyyy',
+          'MMMM dd, yyyy', // September 15, 2022
+          'MMM dd, yyyy', // Sep 15, 2022
+          'MMM dd yyyy', // Sep 15 2022
+          'dd MMM yyyy', // 15 Sep 2022
+        ]
+
+        return formats.some((format) => {
+          try {
+            parsed = parse(value, format, new Date())
+            return isValid(parsed)
+          } catch {
+            return false
+          }
+        })
+      }
+
+      return false
+    },
+    {
+      message: 'Invalid date',
+    },
+  )
   .transform((value) => {
     // Handle null, undefined, and empty string
     if (value === null || value === undefined || value === '') {
       return undefined
     }
-    
+
     // If it's already a Date object, return it
     if (value instanceof Date) {
       return value
     }
-    
+
     // For strings, parse with date-fns
     if (typeof value === 'string') {
       // Try ISO format first
@@ -70,19 +73,19 @@ export const date = z
       if (isValid(parsed)) {
         return parsed
       }
-      
+
       // Try common date formats
       const formats = [
         'yyyy-MM-dd',
         'yyyy/MM/dd',
-        'MM/dd/yyyy', 
+        'MM/dd/yyyy',
         'dd/MM/yyyy',
-        'MMMM dd, yyyy',  // September 15, 2022
-        'MMM dd, yyyy',   // Sep 15, 2022
-        'MMM dd yyyy',    // Sep 15 2022
-        'dd MMM yyyy'     // 15 Sep 2022
+        'MMMM dd, yyyy', // September 15, 2022
+        'MMM dd, yyyy', // Sep 15, 2022
+        'MMM dd yyyy', // Sep 15 2022
+        'dd MMM yyyy', // 15 Sep 2022
       ]
-      
+
       for (const format of formats) {
         try {
           parsed = parse(value, format, new Date())
@@ -94,7 +97,7 @@ export const date = z
         }
       }
     }
-    
+
     return undefined
   })
 
