@@ -1,5 +1,11 @@
 # ghin
 
+## 0.8.3
+
+### Patch Changes
+
+- 8df183c: fix: 🐛 Allow courses search with name only
+
 ## 0.8.2
 
 ### Patch Changes
