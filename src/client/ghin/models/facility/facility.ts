@@ -1,19 +1,17 @@
-import { z } from "zod";
-import { number, shortDate, string } from "../../../../models";
-import { schemaGeoCoordinate } from "../course/geolocation";
+import { z } from 'zod'
+import { number, shortDate, string } from '../../../../models'
+import { schemaGeoCoordinate } from '../course/geolocation'
 
-const schemaStatus = string
-  .transform((value) => value.toUpperCase())
-  .pipe(z.enum(["ACTIVE", "INACTIVE"]));
+const schemaStatus = string.transform((value) => value.toUpperCase()).pipe(z.enum(['ACTIVE', 'INACTIVE']))
 
 const schemaFacilityCourse = z.object({
   CourseId: number,
   CourseStatus: schemaStatus,
   CourseName: string,
   NumberOfHoles: number,
-});
+})
 
-type FacilityCourse = z.infer<typeof schemaFacilityCourse>;
+type FacilityCourse = z.infer<typeof schemaFacilityCourse>
 
 const schemaFacility = z.object({
   Address1: string.nullable().optional(),
@@ -40,9 +38,9 @@ const schemaFacility = z.object({
     .nullable()
     .optional()
     .or(z.array(z.unknown())),
-});
+})
 
-type Facility = z.infer<typeof schemaFacility>;
+type Facility = z.infer<typeof schemaFacility>
 
-export { schemaFacility, schemaFacilityCourse };
-export type { Facility, FacilityCourse };
+export { schemaFacility, schemaFacilityCourse }
+export type { Facility, FacilityCourse }
