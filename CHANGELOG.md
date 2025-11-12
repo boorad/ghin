@@ -1,5 +1,12 @@
 # ghin
 
+## 0.8.0
+
+### Minor Changes
+
+- 1af15bb: feat: ✨ Add approved API access functionality
+  publish as `@spicygolf/ghin`
+
 ## 0.7.0
 
 ### Minor Changes
