@@ -27,7 +27,7 @@ const schemaCourseSearchRequest = z
     {
       message:
         'At least one of the following are required: country + state, facility_id, or updated_at must be provided',
-    }
+    },
   )
 
 type CourseSearchRequest = z.infer<typeof schemaCourseSearchRequest>

@@ -28,7 +28,7 @@ const scoreTypesMap: Record<RawScoreType, ScoreType> = {
 
 // @ts-expect-error ???
 const schemaScoreTypeWithTransform: z.ZodType<RawScoreType, z.ZodTypeDef, ScoreType> = schemaRawScoreTypes.transform(
-  (value) => scoreTypesMap[value]
+  (value) => scoreTypesMap[value],
 )
 
 const scoreStatuses = ['VALIDATED', 'UNDER_REVIEW'] as const
@@ -44,7 +44,7 @@ const scoreStatusesMap = {
 } as const
 
 const schemaScoreStatusWithTransform = schemaRawScoreStatus.transform(
-  (value) => scoreStatusesMap[value as keyof typeof scoreStatusesMap]
+  (value) => scoreStatusesMap[value as keyof typeof scoreStatusesMap],
 )
 
 const schemaScore = z.object({

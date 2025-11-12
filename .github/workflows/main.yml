@@ -19,6 +19,8 @@ jobs:
           cache: "pnpm"
       - name: 🔽 Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: 🎨 Check code quality
+        run: pnpm exec biome check ./src
       - name: 🚨 Lint code
         run: pnpm run lint
       - name: 🧱 Build

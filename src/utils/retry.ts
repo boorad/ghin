@@ -39,7 +39,7 @@ export async function sleep(ms: number): Promise<void> {
 
 export async function withRetry<T>(
   operation: () => Promise<Result<T, Error>>,
-  config: Partial<RetryConfig> = {}
+  config: Partial<RetryConfig> = {},
 ): Promise<Result<T, Error>> {
   const finalConfig = { ...DEFAULT_RETRY_CONFIG, ...config }
 
@@ -76,7 +76,7 @@ export async function withRetry<T>(
 
 export async function withRetryAsync<T>(
   operation: () => Promise<T>,
-  config: Partial<RetryConfig> = {}
+  config: Partial<RetryConfig> = {},
 ): Promise<Result<T, Error>> {
   return withRetry(async () => {
     try {
