@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { schemaGeoCoordinate } from './geolocation'
+import { schemaGeoAddress, schemaGeoCoordinate } from './geolocation'
 
 describe('Geolocation Schema', () => {
   describe('schemaGeoCoordinate', () => {
@@ -86,6 +86,40 @@ describe('Geolocation Schema', () => {
       expect(longitude.success).toBe(true)
       if (longitude.success) {
         expect(longitude.data).toBe(-180)
+      }
+    })
+  })
+
+  describe('schemaGeoAddress', () => {
+    it('should parse valid address string', () => {
+      const result = schemaGeoAddress.safeParse('123 Main St, Atlanta, GA 30307')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe('123 Main St, Atlanta, GA 30307')
+      }
+    })
+
+    it('should convert undefined to null', () => {
+      const result = schemaGeoAddress.safeParse(undefined)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe(null)
+      }
+    })
+
+    it('should convert null to null', () => {
+      const result = schemaGeoAddress.safeParse(null)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe(null)
+      }
+    })
+
+    it('should convert empty string to null', () => {
+      const result = schemaGeoAddress.safeParse('')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe(null)
       }
     })
   })
