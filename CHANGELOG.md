@@ -1,5 +1,11 @@
 # ghin
 
+## 0.8.6
+
+### Patch Changes
+
+- 6af8d15: fix: 🐛 update tee set request params
+
 ## 0.8.5
 
 ### Patch Changes
