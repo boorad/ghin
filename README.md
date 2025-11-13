@@ -24,10 +24,12 @@ This is a fork of [n8io/ghin](https://github.com/n8io/ghin), originally created 
 
 ## Installation
 
-To use this library in your TypeScript project, you can install it via npm:
+To use this library in your TypeScript project, you can install it via npm or bun:
 
 ```shell
 npm install @spicygolf/ghin
+# or
+bun add @spicygolf/ghin
 ```
 
 ## Usage
@@ -35,19 +37,19 @@ npm install @spicygolf/ghin
 Here's a quick example of how to use this library:
 
 ```typescript
-import { GhinClient } from '@spicygolf/ghin';
+import { GhinClient } from '@spicygolf/ghin'
 
 // Initialize the client
 const ghin = new GhinClient({
   password: process.env.GHIN_PASSWORD,
   username: process.env.GHIN_USERNAME,
-});
+})
 
 // Get a golfer's handicap
-const ghinNumber = '1234567';
-const { handicap_index } = await ghin.handicaps.getOne(ghinNumber);
+const ghinNumber = '1234567'
+const { handicap_index } = await ghin.handicaps.getOne(ghinNumber)
 
-console.log(`Golfer ${ghinNumber} has a handicap of ${handicap_index}`);
+console.log(`Golfer ${ghinNumber} has a handicap of ${handicap_index}`)
 ```
 
 ## TODOs

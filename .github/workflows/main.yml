@@ -10,28 +10,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v2
+      - uses: oven-sh/setup-bun@v2
         with:
-          version: 8
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 24.x
-          cache: "pnpm"
+          bun-version: 1.3.2
 
       - name: 🔽 Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: 🎨 Check code quality
-        run: pnpm exec biome check ./src
+        run: bun biome check ./src
 
       - name: 🚨 Lint code
-        run: pnpm run lint
+        run: bun run lint
 
       - name: 🧱 Build
-        run: npm run build
+        run: bun run build
 
       - name: 🧪 Run tests
-        run: pnpm run test:coverage
+        run: bun run test:coverage
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:

@@ -7,14 +7,14 @@ echo "🎨 Running code quality checks..."
 
 # Check code quality with biome
 echo "  → Running biome check..."
-pnpm exec biome check ./src
+bun biome check ./src
 
 # Run linting (biome lint + tsc)
 echo "  → Running lint..."
-pnpm run lint
+bun run lint
 
 # Build the project
 echo "  → Running build..."
-pnpm run build
+bun run build
 
 echo "✅ All checks passed!"
