@@ -1,5 +1,11 @@
 # ghin
 
+## 0.8.7
+
+### Patch Changes
+
+- 399c057: chore: 🧹 housekeeping
+
 ## 0.8.6
 
 ### Patch Changes
