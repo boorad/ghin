@@ -1,5 +1,11 @@
 # ghin
 
+## 0.8.4
+
+### Patch Changes
+
+- 9b2c679: fix: 🐛 handle geoAddress schema
+
 ## 0.8.3
 
 ### Patch Changes
