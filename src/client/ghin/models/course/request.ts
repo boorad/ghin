@@ -34,17 +34,22 @@ const schemaCourseSearchRequest = z
 
 type CourseSearchRequest = z.infer<typeof schemaCourseSearchRequest>
 
+const schemaTeeSetStatus = z.enum(['Active', 'Deleted', 'All'])
+
 const schemaCourseDetailsRequest = z
   .object({
     course_id: number,
-    include_altered_tees: boolean.optional(),
+    gender: z.enum(['M', 'm', 'F', 'f']).optional(),
+    number_of_holes: z.union([z.literal(9), z.literal(18)]).optional(),
+    tee_set_status: schemaTeeSetStatus.optional(),
   })
   .transform((data) => ({
     ...data,
-    include_altered_tees: data.include_altered_tees ?? false,
+    tee_set_status: data.tee_set_status ?? ('Active' as const),
   }))
 
-type CourseDetailsRequest = z.infer<typeof schemaCourseDetailsRequest>
+type CourseDetailsRequest = z.input<typeof schemaCourseDetailsRequest>
+type TeeSetStatus = z.infer<typeof schemaTeeSetStatus>
 
 export { schemaCourseSearchRequest, schemaCourseDetailsRequest }
-export type { CourseSearchRequest, CourseDetailsRequest }
+export type { CourseSearchRequest, CourseDetailsRequest, TeeSetStatus }
