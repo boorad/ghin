@@ -3,6 +3,7 @@ import { boolean, float, monthDay, number, string } from '../../../../models'
 import { schemaCourseCountry } from './country'
 import { schemaCourse } from './course'
 import { schemaGeoAddress, schemaGeoCoordinate } from './geolocation'
+import { schemaSeasonDate, schemaSeasonName } from './season'
 import { schemaCourseSearchState } from './state'
 
 const schemaStatus = string.transform((value) => value.toUpperCase()).pipe(z.enum(['ACTIVE', 'INACTIVE']))
@@ -32,9 +33,21 @@ const schemaCourseDetailsFacility = z.object({
 
 const schemaCourseDetailsSeason = z.object({
   IsAllYear: boolean,
-  SeasonEndDate: monthDay.nullable(),
-  SeasonName: string,
-  SeasonStartDate: monthDay.nullable(),
+  SeasonEndDate: schemaSeasonDate.transform((value) => {
+    if (!value) {
+      return null
+    }
+    const [month, day] = value.split('/')
+    return `${month?.toString().padStart(2, '0')}-${day?.toString().padStart(2, '0')}`
+  }),
+  SeasonName: schemaSeasonName,
+  SeasonStartDate: schemaSeasonDate.transform((value) => {
+    if (!value) {
+      return null
+    }
+    const [month, day] = value.split('/')
+    return `${month?.toString().padStart(2, '0')}-${day?.toString().padStart(2, '0')}`
+  }),
 })
 
 const schemaCourseDetailsTeeSetRatings = z.object({
@@ -76,7 +89,7 @@ const schemaCourseDetailsResponse = z.object({
   CourseState: schemaCourseSearchState,
   CourseStatus: schemaStatus,
   Facility: schemaCourseDetailsFacility,
-  Season: schemaCourseDetailsSeason,
+  Season: schemaCourseDetailsSeason.nullable(),
   TeeSets: z.array(schemaCourseDetailsTeeSet),
 })
 
