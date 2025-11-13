@@ -16,16 +16,29 @@ async function test() {
   try {
     const details = await ghinClient.courses.getDetails({
       course_id: 13995,
-      include_altered_tees: false,
+      // tee_set_status defaults to "Active" - only returns current tees
+      // Use "All" to include historical/deleted tees
+      // Use "Deleted" to only see historical tees
+      // gender: "M", // Optional: filter by gender ('M', 'm', 'F', 'f')
+      // number_of_holes: 18, // Optional: filter by holes (9 or 18)
     });
 
     console.log("\n✓ Success! Course details:");
     console.log("CourseId:", details.CourseId);
     console.log("CourseName:", details.CourseName);
     console.log("CourseCity:", details.CourseCity);
-    console.log("Facility.GeoLocationFormattedAddress:", details.Facility.GeoLocationFormattedAddress);
-    console.log("Facility.GeoLocationLatitude:", details.Facility.GeoLocationLatitude);
-    console.log("Facility.GeoLocationLongitude:", details.Facility.GeoLocationLongitude);
+    console.log(
+      "Facility.GeoLocationFormattedAddress:",
+      details.Facility.GeoLocationFormattedAddress
+    );
+    console.log(
+      "Facility.GeoLocationLatitude:",
+      details.Facility.GeoLocationLatitude
+    );
+    console.log(
+      "Facility.GeoLocationLongitude:",
+      details.Facility.GeoLocationLongitude
+    );
     console.log("\nFull response:");
     console.dir(details, { depth: null });
   } catch (error) {
