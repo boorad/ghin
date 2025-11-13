@@ -1,13 +1,13 @@
-import { GhinClient } from './src'
+import { GhinClient } from '../index'
 
 declare global {
   namespace NodeJS {
     interface ProcessEnv {
       GHIN_PASSWORD: string
-      GHIN_USERNAME: string,
-      GHIN_API_ACCESS: string,
-      GHIN_API_VERSION: string,
-      GHIN_BASE_URL: string,
+      GHIN_USERNAME: string
+      GHIN_API_ACCESS: string
+      GHIN_API_VERSION: string
+      GHIN_BASE_URL: string
     }
   }
 }
