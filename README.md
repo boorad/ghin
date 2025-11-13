@@ -2,12 +2,17 @@
 
 ⛳ An unofficial wrapper for the GHIN api
 
-![Downloads](https://img.shields.io/github/downloads/n8io/ghin/total)
-[![check-code-coverage](https://img.shields.io/badge/code--coverage-100%25-brightgreen)](https://github.com/n8io/ghin/actions/workflows/publish.yml?query=branch%3Amain)
-[![Issues](https://img.shields.io/github/issues/n8io/ghin)](https://github.com/n8io/ghin/issues)
-[![License](https://img.shields.io/github/license/n8io/ghin)](https://github.com/n8io/ghin/blob/main/LICENSE)
+[![npm version](https://img.shields.io/npm/v/@spicygolf/ghin)](https://www.npmjs.com/package/@spicygolf/ghin)
+![Downloads](https://img.shields.io/github/downloads/boorad/ghin/total)
+[![codecov](https://codecov.io/gh/boorad/ghin/branch/main/graph/badge.svg)](https://codecov.io/gh/boorad/ghin)
+[![Issues](https://img.shields.io/github/issues/boorad/ghin)](https://github.com/boorad/ghin/issues)
+[![License](https://img.shields.io/github/license/boorad/ghin)](https://github.com/boorad/ghin/blob/main/LICENSE)
 
 This TypeScript library provides a convenient and easy-to-use API wrapper for accessing the Golfer Handicap Index Network (GHIN) api unofficially. It allows you to interact with GHIN data, retrieve golfer handicaps, scores, and perform various operations related to golf handicaps.
+
+## About This Fork
+
+This is a fork of [n8io/ghin](https://github.com/n8io/ghin), originally created by Nate Clark. This fork includes additional features and improvements.
 
 ## Features
 
@@ -22,7 +27,7 @@ This TypeScript library provides a convenient and easy-to-use API wrapper for ac
 To use this library in your TypeScript project, you can install it via npm:
 
 ```shell
-npm install ghin
+npm install @spicygolf/ghin
 ```
 
 ## Usage
@@ -30,12 +35,12 @@ npm install ghin
 Here's a quick example of how to use this library:
 
 ```typescript
-import { GhinClient } from 'ghin';
+import { GhinClient } from '@spicygolf/ghin';
 
 // Initialize the client
 const ghin = new GhinClient({
-  password: process.env.PASSWORD,
-  username: process.env.USERNAME,
+  password: process.env.GHIN_PASSWORD,
+  username: process.env.GHIN_USERNAME,
 });
 
 // Get a golfer's handicap
@@ -73,7 +78,8 @@ We welcome contributions from the community. If you'd like to contribute to this
 
 MIT License
 
-Copyright (c) 2023 Nate Clark
+Copyright (c) 2023 Nate Clark  
+Copyright (c) 2025 Brad Anderson
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

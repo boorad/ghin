@@ -1,25 +1,26 @@
-import { defineConfig } from 'vitest/config'
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
     globals: true,
-    environment: 'node',
+    environment: "node",
     coverage: {
-      provider: 'v8',
-      reporter: ['text', 'json', 'html'],
+      provider: "v8",
+      reporter: ["text", "json", "html"],
       exclude: [
-        'node_modules/',
-        'dist/',
-        '**/*.d.ts',
-        '**/*.config.*',
-        'playground.ts',
-        '**/__tests__/**',
-        '**/*.test.*',
-        '**/*.spec.*',
+        "node_modules/",
+        "dist/",
+        "docs/",
+        "**/*.d.ts",
+        "**/*.config.*",
+        "src/playground/**",
+        "**/__tests__/**",
+        "**/*.test.*",
+        "**/*.spec.*",
       ],
     },
   },
   esbuild: {
-    target: 'node18',
+    target: "node18",
   },
-}) 
+});

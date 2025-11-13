@@ -1,4 +1,4 @@
-import { GhinClient } from './src'
+import { GhinClient } from '../index'
 
 declare global {
   namespace NodeJS {

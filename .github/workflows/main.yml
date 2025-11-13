@@ -17,13 +17,22 @@ jobs:
         with:
           node-version: 24.x
           cache: "pnpm"
+
       - name: 🔽 Install dependencies
         run: pnpm install --frozen-lockfile
+
       - name: 🎨 Check code quality
         run: pnpm exec biome check ./src
+
       - name: 🚨 Lint code
         run: pnpm run lint
-      - name: 🧪 Run tests
-        run: pnpm run test:run
+
       - name: 🧱 Build
         run: npm run build
+
+      - name: 🧪 Run tests
+        run: pnpm run test:coverage
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}

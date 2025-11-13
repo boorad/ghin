@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { boolean, date, handicap, number, string } from './validation'
+import { boolean, date, handicap, monthDay, number, shortDate, string } from './validation'
 
 describe('Validation', () => {
   describe('string', () => {
@@ -179,6 +179,73 @@ describe('Validation', () => {
         const result = date.safeParse(value)
         expect(result.success).toBe(false)
       }
+    })
+  })
+
+  describe('monthDay', () => {
+    it('should transform valid month/day strings', () => {
+      const result = monthDay.safeParse('9/15')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe('09-15')
+      }
+    })
+
+    it('should pad single digit months and days', () => {
+      const result = monthDay.safeParse('1/5')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe('01-05')
+      }
+    })
+
+    it('should handle double digit months and days', () => {
+      const result = monthDay.safeParse('12/31')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe('12-31')
+      }
+    })
+
+    it('should return null for empty strings', () => {
+      const result = monthDay.safeParse('')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBeNull()
+      }
+    })
+  })
+
+  describe('shortDate', () => {
+    it('should validate Date objects', () => {
+      const validDate = new Date('2022-09-15')
+      const result = shortDate.safeParse(validDate)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBeInstanceOf(Date)
+      }
+    })
+
+    it('should transform valid date strings to Date objects', () => {
+      const result = shortDate.safeParse('2022-09-15')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBeInstanceOf(Date)
+        expect(result.data?.toISOString()).toBe('2022-09-15T00:00:00.000Z')
+      }
+    })
+
+    it('should handle null values', () => {
+      const result = shortDate.safeParse(null)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBeNull()
+      }
+    })
+
+    it('should reject invalid date strings', () => {
+      const result = shortDate.safeParse('invalid-date')
+      expect(result.success).toBe(false)
     })
   })
 })
