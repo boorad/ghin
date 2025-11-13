@@ -1,5 +1,11 @@
 # ghin
 
+## 0.8.5
+
+### Patch Changes
+
+- eb5d1b9: fix: 🐛 course season schema
+
 ## 0.8.4
 
 ### Patch Changes
