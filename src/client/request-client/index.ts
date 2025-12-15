@@ -375,4 +375,41 @@ export class RequestClient {
 
     return withRetry(() => this._fetch<RequestReturnType>({ options: actualOptions, schema, url }))
   }
+
+  async fetchCustomPath<RequestReturnType>({
+    path,
+    schema,
+    options = {},
+  }: {
+    path: string
+    schema: ZodSchema
+    options?: RequestInit & {
+      searchParams?: URLSearchParams
+    }
+  }): Promise<Result<RequestReturnType, Error>> {
+    const accessTokenResult = await this.lock.runExclusive(async () => this.getAccessToken())
+    if (accessTokenResult.isErr()) {
+      return err(accessTokenResult.error)
+    }
+
+    const accessToken = accessTokenResult.value
+    const url = new URL(`${this.baseUrl.pathname}${path}`, this.baseUrl)
+    const { headers, searchParams, ...requestInitOptions } = options
+
+    const actualOptions = {
+      ...requestInitOptions,
+      headers: {
+        ...FETCH_HEADER_DEFAULTS,
+        source: CLIENT_SOURCE,
+        ...makeAuthHeaders(accessToken),
+        ...headers,
+      },
+    }
+
+    if (searchParams) {
+      url.search = searchParams.toString()
+    }
+
+    return withRetry(() => this._fetch<RequestReturnType>({ options: actualOptions, schema, url }))
+  }
 }
