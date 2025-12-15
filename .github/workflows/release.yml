@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       dry-run:
-        description: 'Dry run (no actual publish)'
+        description: "Dry run (no actual publish)"
         type: boolean
         default: false
 
@@ -19,6 +19,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -28,8 +29,8 @@ jobs:
       - name: Setup Node.js (for npm publish with OIDC)
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -45,18 +46,16 @@ jobs:
       - name: Build
         run: bun run build
 
-      - name: Commit version changes
+      - name: Commit and push version changes
         run: |
           git add .
-          git commit -m "chore: version packages" || echo "No changes to commit"
-          git push || echo "No changes to push"
+          git diff --staged --quiet || git commit -m "chore: version packages [skip ci]"
+          git push
 
       - name: Publish to npm
         if: ${{ inputs.dry-run == false }}
         run: npm exec changeset publish
 
-      - name: Dry run - show what would be published
+      - name: Dry run info
         if: ${{ inputs.dry-run == true }}
-        run: |
-          echo "Dry run mode - would publish:"
-          npm exec changeset publish --dry-run || echo "Note: changeset doesn't support --dry-run, skipping actual publish"
+        run: echo "Dry run mode - versions updated but not published"
