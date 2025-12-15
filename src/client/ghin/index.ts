@@ -21,6 +21,8 @@ import {
   type HandicapResponse,
   type ScoresRequest,
   type ScoresResponse,
+  type TeeSetRatingRequest,
+  type TeeSetRatingResponse,
   schemaCourseCountriesResponse,
   schemaCourseDetailsRequest,
   schemaCourseDetailsResponse,
@@ -36,6 +38,8 @@ import {
   schemaGolfersSearchResponse,
   schemaScoresRequest,
   schemaScoresResponse,
+  schemaTeeSetRatingRequest,
+  schemaTeeSetRatingResponse,
 } from './models'
 
 const searchParameters = {
@@ -50,6 +54,7 @@ export class GhinClient {
     getCountries: () => Promise<CourseCountry[]>
     getDetails: (request: CourseDetailsRequest) => Promise<CourseDetailsResponse>
     search: (request: CourseSearchRequest) => Promise<CourseSearchResponse['courses']>
+    getTeeSetRating: (request: TeeSetRatingRequest) => Promise<TeeSetRatingResponse>
   }
 
   facilities: {
@@ -84,6 +89,7 @@ export class GhinClient {
       getCountries: this.coursesGetCountries.bind(this),
       getDetails: this.courseGetDetails.bind(this),
       search: this.courseSearch.bind(this),
+      getTeeSetRating: this.courseGetTeeSetRating.bind(this),
     }
 
     this.facilities = {
@@ -153,6 +159,40 @@ export class GhinClient {
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new ValidationError(`Invalid course details request: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  private async courseGetTeeSetRating(request: TeeSetRatingRequest): Promise<TeeSetRatingResponse> {
+    try {
+      const validRequest = schemaTeeSetRatingRequest.parse(request)
+      const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
+
+      if (validRequest.include_altered_tees !== undefined) {
+        searchParams.set('include_altered_tees', validRequest.include_altered_tees.toString())
+      }
+
+      const path = `/TeeSetRatings/${validRequest.tee_set_rating_id}.json`
+
+      const options: Parameters<typeof this.httpClient.fetchCustomPath>[0]['options'] = {
+        searchParams,
+      }
+
+      const result = await this.httpClient.fetchCustomPath<TeeSetRatingResponse>({
+        path,
+        options,
+        schema: schemaTeeSetRatingResponse,
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid tee set rating request: ${error.message}`)
       }
       throw error instanceof Error ? error : new Error(String(error))
     }
