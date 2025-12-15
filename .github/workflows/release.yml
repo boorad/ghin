@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       dry-run:
-        description: 'Dry run (no actual publish)'
+        description: "Dry run (no actual publish)"
         type: boolean
         default: false
 
@@ -29,7 +29,7 @@ jobs:
       - name: Setup Node.js (for npm publish with OIDC)
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Upgrade npm for OIDC support
         run: npm install -g npm@latest
@@ -57,6 +57,16 @@ jobs:
       - name: Publish to npm
         if: ${{ inputs.dry-run == false }}
         run: npm exec changeset publish
+
+      - name: Create GitHub Release
+        if: ${{ inputs.dry-run == false }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          git tag "v${VERSION}"
+          git push origin "v${VERSION}"
+          gh release create "v${VERSION}" --title "v${VERSION}" --generate-notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Dry run info
         if: ${{ inputs.dry-run == true }}
