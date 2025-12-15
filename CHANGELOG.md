@@ -1,5 +1,11 @@
 # ghin
 
+## 0.8.8
+
+### Patch Changes
+
+- f9cfbff: fix releases, finally release TeeSetRatings fetching
+
 ## 0.8.7
 
 ### Patch Changes
