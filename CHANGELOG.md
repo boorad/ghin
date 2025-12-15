@@ -1,5 +1,12 @@
 # ghin
 
+## 0.8.7
+
+### Patch Changes
+
+- 399c057: chore: 🧹 housekeeping
+- 7623160: add TeeSetRatings fetching
+
 ## 0.8.6
 
 ### Patch Changes
