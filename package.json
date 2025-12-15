@@ -34,7 +34,7 @@
     "dev": "bun --bun run src/playground/ghin.ts",
     "format": "biome check --write ./src",
     "lint": "biome lint ./src && tsc",
-    "release": "bun run build && changeset publish",
+    "release": "bun run build && npm exec changeset publish",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
