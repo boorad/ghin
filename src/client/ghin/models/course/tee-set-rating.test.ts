@@ -108,6 +108,7 @@ describe('TeeSetRating Schemas', () => {
         Facility: validFacility,
         TeeSetRatingId: 12345,
         TeeSetRatingName: 'Blue Tees',
+        TeeSetStatus: 'Active',
         Gender: 'Male',
         HolesNumber: 18,
         TotalPar: 72,
@@ -126,6 +127,7 @@ describe('TeeSetRating Schemas', () => {
       if (result.success) {
         expect(result.data.TeeSetRatingId).toBe(12345)
         expect(result.data.TeeSetRatingName).toBe('Blue Tees')
+        expect(result.data.TeeSetStatus).toBe('active')
         expect(result.data.Gender).toBe('Male')
         expect(result.data.HolesNumber).toBe(18)
       }
@@ -249,9 +251,24 @@ describe('TeeSetRating Schemas', () => {
 
     it('should parse response with multiple ratings (Front, Back, Total)', () => {
       const ratings = [
-        { RatingType: 'Front' as const, CourseRating: 35.5, SlopeRating: 130, BogeyRating: 47.2 },
-        { RatingType: 'Back' as const, CourseRating: 37.0, SlopeRating: 140, BogeyRating: 48.0 },
-        { RatingType: 'Total' as const, CourseRating: 72.5, SlopeRating: 135, BogeyRating: 95.2 },
+        {
+          RatingType: 'Front' as const,
+          CourseRating: 35.5,
+          SlopeRating: 130,
+          BogeyRating: 47.2,
+        },
+        {
+          RatingType: 'Back' as const,
+          CourseRating: 37.0,
+          SlopeRating: 140,
+          BogeyRating: 48.0,
+        },
+        {
+          RatingType: 'Total' as const,
+          CourseRating: 72.5,
+          SlopeRating: 135,
+          BogeyRating: 95.2,
+        },
       ]
 
       const responseWithMultipleRatings = {
@@ -387,7 +404,150 @@ describe('TeeSetRating Schemas', () => {
         LegacyCRPTeeId: 999,
         EligibleSides: null,
         Holes: [],
-        Ratings: [{ RatingType: 'Invalid', CourseRating: 72.5, SlopeRating: 135, BogeyRating: 95.2 }],
+        Ratings: [
+          {
+            RatingType: 'Invalid',
+            CourseRating: 72.5,
+            SlopeRating: 135,
+            BogeyRating: 95.2,
+          },
+        ],
+      }
+
+      const result = schemaTeeSetRatingResponse.safeParse(invalidResponse)
+      expect(result.success).toBe(false)
+    })
+
+    it('should parse response with TeeSetStatus Active and transform to lowercase', () => {
+      const responseWithActiveStatus = {
+        Season: null,
+        Course: validCourse,
+        Facility: validFacility,
+        TeeSetRatingId: 12345,
+        TeeSetRatingName: 'Blue Tees',
+        TeeSetStatus: 'Active',
+        Gender: 'Male',
+        HolesNumber: 18,
+        TotalPar: 72,
+        TotalYardage: 7200,
+        TotalMeters: 6584,
+        StrokeAllocation: true,
+        IsShorter: false,
+        LegacyCRPTeeId: 999,
+        EligibleSides: null,
+        Holes: [],
+        Ratings: [],
+      }
+
+      const result = schemaTeeSetRatingResponse.safeParse(responseWithActiveStatus)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.TeeSetStatus).toBe('active')
+      }
+    })
+
+    it('should parse response with TeeSetStatus Inactive and transform to lowercase', () => {
+      const responseWithInactiveStatus = {
+        Season: null,
+        Course: validCourse,
+        Facility: validFacility,
+        TeeSetRatingId: 12345,
+        TeeSetRatingName: 'Red Tees',
+        TeeSetStatus: 'Inactive',
+        Gender: 'Female',
+        HolesNumber: 18,
+        TotalPar: 72,
+        TotalYardage: 5800,
+        TotalMeters: 5304,
+        StrokeAllocation: true,
+        IsShorter: false,
+        LegacyCRPTeeId: 999,
+        EligibleSides: null,
+        Holes: [],
+        Ratings: [],
+      }
+
+      const result = schemaTeeSetRatingResponse.safeParse(responseWithInactiveStatus)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.TeeSetStatus).toBe('inactive')
+      }
+    })
+
+    it('should parse response with TeeSetStatus Deleted and transform to lowercase', () => {
+      const responseWithDeletedStatus = {
+        Season: null,
+        Course: validCourse,
+        Facility: validFacility,
+        TeeSetRatingId: 12345,
+        TeeSetRatingName: 'Old Tees',
+        TeeSetStatus: 'Deleted',
+        Gender: 'Male',
+        HolesNumber: 18,
+        TotalPar: 72,
+        TotalYardage: 6500,
+        TotalMeters: 5944,
+        StrokeAllocation: true,
+        IsShorter: false,
+        LegacyCRPTeeId: 999,
+        EligibleSides: null,
+        Holes: [],
+        Ratings: [],
+      }
+
+      const result = schemaTeeSetRatingResponse.safeParse(responseWithDeletedStatus)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.TeeSetStatus).toBe('deleted')
+      }
+    })
+
+    it('should parse response without TeeSetStatus (optional field)', () => {
+      const responseWithoutStatus = {
+        Season: null,
+        Course: validCourse,
+        Facility: validFacility,
+        TeeSetRatingId: 12345,
+        TeeSetRatingName: 'Blue Tees',
+        Gender: 'Male',
+        HolesNumber: 18,
+        TotalPar: 72,
+        TotalYardage: 7200,
+        TotalMeters: 6584,
+        StrokeAllocation: true,
+        IsShorter: false,
+        LegacyCRPTeeId: 999,
+        EligibleSides: null,
+        Holes: [],
+        Ratings: [],
+      }
+
+      const result = schemaTeeSetRatingResponse.safeParse(responseWithoutStatus)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.TeeSetStatus).toBeUndefined()
+      }
+    })
+
+    it('should reject response with invalid TeeSetStatus', () => {
+      const invalidResponse = {
+        Season: null,
+        Course: validCourse,
+        Facility: validFacility,
+        TeeSetRatingId: 12345,
+        TeeSetRatingName: 'Blue Tees',
+        TeeSetStatus: 'Invalid',
+        Gender: 'Male',
+        HolesNumber: 18,
+        TotalPar: 72,
+        TotalYardage: 7200,
+        TotalMeters: 6584,
+        StrokeAllocation: true,
+        IsShorter: false,
+        LegacyCRPTeeId: 999,
+        EligibleSides: null,
+        Holes: [],
+        Ratings: [],
       }
 
       const result = schemaTeeSetRatingResponse.safeParse(invalidResponse)

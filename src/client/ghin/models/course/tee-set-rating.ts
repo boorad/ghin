@@ -73,6 +73,10 @@ const schemaTeeSetRatingResponse = z.object({
   Facility: schemaTeeSetRatingFacility,
   TeeSetRatingId: number,
   TeeSetRatingName: string,
+  TeeSetStatus: z
+    .enum(['Active', 'Inactive', 'Deleted'])
+    .transform((val) => val.toLowerCase() as 'active' | 'inactive' | 'deleted')
+    .optional(),
   Gender: z.enum(['Male', 'Female', 'Mixed']).nullable(),
   HolesNumber: number,
   TotalPar: number,
