@@ -1,5 +1,11 @@
 # ghin
 
+## 0.8.8
+
+### Patch Changes
+
+- a9f0aab: add `status` field to TeeSetRating model
+
 ## 0.8.7
 
 ### Patch Changes
