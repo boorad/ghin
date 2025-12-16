@@ -50,8 +50,9 @@ jobs:
 
       - name: Commit and push version changes
         run: |
+          VERSION=$(node -p "require('./package.json').version")
           git add .
-          git diff --staged --quiet || git commit -m "chore: version packages [skip ci]"
+          git diff --staged --quiet || git commit -m "chore: release v${VERSION}"
           git push
 
       - name: Publish to npm
@@ -62,8 +63,6 @@ jobs:
         if: ${{ inputs.dry-run == false }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          git tag "v${VERSION}"
-          git push origin "v${VERSION}"
           gh release create "v${VERSION}" --title "v${VERSION}" --generate-notes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
