@@ -42,10 +42,13 @@ Thank you for your interest in contributing! This guide covers everything you ne
             > bun run test
             >
             > # Run tests in watch mode during development
-            > bun run test --watch
+            > bun run test
             >
             > # Run a single test file
             > bun run test src/client/ghin/index.test.ts
+            >
+            > # Run with coverage report
+            > bun run test:coverage
             > ```
             >
             > All tests mock the HTTP layer via `msw` (Mock Service Worker) — no real network calls are made.
@@ -54,17 +57,17 @@ Thank you for your interest in contributing! This guide covers everything you ne
             >
             > ## Linting & Formatting
             >
-            > This project uses [Biome](https://biomejs.dev) for both linting and formatting.
+            > This project uses [Biome](https://biomejs.dev) for both linting and formatting, plus `tsc` for type-checking.
             >
             > ```shell
-            > # Check for lint and format issues
+            > # Lint (Biome) + type-check (TypeScript)
             > bun run lint
             >
-            > # Auto-fix lint and format issues
-            > bun run lint:fix
-            >
-            > # Format only
+            > # Auto-format source files
             > bun run format
+            >
+            > # Check and auto-fix all issues (format + lint)
+            > npx @biomejs/biome check --write ./src
             > ```
             >
             > Biome is configured in `biome.json`. Please ensure `bun run lint` passes with no errors before opening a PR.
@@ -121,6 +124,7 @@ Thank you for your interest in contributing! This guide covers everything you ne
             | `refactor` | ♻️ | `refactor: ♻️ extract shared URL builder` |
 
             The commit message format is:
+
             ```
             <type>: <emoji> <short description>
 
@@ -167,9 +171,9 @@ Thank you for your interest in contributing! This guide covers everything you ne
                   >                             - ```shell
                   >                               # Run the full verification suite before opening a PR
                   >                               bun install
-                  >                               bun run test       # all tests must pass
-                  >                               bun run lint       # no lint errors
-                  >                               bun run build      # TypeScript must compile and bundle successfully
+                  >                               bun run test         # all tests must pass
+                  >                               bun run lint         # Biome lint + TypeScript type-check
+                  >                               bun run build        # bundle must succeed (CJS + ESM + DTS)
                   >                               ```
                   >
                   > ---
