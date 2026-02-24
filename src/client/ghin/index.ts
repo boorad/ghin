@@ -14,6 +14,7 @@ import {
   type CourseSearchResponse,
   type FacilitySearchRequest,
   type FacilitySearchResponse,
+  type FollowingResponse,
   type GolferCourseHandicapRequest,
   type GolfersGlobalSearchRequest,
   type GolfersSearchRequest,
@@ -31,6 +32,7 @@ import {
   schemaCourseSearchResponse,
   schemaFacilitySearchRequest,
   schemaFacilitySearchResponse,
+  schemaFollowingResponse,
   schemaGolferCourseHandicapRequest,
   schemaGolferHandicapResponse,
   schemaGolfersGlobalSearchRequest,
@@ -66,6 +68,7 @@ export class GhinClient {
     getScores: (ghinNumber: number, request?: ScoresRequest) => Promise<ScoresResponse>
     search: (request: GolfersSearchRequest) => Promise<GolfersSearchResponse['golfers']>
     globalSearch: (request: GolfersGlobalSearchRequest) => Promise<GolfersSearchResponse['golfers']>
+    getFollowing: (ghinNumber: number) => Promise<FollowingResponse['golfers']>
   }
 
   handicaps: {
@@ -106,12 +109,14 @@ export class GhinClient {
       getScores: this.golfersGetScores.bind(this),
       search: this.golfersSearch.bind(this),
       globalSearch: this.golfersGlobalSearch.bind(this),
+      getFollowing: this.golfersGetFollowing.bind(this),
     }
   }
 
   private async coursesGetCountries(): Promise<CourseCountry[]> {
     try {
       const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
+
       const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
         searchParams,
       }
@@ -160,6 +165,7 @@ export class GhinClient {
       if (error instanceof z.ZodError) {
         throw new ValidationError(`Invalid course details request: ${error.message}`)
       }
+
       throw error instanceof Error ? error : new Error(String(error))
     }
   }
@@ -194,6 +200,7 @@ export class GhinClient {
       if (error instanceof z.ZodError) {
         throw new ValidationError(`Invalid tee set rating request: ${error.message}`)
       }
+
       throw error instanceof Error ? error : new Error(String(error))
     }
   }
@@ -226,6 +233,7 @@ export class GhinClient {
       if (error instanceof z.ZodError) {
         throw new ValidationError(`Invalid course search request: ${error.message}`)
       }
+
       throw error instanceof Error ? error : new Error(String(error))
     }
   }
@@ -258,6 +266,7 @@ export class GhinClient {
       if (error instanceof z.ZodError) {
         throw new ValidationError(`Invalid facility search request: ${error.message}`)
       }
+
       throw error instanceof Error ? error : new Error(String(error))
     }
   }
@@ -265,7 +274,6 @@ export class GhinClient {
   private async handicapsGetOne(ghin: number): Promise<HandicapResponse['golfer']> {
     try {
       const ghinNumber = number.parse(ghin)
-
       const searchParams = new URLSearchParams([
         ['source', CLIENT_SOURCE],
         ['ghin', ghinNumber.toString()],
@@ -290,6 +298,7 @@ export class GhinClient {
       if (error instanceof z.ZodError) {
         throw new ValidationError(`Invalid GHIN number: ${error.message}`)
       }
+
       throw error instanceof Error ? error : new Error(String(error))
     }
   }
@@ -334,6 +343,7 @@ export class GhinClient {
       if (error instanceof z.ZodError) {
         throw new ValidationError(`Invalid course handicap request: ${error.message}`)
       }
+
       throw error instanceof Error ? error : new Error(String(error))
     }
   }
@@ -378,6 +388,7 @@ export class GhinClient {
       if (error instanceof z.ZodError) {
         throw new ValidationError(`Invalid golfer search request: ${error.message}`)
       }
+
       throw error instanceof Error ? error : new Error(String(error))
     }
   }
@@ -422,6 +433,7 @@ export class GhinClient {
       if (error instanceof z.ZodError) {
         throw new ValidationError(`Invalid golfer search request: ${error.message}`)
       }
+
       throw error instanceof Error ? error : new Error(String(error))
     }
   }
@@ -429,6 +441,7 @@ export class GhinClient {
   private async golfersGetOne(ghinNumber: number): Promise<GolfersSearchResponse['golfers'][number] | undefined> {
     try {
       const ghin = number.parse(ghinNumber)
+
       const results = await this.golfersGlobalSearch({
         ghin: ghin,
         status: 'Active',
@@ -439,6 +452,7 @@ export class GhinClient {
       if (error instanceof z.ZodError) {
         throw new ValidationError(`Invalid GHIN number: ${error.message}`)
       }
+
       throw error instanceof Error ? error : new Error(String(error))
     }
   }
@@ -462,11 +476,13 @@ export class GhinClient {
           for (const v of value) {
             searchParams.append(key, v.toString())
           }
+
           continue
         }
 
         if (typeof value === 'object' && value instanceof Date) {
           searchParams.set(key, value.toISOString().split('T')[0] as string)
+
           continue
         }
 
@@ -492,6 +508,38 @@ export class GhinClient {
       if (error instanceof z.ZodError) {
         throw new ValidationError(`Invalid scores request: ${error.message}`)
       }
+
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  private async golfersGetFollowing(ghinNumber: number): Promise<FollowingResponse['golfers']> {
+    try {
+      const ghin = number.parse(ghinNumber)
+      const path = `/golfers/${ghin}/following.json`
+
+      const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
+
+      const options: Parameters<typeof this.httpClient.fetchCustomPath>[0]['options'] = {
+        searchParams,
+      }
+
+      const result = await this.httpClient.fetchCustomPath<FollowingResponse>({
+        path,
+        options,
+        schema: schemaFollowingResponse,
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value.golfers
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid GHIN number: ${error.message}`)
+      }
+
       throw error instanceof Error ? error : new Error(String(error))
     }
   }

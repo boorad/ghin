@@ -6,9 +6,12 @@ import { GhinClient } from './index'
 
 // Mock the RequestClient
 const mockFetch = vi.fn()
+const mockFetchCustomPath = vi.fn()
+
 vi.mock('../request-client', () => ({
   RequestClient: vi.fn().mockImplementation(() => ({
     fetch: mockFetch,
+    fetchCustomPath: mockFetchCustomPath,
   })),
   CLIENT_SOURCE: 'GHINcom',
 }))
@@ -19,7 +22,7 @@ describe('GhinClient', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockFetch.mockReset()
-
+    mockFetchCustomPath.mockReset()
     ghinClient = new GhinClient({
       username: 'testuser',
       password: 'testpass',
@@ -65,7 +68,6 @@ describe('GhinClient', () => {
       mockFetch.mockResolvedValue(ok(mockCountries))
 
       const result = await ghinClient.courses.getCountries()
-
       expect(result).toEqual(mockCountries.countries)
       expect(mockFetch).toHaveBeenCalledWith({
         entity: 'course_countries',
@@ -78,7 +80,6 @@ describe('GhinClient', () => {
 
     it('should throw error when fetch fails', async () => {
       mockFetch.mockResolvedValue(err(new Error('Network error')))
-
       await expect(ghinClient.courses.getCountries()).rejects.toThrow('Network error')
     })
   })
@@ -93,7 +94,6 @@ describe('GhinClient', () => {
       mockFetch.mockResolvedValue(ok(mockDetails))
 
       const result = await ghinClient.courses.getDetails({ course_id: 12345 })
-
       expect(result).toEqual(mockDetails)
       expect(mockFetch).toHaveBeenCalled()
     })
@@ -105,7 +105,6 @@ describe('GhinClient', () => {
 
     it('should throw error when fetch fails', async () => {
       mockFetch.mockResolvedValue(err(new Error('Not found')))
-
       await expect(ghinClient.courses.getDetails({ course_id: 12345 })).rejects.toThrow('Not found')
     })
   })
@@ -121,36 +120,30 @@ describe('GhinClient', () => {
       mockFetch.mockResolvedValue(ok(mockResponse))
 
       const result = await ghinClient.courses.search({ name: 'Test' })
-
       expect(result).toEqual(mockResponse.courses)
       expect(mockFetch).toHaveBeenCalled()
     })
 
     it('should throw error when fetch fails', async () => {
       mockFetch.mockResolvedValue(err(new Error('Search failed')))
-
       await expect(ghinClient.courses.search({ name: 'Test' })).rejects.toThrow('Search failed')
     })
   })
 
   describe('facilities.search', () => {
     it('should search and return facilities', async () => {
-      const mockResponse = {
-        facilities: [{ facility_id: 1, name: 'Facility 1' }],
-      }
+      const mockResponse = { facilities: [{ facility_id: 1, name: 'Facility 1' }] }
       mockFetch.mockResolvedValue(ok(mockResponse))
 
       const result = await ghinClient.facilities.search({
         name: 'Test',
       })
-
       expect(result).toEqual(mockResponse)
       expect(mockFetch).toHaveBeenCalled()
     })
 
     it('should throw error when fetch fails', async () => {
       mockFetch.mockResolvedValue(err(new Error('Search failed')))
-
       await expect(ghinClient.facilities.search({ name: 'Test' })).rejects.toThrow('Search failed')
     })
   })
@@ -166,7 +159,6 @@ describe('GhinClient', () => {
       mockFetch.mockResolvedValue(ok(mockResponse))
 
       const result = await ghinClient.handicaps.getOne(1234567)
-
       expect(result).toEqual(mockResponse.golfer)
       expect(mockFetch).toHaveBeenCalled()
     })
@@ -178,7 +170,6 @@ describe('GhinClient', () => {
 
     it('should throw error when fetch fails', async () => {
       mockFetch.mockResolvedValue(err(new Error('Not found')))
-
       await expect(ghinClient.handicaps.getOne(1234567)).rejects.toThrow('Not found')
     })
   })
@@ -193,14 +184,12 @@ describe('GhinClient', () => {
       const result = await ghinClient.handicaps.getCoursePlayerHandicaps([
         { ghin: 1234567, tee_set_id: 12345, tee_set_side: 'All 18' },
       ])
-
       expect(result).toEqual(mockResponse)
       expect(mockFetch).toHaveBeenCalled()
     })
 
     it('should throw error when fetch fails', async () => {
       mockFetch.mockResolvedValue(err(new Error('Calculation failed')))
-
       await expect(
         ghinClient.handicaps.getCoursePlayerHandicaps([{ ghin: 1234567, tee_set_id: 12345, tee_set_side: 'All 18' }]),
       ).rejects.toThrow('Calculation failed')
@@ -215,14 +204,12 @@ describe('GhinClient', () => {
       mockFetch.mockResolvedValue(ok(mockResponse))
 
       const result = await ghinClient.golfers.search({ last_name: 'Doe' })
-
       expect(result).toEqual(mockResponse.golfers)
       expect(mockFetch).toHaveBeenCalled()
     })
 
     it('should throw error when fetch fails', async () => {
       mockFetch.mockResolvedValue(err(new Error('Search failed')))
-
       await expect(ghinClient.golfers.search({ last_name: 'Doe' })).rejects.toThrow('Search failed')
     })
   })
@@ -242,14 +229,12 @@ describe('GhinClient', () => {
       mockFetch.mockResolvedValue(ok(mockResponse))
 
       const result = await ghinClient.golfers.globalSearch({ ghin: 1234567 })
-
       expect(result).toEqual(mockResponse.golfers)
       expect(mockFetch).toHaveBeenCalled()
     })
 
     it('should throw error when fetch fails', async () => {
       mockFetch.mockResolvedValue(err(new Error('Search failed')))
-
       await expect(ghinClient.golfers.globalSearch({ ghin: 1234567 })).rejects.toThrow('Search failed')
     })
   })
@@ -269,7 +254,6 @@ describe('GhinClient', () => {
       mockFetch.mockResolvedValue(ok(mockResponse))
 
       const result = await ghinClient.golfers.getOne(1234567)
-
       expect(result).toEqual(mockResponse.golfers[0])
       expect(mockFetch).toHaveBeenCalled()
     })
@@ -288,7 +272,6 @@ describe('GhinClient', () => {
       mockFetch.mockResolvedValue(ok(mockResponse))
 
       const result = await ghinClient.golfers.getOne(1234567)
-
       expect(result).toBeUndefined()
     })
 
@@ -299,7 +282,6 @@ describe('GhinClient', () => {
 
     it('should throw error when fetch fails', async () => {
       mockFetch.mockResolvedValue(err(new Error('Not found')))
-
       await expect(ghinClient.golfers.getOne(1234567)).rejects.toThrow('Not found')
     })
   })
@@ -312,7 +294,6 @@ describe('GhinClient', () => {
       mockFetch.mockResolvedValue(ok(mockResponse))
 
       const result = await ghinClient.golfers.getScores(1234567)
-
       expect(result).toEqual(mockResponse)
       expect(mockFetch).toHaveBeenCalled()
     })
@@ -326,7 +307,6 @@ describe('GhinClient', () => {
         to_date_played: new Date('2024-12-31'),
         score_types: ['H', 'A'],
       })
-
       expect(result).toEqual(mockResponse)
       expect(mockFetch).toHaveBeenCalled()
     })
@@ -338,8 +318,50 @@ describe('GhinClient', () => {
 
     it('should throw error when fetch fails', async () => {
       mockFetch.mockResolvedValue(err(new Error('Fetch failed')))
-
       await expect(ghinClient.golfers.getScores(1234567)).rejects.toThrow('Fetch failed')
+    })
+  })
+
+  describe('golfers.getFollowing', () => {
+    it('should fetch and return the list of followed golfers', async () => {
+      const mockResponse = {
+        golfers: [
+          {
+            ghin: 7654321,
+            first_name: 'Jane',
+            last_name: 'Smith',
+            status: 'Active',
+          },
+        ],
+      }
+      mockFetchCustomPath.mockResolvedValue(ok(mockResponse))
+
+      const result = await ghinClient.golfers.getFollowing(1234567)
+      expect(result).toEqual(mockResponse.golfers)
+      expect(mockFetchCustomPath).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: '/golfers/1234567/following.json',
+          schema: expect.anything(),
+        }),
+      )
+    })
+
+    it('should return empty array when golfer follows nobody', async () => {
+      const mockResponse = { golfers: [] }
+      mockFetchCustomPath.mockResolvedValue(ok(mockResponse))
+
+      const result = await ghinClient.golfers.getFollowing(1234567)
+      expect(result).toEqual([])
+    })
+
+    it('should throw validation error with invalid ghin', async () => {
+      // @ts-expect-error - Testing invalid input type
+      await expect(ghinClient.golfers.getFollowing('invalid')).rejects.toThrow(ValidationError)
+    })
+
+    it('should throw error when fetch fails', async () => {
+      mockFetchCustomPath.mockResolvedValue(err(new Error('Not found')))
+      await expect(ghinClient.golfers.getFollowing(1234567)).rejects.toThrow('Not found')
     })
   })
 })
