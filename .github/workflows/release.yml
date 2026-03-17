@@ -59,6 +59,10 @@ jobs:
         if: ${{ inputs.dry-run == false }}
         run: npm exec changeset publish
 
+      - name: Push tags
+        if: ${{ inputs.dry-run == false }}
+        run: git push --tags
+
       - name: Create GitHub Release
         if: ${{ inputs.dry-run == false }}
         run: |
