@@ -1,5 +1,6 @@
 export * from './course'
 export * from './facility'
 export * from './golfers'
+export * from './gpa'
 export * from './handicaps'
 export * from './scores'

@@ -1,0 +1,47 @@
+# Code Review Branch Commits
+
+Review all commits on the current branch since diverging from main.
+
+## Prerequisites
+
+**IMPORTANT**: Before starting the review, check if this is a fresh context/session:
+- If there is prior conversation history in this session (e.g., you helped write the code being reviewed), STOP immediately
+- Inform the user: "Code reviews should be done in a fresh context to avoid bias. Please start a new Claude Code session and run /review there."
+- A reviewer should not be the same "person" who wrote the code
+
+## Instructions
+
+When activated, perform a full code review of the commits since branching from main:
+
+1. **Get the commits**: Run `git log main..HEAD --oneline` to see all commits on this branch
+2. **Get the full diff**: Run `git diff main..HEAD` to see all changes
+3. **For each file changed**, read enough context to understand the changes
+4. **Review for**:
+   - Correctness and logic errors
+   - Consistency with existing patterns in the codebase
+   - TypeScript best practices
+   - Zod schema correctness (this project uses Zod extensively for validation)
+   - Error handling with `neverthrow` Result types
+   - Potential bugs or edge cases
+   - Code clarity and maintainability
+5. **Provide a structured review** with:
+   - Summary of what the branch does
+   - Positives (what's done well)
+   - Issues & suggestions (ranked by severity)
+   - Recommended actions (if any)
+
+Run `./scripts/code-quality.sh` to verify the code compiles and passes lint.
+
+## Follow-up
+
+After presenting the review, present a **fix plan table** for the user to approve before making any changes:
+
+| # | File | Issue | Proposed Action |
+|---|------|-------|-----------------|
+| 1 | path/to/file.ts:42 | Brief description | Fix / Skip / Ask |
+
+- **Fix**: Will apply the change
+- **Skip**: Not worth changing (explain why)
+- **Ask**: Ambiguous, needs user input on approach
+
+**Wait for the user to approve the plan** (they may want to skip or modify items). Then apply only the approved fixes. Run `./scripts/code-quality.sh` after all fixes are applied to verify everything is clean.

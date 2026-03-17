@@ -1,5 +1,7 @@
 export * from './adjustment'
 export * from './hole-detail'
+export * from './post-request'
+export * from './post-response'
 export * from './request'
 export * from './response'
 export * from './statistics'

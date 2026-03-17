@@ -8,6 +8,8 @@ import {
   type CourseCountry,
   type CourseDetailsRequest,
   type CourseDetailsResponse,
+  type CourseHandicapGetRequest,
+  type CourseHandicapsGetResponse,
   type CourseHandicapsRequest,
   type CoursePlayerHandicapsResponse,
   type CourseSearchRequest,
@@ -18,14 +20,30 @@ import {
   type GolfersGlobalSearchRequest,
   type GolfersSearchRequest,
   type GolfersSearchResponse,
+  type GpaAccessStatus,
+  type GpaAccessesResponse,
+  type GpaRequestAccessResponse,
+  type GpaRevokeAccessResponse,
+  type GpaUpdateStatusRequest,
+  type GpaUpdateStatusResponse,
   type HandicapResponse,
+  type PlayingHandicapRequest,
+  type PlayingHandicapsResponse,
+  type ScorePost18h9and9Request,
+  type ScorePostAdjustedRequest,
+  type ScorePostHbhRequest,
+  type ScorePostResponse,
   type ScoresRequest,
   type ScoresResponse,
+  type TeeSetRatingForScorePostingRequest,
   type TeeSetRatingRequest,
   type TeeSetRatingResponse,
+  type TeeSetRatingsForScorePostingResponse,
   schemaCourseCountriesResponse,
   schemaCourseDetailsRequest,
   schemaCourseDetailsResponse,
+  schemaCourseHandicapGetRequest,
+  schemaCourseHandicapsGetResponse,
   schemaCoursePlayerHandicapsResponse,
   schemaCourseSearchRequest,
   schemaCourseSearchResponse,
@@ -36,10 +54,23 @@ import {
   schemaGolfersGlobalSearchRequest,
   schemaGolfersSearchRequest,
   schemaGolfersSearchResponse,
+  schemaGpaAccessesResponse,
+  schemaGpaRequestAccessResponse,
+  schemaGpaRevokeAccessResponse,
+  schemaGpaUpdateStatusRequest,
+  schemaGpaUpdateStatusResponse,
+  schemaPlayingHandicapRequest,
+  schemaPlayingHandicapsResponse,
+  schemaScorePost18h9and9Request,
+  schemaScorePostAdjustedRequest,
+  schemaScorePostHbhRequest,
+  schemaScorePostResponse,
   schemaScoresRequest,
   schemaScoresResponse,
+  schemaTeeSetRatingForScorePostingRequest,
   schemaTeeSetRatingRequest,
   schemaTeeSetRatingResponse,
+  schemaTeeSetRatingsForScorePostingResponse,
 } from './models'
 
 const searchParameters = {
@@ -55,6 +86,9 @@ export class GhinClient {
     getDetails: (request: CourseDetailsRequest) => Promise<CourseDetailsResponse>
     search: (request: CourseSearchRequest) => Promise<CourseSearchResponse['courses']>
     getTeeSetRating: (request: TeeSetRatingRequest) => Promise<TeeSetRatingResponse>
+    getTeeSetRatingsForScorePosting: (
+      request: TeeSetRatingForScorePostingRequest,
+    ) => Promise<TeeSetRatingsForScorePostingResponse>
   }
 
   facilities: {
@@ -68,9 +102,24 @@ export class GhinClient {
     globalSearch: (request: GolfersGlobalSearchRequest) => Promise<GolfersSearchResponse['golfers']>
   }
 
+  gpa: {
+    getAccesses: () => Promise<GpaAccessStatus[]>
+    requestAccess: (golferId: number) => Promise<GpaRequestAccessResponse>
+    updateStatus: (request: GpaUpdateStatusRequest) => Promise<GpaUpdateStatusResponse>
+    revokeAccess: (golferId: number) => Promise<GpaRevokeAccessResponse>
+  }
+
   handicaps: {
     getOne: (ghinNumber: number) => Promise<HandicapResponse['golfer']>
     getCoursePlayerHandicaps: (requests: GolferCourseHandicapRequest[]) => Promise<CoursePlayerHandicapsResponse>
+    getCourseHandicaps: (request: CourseHandicapGetRequest) => Promise<CourseHandicapsGetResponse>
+    getPlayingHandicaps: (request: PlayingHandicapRequest) => Promise<PlayingHandicapsResponse>
+  }
+
+  scores: {
+    postHoleByHole: (request: ScorePostHbhRequest) => Promise<ScorePostResponse>
+    postAdjusted: (request: ScorePostAdjustedRequest) => Promise<ScorePostResponse>
+    post18h9and9: (request: ScorePost18h9and9Request) => Promise<ScorePostResponse>
   }
 
   constructor(config: ClientConfig) {
@@ -90,15 +139,25 @@ export class GhinClient {
       getDetails: this.courseGetDetails.bind(this),
       search: this.courseSearch.bind(this),
       getTeeSetRating: this.courseGetTeeSetRating.bind(this),
+      getTeeSetRatingsForScorePosting: this.courseGetTeeSetRatingsForScorePosting.bind(this),
     }
 
     this.facilities = {
       search: this.facilitySearch.bind(this),
     }
 
+    this.gpa = {
+      getAccesses: this.gpaGetAccesses.bind(this),
+      requestAccess: this.gpaRequestAccess.bind(this),
+      updateStatus: this.gpaUpdateStatus.bind(this),
+      revokeAccess: this.gpaRevokeAccess.bind(this),
+    }
+
     this.handicaps = {
       getOne: this.handicapsGetOne.bind(this),
       getCoursePlayerHandicaps: this.handicapsGetCoursePlayerHandicaps.bind(this),
+      getCourseHandicaps: this.handicapsGetCourseHandicaps.bind(this),
+      getPlayingHandicaps: this.handicapsGetPlayingHandicaps.bind(this),
     }
 
     this.golfers = {
@@ -107,7 +166,15 @@ export class GhinClient {
       search: this.golfersSearch.bind(this),
       globalSearch: this.golfersGlobalSearch.bind(this),
     }
+
+    this.scores = {
+      postHoleByHole: this.scoresPostHoleByHole.bind(this),
+      postAdjusted: this.scoresPostAdjusted.bind(this),
+      post18h9and9: this.scoresPost18h9and9.bind(this),
+    }
   }
+
+  // ── Courses ──────────────────────────────────────────────────────────
 
   private async coursesGetCountries(): Promise<CourseCountry[]> {
     try {
@@ -198,6 +265,38 @@ export class GhinClient {
     }
   }
 
+  private async courseGetTeeSetRatingsForScorePosting(
+    request: TeeSetRatingForScorePostingRequest,
+  ): Promise<TeeSetRatingsForScorePostingResponse> {
+    try {
+      const validRequest = schemaTeeSetRatingForScorePostingRequest.parse(request)
+      const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
+
+      const path = `/Courses/${validRequest.course_id}/TeeSetRatingsForScorePosting.json`
+
+      const options: Parameters<typeof this.httpClient.fetchCustomPath>[0]['options'] = {
+        searchParams,
+      }
+
+      const result = await this.httpClient.fetchCustomPath<TeeSetRatingsForScorePostingResponse>({
+        path,
+        options,
+        schema: schemaTeeSetRatingsForScorePostingResponse,
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid tee set rating for score posting request: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
   private async courseSearch(request: CourseSearchRequest): Promise<CourseSearchResponse['courses']> {
     try {
       const validRequest = schemaCourseSearchRequest.parse(request)
@@ -230,6 +329,8 @@ export class GhinClient {
     }
   }
 
+  // ── Facilities ───────────────────────────────────────────────────────
+
   private async facilitySearch(request: FacilitySearchRequest): Promise<FacilitySearchResponse> {
     try {
       const validRequest = schemaFacilitySearchRequest.parse(request)
@@ -261,6 +362,109 @@ export class GhinClient {
       throw error instanceof Error ? error : new Error(String(error))
     }
   }
+
+  // ── GPA (Golfer Product Access) ──────────────────────────────────────
+
+  private async gpaGetAccesses(): Promise<GpaAccessStatus[]> {
+    try {
+      const result = await this.httpClient.fetch<GpaAccessesResponse>({
+        entity: 'gpa_accesses',
+        schema: schemaGpaAccessesResponse,
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value.accesses
+    } catch (error) {
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  private async gpaRequestAccess(golferId: number): Promise<GpaRequestAccessResponse> {
+    try {
+      const id = number.positive().parse(golferId)
+
+      const path = `/users/golfers/${id}/request_golfer_product_access.json`
+
+      const result = await this.httpClient.fetchCustomPath<GpaRequestAccessResponse>({
+        path,
+        schema: schemaGpaRequestAccessResponse,
+        options: {
+          method: 'POST',
+        },
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid golfer ID: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  private async gpaUpdateStatus(request: GpaUpdateStatusRequest): Promise<GpaUpdateStatusResponse> {
+    try {
+      const validRequest = schemaGpaUpdateStatusRequest.parse(request)
+
+      const path = `/users/${validRequest.user_id}/golfers/${validRequest.golfer_id}/update_golfer_product_access_status.json`
+
+      const result = await this.httpClient.fetchCustomPath<GpaUpdateStatusResponse>({
+        path,
+        schema: schemaGpaUpdateStatusResponse,
+        options: {
+          method: 'POST',
+          body: JSON.stringify({ status: validRequest.status }),
+        },
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid GPA update status request: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  private async gpaRevokeAccess(golferId: number): Promise<GpaRevokeAccessResponse> {
+    try {
+      const id = number.positive().parse(golferId)
+
+      const path = `/users/golfers/${id}/revoke_golfer_product_access.json`
+
+      const result = await this.httpClient.fetchCustomPath<GpaRevokeAccessResponse>({
+        path,
+        schema: schemaGpaRevokeAccessResponse,
+        options: {
+          method: 'DELETE',
+        },
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid golfer ID: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  // ── Handicaps ────────────────────────────────────────────────────────
 
   private async handicapsGetOne(ghin: number): Promise<HandicapResponse['golfer']> {
     try {
@@ -337,6 +541,68 @@ export class GhinClient {
       throw error instanceof Error ? error : new Error(String(error))
     }
   }
+
+  private async handicapsGetCourseHandicaps(request: CourseHandicapGetRequest): Promise<CourseHandicapsGetResponse> {
+    try {
+      const validRequest = schemaCourseHandicapGetRequest.parse(request)
+      const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
+
+      for (const [key, value] of Object.entries(validRequest)) {
+        searchParams.set(key, value.toString())
+      }
+
+      const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
+        searchParams,
+      }
+
+      const result = await this.httpClient.fetch<CourseHandicapsGetResponse>({
+        entity: 'course_handicaps_get',
+        options,
+        schema: schemaCourseHandicapsGetResponse,
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid course handicap request: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  private async handicapsGetPlayingHandicaps(request: PlayingHandicapRequest): Promise<PlayingHandicapsResponse> {
+    try {
+      const validRequest = schemaPlayingHandicapRequest.parse(request)
+
+      const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
+        method: 'POST',
+        body: JSON.stringify(validRequest),
+      }
+
+      const result = await this.httpClient.fetch<PlayingHandicapsResponse>({
+        entity: 'playing_handicaps_post',
+        options,
+        schema: schemaPlayingHandicapsResponse,
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid playing handicap request: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  // ── Golfers ──────────────────────────────────────────────────────────
 
   private async golfersSearch(request: GolfersSearchRequest): Promise<GolfersSearchResponse['golfers']> {
     try {
@@ -491,6 +757,92 @@ export class GhinClient {
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new ValidationError(`Invalid scores request: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  // ── Score Posting ────────────────────────────────────────────────────
+
+  private async scoresPostHoleByHole(request: ScorePostHbhRequest): Promise<ScorePostResponse> {
+    try {
+      const validRequest = schemaScorePostHbhRequest.parse(request)
+
+      const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
+        method: 'POST',
+        body: JSON.stringify(validRequest),
+      }
+
+      const result = await this.httpClient.fetch<ScorePostResponse>({
+        entity: 'scores_hbh',
+        options,
+        schema: schemaScorePostResponse,
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid hole-by-hole score request: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  private async scoresPostAdjusted(request: ScorePostAdjustedRequest): Promise<ScorePostResponse> {
+    try {
+      const validRequest = schemaScorePostAdjustedRequest.parse(request)
+
+      const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
+        method: 'POST',
+        body: JSON.stringify(validRequest),
+      }
+
+      const result = await this.httpClient.fetch<ScorePostResponse>({
+        entity: 'scores_adjusted',
+        options,
+        schema: schemaScorePostResponse,
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid adjusted score request: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  private async scoresPost18h9and9(request: ScorePost18h9and9Request): Promise<ScorePostResponse> {
+    try {
+      const validRequest = schemaScorePost18h9and9Request.parse(request)
+
+      const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
+        method: 'POST',
+        body: JSON.stringify(validRequest),
+      }
+
+      const result = await this.httpClient.fetch<ScorePostResponse>({
+        entity: 'scores_18h9and9',
+        options,
+        schema: schemaScorePostResponse,
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid 18h 9-and-9 score request: ${error.message}`)
       }
       throw error instanceof Error ? error : new Error(String(error))
     }

@@ -12,13 +12,13 @@ const rawScoreTypes = ['A', 'C', 'E', 'H', 'N', 'P', 'T'] as const
 const schemaRawScoreTypes = z.enum(rawScoreTypes)
 type RawScoreType = z.infer<typeof schemaRawScoreTypes>
 
-const scoreTypes = ['AWAY', 'COMPETITION', 'EXCEPTIONAL', 'HOME', '9_HOLE_ROUNDS', 'PENALTY', 'TOURNAMENT'] as const
+const scoreTypes = ['AWAY', 'COMBINED', 'EXCEPTIONAL', 'HOME', '9_HOLE_ROUNDS', 'PENALTY', 'TOURNAMENT'] as const
 const schemaScoreType = z.enum(scoreTypes)
 type ScoreType = z.infer<typeof schemaScoreType>
 
 const scoreTypesMap: Record<RawScoreType, ScoreType> = {
   A: 'AWAY',
-  C: 'COMPETITION',
+  C: 'COMBINED',
   E: 'EXCEPTIONAL',
   H: 'HOME',
   N: '9_HOLE_ROUNDS',
@@ -26,8 +26,7 @@ const scoreTypesMap: Record<RawScoreType, ScoreType> = {
   T: 'TOURNAMENT',
 } as const
 
-// @ts-expect-error ???
-const schemaScoreTypeWithTransform: z.ZodType<RawScoreType, z.ZodTypeDef, ScoreType> = schemaRawScoreTypes.transform(
+const schemaScoreTypeWithTransform: z.ZodType<ScoreType, z.ZodTypeDef, RawScoreType> = schemaRawScoreTypes.transform(
   (value) => scoreTypesMap[value],
 )
 
