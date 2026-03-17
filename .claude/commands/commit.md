@@ -20,7 +20,7 @@ When activated, commit the current working tree changes:
 
 3. **Review changes**:
    - Run `git diff --stat` and `git diff --staged --stat` to see what's changed
-   - If nothing is staged, run `git add -A` to stage everything
+   - If nothing is staged, stage all changed files by name (do NOT use `git add -A` — it may pick up sensitive files like `.env`)
    - Run `git diff --staged --stat` to confirm what will be committed
 
 4. **Generate commit message**:
