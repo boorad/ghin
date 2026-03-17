@@ -1,11 +1,11 @@
 import { z } from 'zod'
-import { float, gender, number, string } from '../../../../models'
+import { float, gender, number, string, teeSetSide } from '../../../../models'
 
 const schemaPlayingHandicapRequest = z.object({
   golfer_id: number,
   course_id: number,
   tee_set_id: number,
-  tee_set_side: z.enum(['All18', 'F9', 'B9']),
+  tee_set_side: teeSetSide,
   played_at: string,
   gender,
 })

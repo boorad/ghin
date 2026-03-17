@@ -129,6 +129,7 @@ export const handicap = z
 
 export const number = float.int()
 export const string = emptyString.min(1)
+export const teeSetSide = z.enum(['All18', 'F9', 'B9'])
 
 export const monthDay = string.or(emptyString).transform((value) => {
   if (!value) {

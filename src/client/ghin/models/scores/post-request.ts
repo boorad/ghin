@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { boolean, gender, number, string } from '../../../../models'
+import { boolean, gender, number, string, teeSetSide } from '../../../../models'
 
 const schemaScorePostHoleDetail = z.object({
   hole_number: number,
@@ -8,16 +8,14 @@ const schemaScorePostHoleDetail = z.object({
 })
 
 type ScorePostHoleDetail = z.infer<typeof schemaScorePostHoleDetail>
-
-const schemaTeeSetSide = z.enum(['All18', 'F9', 'B9'])
-const schemaScoreType = z.enum(['H', 'A', 'C'])
+const schemaScoreType = z.enum(['H', 'A', 'C', 'T'])
 const schemaNumberOfHoles = z.enum(['9', '18'])
 
 const schemaScorePostHbhRequest = z.object({
   golfer_id: string,
   course_id: string,
   tee_set_id: string,
-  tee_set_side: schemaTeeSetSide,
+  tee_set_side: teeSetSide,
   played_at: string,
   score_type: schemaScoreType,
   hole_details: z.array(schemaScorePostHoleDetail),
@@ -34,7 +32,7 @@ const schemaScorePostAdjustedRequest = z.object({
   golfer_id: string,
   course_id: string,
   tee_set_id: string,
-  tee_set_side: schemaTeeSetSide,
+  tee_set_side: teeSetSide,
   played_at: string,
   score_type: schemaScoreType,
   adjusted_gross_score: number,
