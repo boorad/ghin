@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { float, number, string, teeSetSide } from '../../../../models'
 
 const schemaTeeSetRatingForScorePostingRequest = z.object({
-  course_id: number,
+  course_id: number.positive(),
 })
 
 type TeeSetRatingForScorePostingRequest = z.infer<typeof schemaTeeSetRatingForScorePostingRequest>

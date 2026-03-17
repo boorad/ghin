@@ -3,7 +3,7 @@ import { boolean, gender, number, string, teeSetSide } from '../../../../models'
 
 const schemaScorePostHoleDetail = z.object({
   hole_number: number.min(1).max(18),
-  raw_score: number,
+  raw_score: number.min(1),
   x_hole: boolean.optional(),
 })
 
