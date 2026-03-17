@@ -23,9 +23,11 @@ const schemaTeeSetRatingForScorePostingEntry = z
 
 type TeeSetRatingForScorePostingEntry = z.infer<typeof schemaTeeSetRatingForScorePostingEntry>
 
-const schemaTeeSetRatingsForScorePostingResponse = z.object({
-  tee_set_ratings: z.array(schemaTeeSetRatingForScorePostingEntry),
-})
+const schemaTeeSetRatingsForScorePostingResponse = z
+  .object({
+    tee_set_ratings: z.array(schemaTeeSetRatingForScorePostingEntry),
+  })
+  .passthrough()
 
 type TeeSetRatingsForScorePostingResponse = z.infer<typeof schemaTeeSetRatingsForScorePostingResponse>
 
