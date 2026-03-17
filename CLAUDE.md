@@ -57,6 +57,11 @@ src/
   playground/          # Dev test scripts
 ```
 
+## API Reference
+
+- **Swagger docs**: https://app.swaggerhub.com/apis-docs/GHIN/GHIN2020AllSandbox/1.0
+- **Raw spec** (JSON, no auth): `https://api.swaggerhub.com/apis/GHIN/GHIN2020AllSandbox/1.0`
+
 ## Key Patterns
 
 - **Zod schemas** define all API response types — models live alongside their client methods in `src/client/ghin/models/`

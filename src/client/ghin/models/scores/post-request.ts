@@ -8,7 +8,7 @@ const schemaScorePostHoleDetail = z.object({
 })
 
 type ScorePostHoleDetail = z.infer<typeof schemaScorePostHoleDetail>
-const schemaScoreType = z.enum(['H', 'A', 'C', 'T'])
+const schemaScoreType = z.enum(['H', 'A', 'T'])
 const schemaNumberOfHoles = z.enum(['9', '18'])
 
 const schemaScorePostHbhRequest = z.object({
