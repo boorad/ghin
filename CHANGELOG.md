@@ -1,5 +1,11 @@
 # ghin
 
+## 0.9.0
+
+### Minor Changes
+
+- 4dc61e3: Add GPA consent, score posting, and handicap calculation endpoints
+
 ## 0.8.8
 
 ### Patch Changes
