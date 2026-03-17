@@ -19,8 +19,8 @@ run_quiet() {
 
     if [ $exit_code -ne 0 ]; then
         echo -e "${RED}FAIL${NC} $name (exit $exit_code)"
-        # Show output on failure (full output — context around errors is valuable)
-        echo "$output"
+        # Show output on failure
+        echo "$output" | grep -E "(error|warning|Error|Warning|failed|FAIL)" || echo "$output"
         return $exit_code
     fi
 
