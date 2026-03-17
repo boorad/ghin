@@ -173,6 +173,21 @@ describe('GhinClient', () => {
 
       await expect(ghinClient.courses.getTeeSetRatingsForScorePosting({ course_id: 2539 })).rejects.toThrow('Not found')
     })
+
+    it('should throw validation error with invalid request', async () => {
+      // @ts-expect-error - Testing invalid input type
+      await expect(ghinClient.courses.getTeeSetRatingsForScorePosting({ course_id: 'invalid' })).rejects.toThrow(
+        ValidationError,
+      )
+    })
+
+    it('should wrap non-Error throws', async () => {
+      mockFetchCustomPath.mockRejectedValue('string error')
+
+      await expect(ghinClient.courses.getTeeSetRatingsForScorePosting({ course_id: 2539 })).rejects.toThrow(
+        'string error',
+      )
+    })
   })
 
   describe('facilities.search', () => {
@@ -221,6 +236,12 @@ describe('GhinClient', () => {
 
       await expect(ghinClient.gpa.getAccesses()).rejects.toThrow('Unauthorized')
     })
+
+    it('should wrap non-Error throws', async () => {
+      mockFetch.mockRejectedValue('string error')
+
+      await expect(ghinClient.gpa.getAccesses()).rejects.toThrow('string error')
+    })
   })
 
   describe('gpa.requestAccess', () => {
@@ -247,6 +268,12 @@ describe('GhinClient', () => {
       mockFetchCustomPath.mockResolvedValue(err(new Error('Request failed')))
 
       await expect(ghinClient.gpa.requestAccess(123)).rejects.toThrow('Request failed')
+    })
+
+    it('should wrap non-Error throws', async () => {
+      mockFetchCustomPath.mockRejectedValue('string error')
+
+      await expect(ghinClient.gpa.requestAccess(123)).rejects.toThrow('string error')
     })
   })
 
@@ -290,6 +317,14 @@ describe('GhinClient', () => {
         'Update failed',
       )
     })
+
+    it('should wrap non-Error throws', async () => {
+      mockFetchCustomPath.mockRejectedValue('string error')
+
+      await expect(ghinClient.gpa.updateStatus({ user_id: 1, golfer_id: 123, status: 'approved' })).rejects.toThrow(
+        'string error',
+      )
+    })
   })
 
   describe('gpa.revokeAccess', () => {
@@ -307,10 +342,21 @@ describe('GhinClient', () => {
       })
     })
 
+    it('should throw validation error with invalid golfer ID', async () => {
+      // @ts-expect-error - Testing invalid input type
+      await expect(ghinClient.gpa.revokeAccess('invalid')).rejects.toThrow(ValidationError)
+    })
+
     it('should throw error when fetch fails', async () => {
       mockFetchCustomPath.mockResolvedValue(err(new Error('Revoke failed')))
 
       await expect(ghinClient.gpa.revokeAccess(123)).rejects.toThrow('Revoke failed')
+    })
+
+    it('should wrap non-Error throws', async () => {
+      mockFetchCustomPath.mockRejectedValue('string error')
+
+      await expect(ghinClient.gpa.revokeAccess(123)).rejects.toThrow('string error')
     })
   })
 
@@ -406,6 +452,35 @@ describe('GhinClient', () => {
         }),
       ).rejects.toThrow('Failed')
     })
+
+    it('should throw validation error with invalid request', async () => {
+      await expect(
+        ghinClient.handicaps.getCourseHandicaps({
+          golfer_id: 123,
+          course_id: 2539,
+          tee_set_id: 262908,
+          // @ts-expect-error - Testing invalid input type
+          tee_set_side: 'invalid',
+          played_at: '2026-03-17',
+          gender: 'M',
+        }),
+      ).rejects.toThrow(ValidationError)
+    })
+
+    it('should wrap non-Error throws', async () => {
+      mockFetch.mockRejectedValue('string error')
+
+      await expect(
+        ghinClient.handicaps.getCourseHandicaps({
+          golfer_id: 123,
+          course_id: 2539,
+          tee_set_id: 262908,
+          tee_set_side: 'All18',
+          played_at: '2026-03-17',
+          gender: 'M',
+        }),
+      ).rejects.toThrow('string error')
+    })
   })
 
   describe('handicaps.getPlayingHandicaps', () => {
@@ -448,6 +523,35 @@ describe('GhinClient', () => {
           gender: 'M',
         }),
       ).rejects.toThrow('Failed')
+    })
+
+    it('should throw validation error with invalid request', async () => {
+      await expect(
+        ghinClient.handicaps.getPlayingHandicaps({
+          golfer_id: 123,
+          course_id: 2539,
+          tee_set_id: 262908,
+          // @ts-expect-error - Testing invalid input type
+          tee_set_side: 'invalid',
+          played_at: '2026-03-17',
+          gender: 'M',
+        }),
+      ).rejects.toThrow(ValidationError)
+    })
+
+    it('should wrap non-Error throws', async () => {
+      mockFetch.mockRejectedValue('string error')
+
+      await expect(
+        ghinClient.handicaps.getPlayingHandicaps({
+          golfer_id: 123,
+          course_id: 2539,
+          tee_set_id: 262908,
+          tee_set_side: 'All18',
+          played_at: '2026-03-17',
+          gender: 'M',
+        }),
+      ).rejects.toThrow('string error')
     })
   })
 
@@ -635,12 +739,34 @@ describe('GhinClient', () => {
         }),
         schema: expect.anything(),
       })
+
+      const hbhBody = JSON.parse(mockFetch.mock.calls.at(-1)?.[0]?.options?.body as string)
+      expect(hbhBody).toMatchObject({
+        golfer_id: '123',
+        course_id: '2539',
+        score_type: 'H',
+        number_of_holes: '18',
+      })
+      expect(hbhBody.hole_details).toHaveLength(18)
+    })
+
+    it('should throw validation error with invalid request', async () => {
+      // @ts-expect-error - Testing invalid input type
+      await expect(ghinClient.scores.postHoleByHole({ ...validHbhRequest, score_type: 'X' })).rejects.toThrow(
+        ValidationError,
+      )
     })
 
     it('should throw error when fetch fails', async () => {
       mockFetch.mockResolvedValue(err(new Error('Post failed')))
 
       await expect(ghinClient.scores.postHoleByHole(validHbhRequest)).rejects.toThrow('Post failed')
+    })
+
+    it('should wrap non-Error throws', async () => {
+      mockFetch.mockRejectedValue('string error')
+
+      await expect(ghinClient.scores.postHoleByHole(validHbhRequest)).rejects.toThrow('string error')
     })
   })
 
@@ -689,12 +815,33 @@ describe('GhinClient', () => {
         }),
         schema: expect.anything(),
       })
+
+      const adjustedBody = JSON.parse(mockFetch.mock.calls.at(-1)?.[0]?.options?.body as string)
+      expect(adjustedBody).toMatchObject({
+        golfer_id: '123',
+        course_id: '2539',
+        score_type: 'A',
+        adjusted_gross_score: 85,
+      })
+    })
+
+    it('should throw validation error with invalid request', async () => {
+      // @ts-expect-error - Testing invalid input type
+      await expect(ghinClient.scores.postAdjusted({ ...validAdjustedRequest, score_type: 'X' })).rejects.toThrow(
+        ValidationError,
+      )
     })
 
     it('should throw error when fetch fails', async () => {
       mockFetch.mockResolvedValue(err(new Error('Post failed')))
 
       await expect(ghinClient.scores.postAdjusted(validAdjustedRequest)).rejects.toThrow('Post failed')
+    })
+
+    it('should wrap non-Error throws', async () => {
+      mockFetch.mockRejectedValue('string error')
+
+      await expect(ghinClient.scores.postAdjusted(validAdjustedRequest)).rejects.toThrow('string error')
     })
   })
 
@@ -743,12 +890,34 @@ describe('GhinClient', () => {
         }),
         schema: expect.anything(),
       })
+
+      const nineAndNineBody = JSON.parse(mockFetch.mock.calls.at(-1)?.[0]?.options?.body as string)
+      expect(nineAndNineBody).toMatchObject({
+        golfer_id: '123',
+        course_id: '2539',
+        score_type: 'H',
+        front9_adjusted: 42,
+        back9_adjusted: 43,
+      })
+    })
+
+    it('should throw validation error with invalid request', async () => {
+      // @ts-expect-error - Testing invalid input type
+      await expect(ghinClient.scores.post18h9and9({ ...valid9and9Request, score_type: 'X' })).rejects.toThrow(
+        ValidationError,
+      )
     })
 
     it('should throw error when fetch fails', async () => {
       mockFetch.mockResolvedValue(err(new Error('Post failed')))
 
       await expect(ghinClient.scores.post18h9and9(valid9and9Request)).rejects.toThrow('Post failed')
+    })
+
+    it('should wrap non-Error throws', async () => {
+      mockFetch.mockRejectedValue('string error')
+
+      await expect(ghinClient.scores.post18h9and9(valid9and9Request)).rejects.toThrow('string error')
     })
   })
 })

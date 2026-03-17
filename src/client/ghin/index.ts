@@ -384,7 +384,7 @@ export class GhinClient {
 
   private async gpaRequestAccess(golferId: number): Promise<GpaRequestAccessResponse> {
     try {
-      const id = number.parse(golferId)
+      const id = number.positive().parse(golferId)
 
       const path = `/users/golfers/${id}/request_golfer_product_access.json`
 
@@ -439,7 +439,7 @@ export class GhinClient {
 
   private async gpaRevokeAccess(golferId: number): Promise<GpaRevokeAccessResponse> {
     try {
-      const id = number.parse(golferId)
+      const id = number.positive().parse(golferId)
 
       const path = `/users/golfers/${id}/revoke_golfer_product_access.json`
 

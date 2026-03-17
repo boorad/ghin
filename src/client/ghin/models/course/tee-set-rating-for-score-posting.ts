@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { boolean, float, number, string } from '../../../../models'
+import { float, number, string, teeSetSide } from '../../../../models'
 
 const schemaTeeSetRatingForScorePostingRequest = z.object({
   course_id: number,
@@ -17,7 +17,7 @@ const schemaTeeSetRatingForScorePostingEntry = z
     bogey_rating: float.nullable().optional(),
     par: number,
     holes_number: number,
-    tee_set_side: string,
+    tee_set_side: teeSetSide,
   })
   .passthrough()
 

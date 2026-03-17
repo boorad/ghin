@@ -44,7 +44,7 @@ The pre-commit hook runs `./scripts/code-quality.sh` which checks: biome (format
 
 ## Project Structure
 
-```
+```text
 src/
   client/
     ghin/              # Main GhinClient — courses, facilities, golfers, handicaps

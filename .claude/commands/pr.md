@@ -29,6 +29,7 @@ When activated, create a pull request for the current branch:
      - **Issue references**: Add `Fixes #XXX` or `Closes #XXX` for any issues this PR resolves (these will auto-close the issues when merged)
 
 5. **Create the PR**:
+
    ```bash
    gh pr create --title "<title>" --body "<body>" --base main --assignee @me
    ```

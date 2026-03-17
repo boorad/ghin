@@ -13,15 +13,15 @@ declare global {
 }
 
 const fn = async () => {
-  const ghinClient = new GhinClient({
-    password: process.env.GHIN_PASSWORD as string,
-    username: process.env.GHIN_USERNAME as string,
-    apiAccess: process.env.GHIN_API_ACCESS === 'true',
-    apiVersion: process.env.GHIN_API_VERSION as string,
-    baseUrl: process.env.GHIN_BASE_URL as string,
-  })
-
   try {
+    const ghinClient = new GhinClient({
+      password: process.env.GHIN_PASSWORD as string,
+      username: process.env.GHIN_USERNAME as string,
+      apiAccess: process.env.GHIN_API_ACCESS === 'true',
+      apiVersion: process.env.GHIN_API_VERSION as string,
+      baseUrl: process.env.GHIN_BASE_URL as string,
+    })
+
     // List current GPA accesses
     console.log('--- GPA Accesses ---')
     const accesses = await ghinClient.gpa.getAccesses()

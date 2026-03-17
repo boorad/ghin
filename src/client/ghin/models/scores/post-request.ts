@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { boolean, gender, number, string, teeSetSide } from '../../../../models'
 
 const schemaScorePostHoleDetail = z.object({
-  hole_number: number,
+  hole_number: number.min(1).max(18),
   raw_score: number,
   x_hole: boolean.optional(),
 })
@@ -18,7 +18,7 @@ const schemaScorePostHbhRequest = z.object({
   tee_set_side: teeSetSide,
   played_at: string,
   score_type: schemaScoreType,
-  hole_details: z.array(schemaScorePostHoleDetail),
+  hole_details: z.array(schemaScorePostHoleDetail).min(1),
   number_of_holes: schemaNumberOfHoles,
   number_of_played_holes: number.optional(),
   gender,

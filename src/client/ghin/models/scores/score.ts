@@ -26,8 +26,7 @@ const scoreTypesMap: Record<RawScoreType, ScoreType> = {
   T: 'TOURNAMENT',
 } as const
 
-// @ts-expect-error ???
-const schemaScoreTypeWithTransform: z.ZodType<RawScoreType, z.ZodTypeDef, ScoreType> = schemaRawScoreTypes.transform(
+const schemaScoreTypeWithTransform: z.ZodType<ScoreType, z.ZodTypeDef, RawScoreType> = schemaRawScoreTypes.transform(
   (value) => scoreTypesMap[value],
 )
 

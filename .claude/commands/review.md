@@ -34,4 +34,14 @@ Run `./scripts/code-quality.sh` to verify the code compiles and passes lint.
 
 ## Follow-up
 
-After presenting the review, **fix all issues** identified above. Apply each fix directly -- do not ask for confirmation on individual items. If any issue is ambiguous or has multiple reasonable approaches, ask the user which direction to take before proceeding. Run `./scripts/code-quality.sh` after all fixes are applied to verify everything is clean.
+After presenting the review, present a **fix plan table** for the user to approve before making any changes:
+
+| # | File | Issue | Proposed Action |
+|---|------|-------|-----------------|
+| 1 | path/to/file.ts:42 | Brief description | Fix / Skip / Ask |
+
+- **Fix**: Will apply the change
+- **Skip**: Not worth changing (explain why)
+- **Ask**: Ambiguous, needs user input on approach
+
+**Wait for the user to approve the plan** (they may want to skip or modify items). Then apply only the approved fixes. Run `./scripts/code-quality.sh` after all fixes are applied to verify everything is clean.

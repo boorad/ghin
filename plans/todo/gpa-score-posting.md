@@ -106,7 +106,7 @@ type ScorePostHbhRequest = {
   tee_set_id: string
   tee_set_side: 'All18' | 'F9' | 'B9'
   played_at: string         // 'YYYY-MM-DD'
-  score_type: 'H' | 'A' | 'C'  // Home, Away, Competition
+  score_type: 'H' | 'A' | 'T'  // Home, Away, Tournament
   hole_details: HoleDetail[]
   number_of_holes: '9' | '18'
   number_of_played_holes?: number  // required for 9-hole and 10-17
@@ -146,9 +146,9 @@ type ScorePostResponse = {
 #### Score Type Detection Logic (for spicy app, but document here)
 
 ```
-H (Home)  - golfer's home club matches the course's facility
-A (Away)  - golfer is playing at a different facility
-C (Competition) - tournament/competition round (user-selected)
+H (Home)       - golfer's home club matches the course's facility
+A (Away)       - golfer is playing at a different facility
+T (Tournament) - tournament/competition round (user-selected)
 ```
 
 ### Phase 3: Additional Endpoints
