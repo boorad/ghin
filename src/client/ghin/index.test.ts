@@ -726,7 +726,7 @@ describe('GhinClient', () => {
         slope_rating: 130,
         score_type: 'H',
       }
-      mockFetch.mockResolvedValue(ok(mockResponse))
+      mockFetch.mockResolvedValue(ok({ score: mockResponse }))
 
       const result = await ghinClient.scores.postHoleByHole(validHbhRequest)
 
@@ -802,7 +802,7 @@ describe('GhinClient', () => {
         slope_rating: 130,
         score_type: 'A',
       }
-      mockFetch.mockResolvedValue(ok(mockResponse))
+      mockFetch.mockResolvedValue(ok({ score: mockResponse }))
 
       const result = await ghinClient.scores.postAdjusted(validAdjustedRequest)
 
@@ -877,7 +877,7 @@ describe('GhinClient', () => {
         slope_rating: 130,
         score_type: 'H',
       }
-      mockFetch.mockResolvedValue(ok(mockResponse))
+      mockFetch.mockResolvedValue(ok({ score: mockResponse }))
 
       const result = await ghinClient.scores.post18h9and9(valid9and9Request)
 
