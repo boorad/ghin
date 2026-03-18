@@ -1,5 +1,12 @@
 # ghin
 
+## 0.9.1
+
+### Patch Changes
+
+- 073f2b7: Align GPA and score response schemas with sandbox API
+- 5a6c9d5: Fix release workflow to push tags before creating GitHub release
+
 ## 0.9.0
 
 ### Minor Changes
