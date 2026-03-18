@@ -215,7 +215,7 @@ describe('GhinClient', () => {
   describe('gpa.getAccesses', () => {
     it('should fetch and return GPA accesses', async () => {
       const mockResponse = {
-        accesses: [
+        gpa_accesses: [
           { golfer_id: 123, status: 'approved' },
           { golfer_id: 456, status: 'pending' },
         ],
@@ -224,7 +224,7 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.gpa.getAccesses()
 
-      expect(result).toEqual(mockResponse.accesses)
+      expect(result).toEqual(mockResponse.gpa_accesses)
       expect(mockFetch).toHaveBeenCalledWith({
         entity: 'gpa_accesses',
         schema: expect.anything(),
@@ -294,7 +294,7 @@ describe('GhinClient', () => {
         schema: expect.anything(),
         options: {
           method: 'POST',
-          body: JSON.stringify({ status: 'approved' }),
+          body: JSON.stringify({ gpa_status: 'approved' }),
         },
       })
     })

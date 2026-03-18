@@ -376,7 +376,7 @@ export class GhinClient {
         throw result.error
       }
 
-      return result.value.accesses
+      return result.value.gpa_accesses
     } catch (error) {
       throw error instanceof Error ? error : new Error(String(error))
     }
@@ -420,7 +420,7 @@ export class GhinClient {
         schema: schemaGpaUpdateStatusResponse,
         options: {
           method: 'POST',
-          body: JSON.stringify({ status: validRequest.status }),
+          body: JSON.stringify({ gpa_status: validRequest.status }),
         },
       })
 
@@ -773,7 +773,7 @@ export class GhinClient {
         body: JSON.stringify(validRequest),
       }
 
-      const result = await this.httpClient.fetch<ScorePostResponse>({
+      const result = await this.httpClient.fetch<{ score: ScorePostResponse }>({
         entity: 'scores_hbh',
         options,
         schema: schemaScorePostResponse,
@@ -783,7 +783,7 @@ export class GhinClient {
         throw result.error
       }
 
-      return result.value
+      return result.value.score
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new ValidationError(`Invalid hole-by-hole score request: ${error.message}`)
@@ -801,7 +801,7 @@ export class GhinClient {
         body: JSON.stringify(validRequest),
       }
 
-      const result = await this.httpClient.fetch<ScorePostResponse>({
+      const result = await this.httpClient.fetch<{ score: ScorePostResponse }>({
         entity: 'scores_adjusted',
         options,
         schema: schemaScorePostResponse,
@@ -811,7 +811,7 @@ export class GhinClient {
         throw result.error
       }
 
-      return result.value
+      return result.value.score
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new ValidationError(`Invalid adjusted score request: ${error.message}`)
@@ -829,7 +829,7 @@ export class GhinClient {
         body: JSON.stringify(validRequest),
       }
 
-      const result = await this.httpClient.fetch<ScorePostResponse>({
+      const result = await this.httpClient.fetch<{ score: ScorePostResponse }>({
         entity: 'scores_18h9and9',
         options,
         schema: schemaScorePostResponse,
@@ -839,7 +839,7 @@ export class GhinClient {
         throw result.error
       }
 
-      return result.value
+      return result.value.score
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new ValidationError(`Invalid 18h 9-and-9 score request: ${error.message}`)
