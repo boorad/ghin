@@ -11,7 +11,7 @@ const schemaGpaAccessStatus = z
 type GpaAccessStatus = z.infer<typeof schemaGpaAccessStatus>
 
 const schemaGpaAccessesResponse = z.object({
-  accesses: z.array(schemaGpaAccessStatus),
+  gpa_accesses: z.array(schemaGpaAccessStatus),
 })
 
 type GpaAccessesResponse = z.infer<typeof schemaGpaAccessesResponse>

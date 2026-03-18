@@ -215,7 +215,7 @@ describe('GhinClient', () => {
   describe('gpa.getAccesses', () => {
     it('should fetch and return GPA accesses', async () => {
       const mockResponse = {
-        accesses: [
+        gpa_accesses: [
           { golfer_id: 123, status: 'approved' },
           { golfer_id: 456, status: 'pending' },
         ],
@@ -224,7 +224,7 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.gpa.getAccesses()
 
-      expect(result).toEqual(mockResponse.accesses)
+      expect(result).toEqual(mockResponse.gpa_accesses)
       expect(mockFetch).toHaveBeenCalledWith({
         entity: 'gpa_accesses',
         schema: expect.anything(),
@@ -294,7 +294,7 @@ describe('GhinClient', () => {
         schema: expect.anything(),
         options: {
           method: 'POST',
-          body: JSON.stringify({ status: 'approved' }),
+          body: JSON.stringify({ gpa_status: 'approved' }),
         },
       })
     })
@@ -726,7 +726,7 @@ describe('GhinClient', () => {
         slope_rating: 130,
         score_type: 'H',
       }
-      mockFetch.mockResolvedValue(ok(mockResponse))
+      mockFetch.mockResolvedValue(ok({ score: mockResponse }))
 
       const result = await ghinClient.scores.postHoleByHole(validHbhRequest)
 
@@ -802,7 +802,7 @@ describe('GhinClient', () => {
         slope_rating: 130,
         score_type: 'A',
       }
-      mockFetch.mockResolvedValue(ok(mockResponse))
+      mockFetch.mockResolvedValue(ok({ score: mockResponse }))
 
       const result = await ghinClient.scores.postAdjusted(validAdjustedRequest)
 
@@ -877,7 +877,7 @@ describe('GhinClient', () => {
         slope_rating: 130,
         score_type: 'H',
       }
-      mockFetch.mockResolvedValue(ok(mockResponse))
+      mockFetch.mockResolvedValue(ok({ score: mockResponse }))
 
       const result = await ghinClient.scores.post18h9and9(valid9and9Request)
 

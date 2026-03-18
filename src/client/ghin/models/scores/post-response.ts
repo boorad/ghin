@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { float, number, string } from '../../../../models'
 
-const schemaScorePostResponse = z
+const schemaScorePostResponseInner = z
   .object({
     id: number,
     golfer_id: number,
@@ -25,7 +25,11 @@ const schemaScorePostResponse = z
   })
   .passthrough()
 
-type ScorePostResponse = z.infer<typeof schemaScorePostResponse>
+const schemaScorePostResponse = z.object({
+  score: schemaScorePostResponseInner,
+})
+
+type ScorePostResponse = z.infer<typeof schemaScorePostResponseInner>
 
 export { schemaScorePostResponse }
 export type { ScorePostResponse }
