@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ZodSchema } from 'zod'
-import { NetworkError, ValidationError } from '../../errors'
+import { AuthenticationError, NetworkError, ValidationError } from '../../errors'
 import { InMemoryCacheClient } from '../in-memory-cache-client'
 import { RequestClient } from './index'
 
@@ -240,7 +240,7 @@ describe('RequestClient', () => {
       }
     })
 
-    it('should handle 401 authentication errors', async () => {
+    it('should handle 401 authentication errors after a retry', async () => {
       const { jwtDecode } = await import('jwt-decode')
       vi.mocked(jwtDecode).mockReturnValue({
         exp: Math.floor(Date.now() / 1000) + 3600,
@@ -252,6 +252,128 @@ describe('RequestClient', () => {
       const mockLoginResponse = {
         golfer_user: { golfer_user_token: 'access-token' },
       }
+      const unauthorizedResponse = {
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        json: async () => ({ error: 'Unauthorized' }),
+      } as Response
+
+      vi.mocked(fetch)
+        // initial auth
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockSessionResponse,
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockLoginResponse,
+        } as Response)
+        // first API attempt → 401
+        .mockResolvedValueOnce(unauthorizedResponse)
+        // forced re-login
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockSessionResponse,
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockLoginResponse,
+        } as Response)
+        // retry API attempt → still 401
+        .mockResolvedValueOnce(unauthorizedResponse)
+
+      const schema = { safeParse: vi.fn() } as unknown as ZodSchema
+
+      const result = await requestClient.fetch({
+        entity: 'golfer',
+        schema,
+      })
+
+      expect(result.isErr()).toBe(true)
+      if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(AuthenticationError)
+        expect(result.error.message).toContain('Authentication failed')
+      }
+      // exactly one re-login was attempted, not a loop
+      expect(fetch).toHaveBeenCalledTimes(6)
+    })
+
+    it('should auto re-login on 401 and retry successfully', async () => {
+      const { jwtDecode } = await import('jwt-decode')
+      vi.mocked(jwtDecode).mockReturnValue({
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      })
+
+      const mockSessionResponse = {
+        authToken: { token: 'session-token', expiresIn: '3600s' },
+      }
+      const mockLoginResponse = {
+        golfer_user: { golfer_user_token: 'access-token' },
+      }
+      const mockApiResponse = { data: 'ok-after-relogin' }
+
+      vi.mocked(fetch)
+        // initial auth
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockSessionResponse,
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockLoginResponse,
+        } as Response)
+        // first API attempt → 401
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          statusText: 'Unauthorized',
+          json: async () => ({ error: 'Unauthorized' }),
+        } as Response)
+        // forced re-login
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockSessionResponse,
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockLoginResponse,
+        } as Response)
+        // retry API attempt → success
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockApiResponse,
+        } as Response)
+
+      const schema = {
+        safeParse: vi.fn().mockReturnValue({ success: true, data: mockApiResponse }),
+      } as unknown as ZodSchema
+
+      const result = await requestClient.fetch({
+        entity: 'golfer',
+        schema,
+      })
+
+      expect(result.isOk()).toBe(true)
+      if (result.isOk()) {
+        expect(result.value).toEqual(mockApiResponse)
+      }
+      expect(fetch).toHaveBeenCalledTimes(6)
+    })
+
+    it('should auto re-login on 403 and retry successfully', async () => {
+      const { jwtDecode } = await import('jwt-decode')
+      vi.mocked(jwtDecode).mockReturnValue({
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      })
+
+      const mockSessionResponse = {
+        authToken: { token: 'session-token', expiresIn: '3600s' },
+      }
+      const mockLoginResponse = {
+        golfer_user: { golfer_user_token: 'access-token' },
+      }
+      const mockApiResponse = { data: 'ok-after-relogin' }
 
       vi.mocked(fetch)
         .mockResolvedValueOnce({
@@ -264,22 +386,103 @@ describe('RequestClient', () => {
         } as Response)
         .mockResolvedValueOnce({
           ok: false,
-          status: 401,
-          statusText: 'Unauthorized',
-          json: async () => ({ error: 'Unauthorized' }),
+          status: 403,
+          statusText: 'Forbidden',
+          json: async () => ({ error: 'Forbidden' }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockSessionResponse,
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockLoginResponse,
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockApiResponse,
         } as Response)
 
-      const schema = { safeParse: vi.fn() } as unknown as ZodSchema
+      const schema = {
+        safeParse: vi.fn().mockReturnValue({ success: true, data: mockApiResponse }),
+      } as unknown as ZodSchema
 
       const result = await requestClient.fetch({
         entity: 'golfer',
         schema,
       })
 
-      expect(result.isErr()).toBe(true)
-      if (result.isErr()) {
-        expect(result.error.message).toContain('Authentication failed')
+      expect(result.isOk()).toBe(true)
+      expect(fetch).toHaveBeenCalledTimes(6)
+    })
+
+    it('should only re-login once when concurrent requests both 401', async () => {
+      const { jwtDecode } = await import('jwt-decode')
+      vi.mocked(jwtDecode).mockReturnValue({
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      })
+
+      const mockSessionResponse = {
+        authToken: { token: 'session-token', expiresIn: '3600s' },
       }
+      const firstLoginResponse = {
+        golfer_user: { golfer_user_token: 'access-token-v1' },
+      }
+      const secondLoginResponse = {
+        golfer_user: { golfer_user_token: 'access-token-v2' },
+      }
+      const mockApiResponse = { data: 'ok' }
+      const unauthorizedResponse = {
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        json: async () => ({ error: 'Unauthorized' }),
+      } as Response
+      const okResponse = {
+        ok: true,
+        json: async () => mockApiResponse,
+      } as Response
+
+      // Sequence:
+      //   initial auth: session, login (v1)
+      //   request A → 401, request B → 401
+      //   exactly ONE forced re-login (session, login v2) — not two
+      //   request A retry → ok, request B retry → ok
+      vi.mocked(fetch)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockSessionResponse,
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => firstLoginResponse,
+        } as Response)
+        .mockResolvedValueOnce(unauthorizedResponse)
+        .mockResolvedValueOnce(unauthorizedResponse)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockSessionResponse,
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => secondLoginResponse,
+        } as Response)
+        .mockResolvedValueOnce(okResponse)
+        .mockResolvedValueOnce(okResponse)
+
+      const schema = {
+        safeParse: vi.fn().mockReturnValue({ success: true, data: mockApiResponse }),
+      } as unknown as ZodSchema
+
+      const [resultA, resultB] = await Promise.all([
+        requestClient.fetch({ entity: 'golfer', schema }),
+        requestClient.fetch({ entity: 'golfer', schema }),
+      ])
+
+      expect(resultA.isOk()).toBe(true)
+      expect(resultB.isOk()).toBe(true)
+      // 2 (initial auth) + 2 (first attempts) + 2 (single re-login) + 2 (retries)
+      expect(fetch).toHaveBeenCalledTimes(8)
     })
 
     it('should handle 429 rate limit errors', async () => {

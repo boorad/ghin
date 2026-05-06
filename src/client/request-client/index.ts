@@ -261,6 +261,10 @@ export class RequestClient {
       )
     }
 
+    return this.persistRefreshedToken()
+  }
+
+  private async persistRefreshedToken(): Promise<Result<string, Error>> {
     const refreshResult = await this.refreshAccessToken()
     if (refreshResult.isErr()) {
       return refreshResult
@@ -281,6 +285,20 @@ export class RequestClient {
     }
 
     return ok(accessToken)
+  }
+
+  // Forces a fresh login, bypassing both the in-memory and external cache.
+  // Used to recover from 401/403 when the USGA-side token has been invalidated
+  // before its JWT `exp` (e.g. the 12-hour session ceiling).
+  // The `priorToken` arg lets concurrent callers no-op once one of them has
+  // already obtained a new token, avoiding a login storm.
+  private async forceRefreshAccessToken(priorToken: string): Promise<Result<string, Error>> {
+    if (this.accessToken && this.accessToken !== priorToken && this.isAccessTokenValid(this.accessToken)) {
+      return ok(this.accessToken)
+    }
+
+    this.accessToken = undefined
+    return this.persistRefreshedToken()
   }
 
   private async apiLogin(): Promise<Result<string, Error>> {
@@ -351,35 +369,67 @@ export class RequestClient {
     })
   }
 
-  async fetch<RequestReturnType>({
-    entity,
+  private async authedRequest<RequestReturnType>({
+    url,
     schema,
-    options = {},
-  }: FetchParameters): Promise<Result<RequestReturnType, Error>> {
+    options,
+  }: {
+    url: URL
+    schema: ZodSchema
+    options: RequestInit & { searchParams?: URLSearchParams }
+  }): Promise<Result<RequestReturnType, Error>> {
     const accessTokenResult = await this.lock.runExclusive(async () => this.getAccessToken())
     if (accessTokenResult.isErr()) {
       return err(accessTokenResult.error)
     }
 
-    const accessToken = accessTokenResult.value
-    const url = toFullApiUrl(this.baseUrl, entity)
     const { headers, searchParams, ...requestInitOptions } = options
 
-    const actualOptions = {
+    const buildOptions = (token: string): RequestInit => ({
       ...requestInitOptions,
       headers: {
         ...FETCH_HEADER_DEFAULTS,
         source: CLIENT_SOURCE,
-        ...makeAuthHeaders(accessToken),
+        ...makeAuthHeaders(token),
         ...headers,
       },
-    }
+    })
 
     if (searchParams) {
       url.search = searchParams.toString()
     }
 
-    return withRetry(() => this._fetch<RequestReturnType>({ options: actualOptions, schema, url }))
+    const accessToken = accessTokenResult.value
+    const firstResult = await withRetry(() =>
+      this._fetch<RequestReturnType>({ options: buildOptions(accessToken), schema, url }),
+    )
+
+    if (firstResult.isOk() || !(firstResult.error instanceof AuthenticationError)) {
+      return firstResult
+    }
+
+    // 401/403 — USGA tokens can be invalidated server-side before their JWT `exp`
+    // (12-hour session ceiling per Data Services §4.2.1 note 12). Force a single
+    // re-login and retry once. We deliberately do NOT loop on this to avoid
+    // login storms when credentials are actually wrong.
+    const refreshResult = await this.lock.runExclusive(async () => this.forceRefreshAccessToken(accessToken))
+    if (refreshResult.isErr()) {
+      return err(refreshResult.error)
+    }
+
+    return withRetry(() => this._fetch<RequestReturnType>({ options: buildOptions(refreshResult.value), schema, url }))
+  }
+
+  async fetch<RequestReturnType>({
+    entity,
+    schema,
+    options = {},
+  }: FetchParameters): Promise<Result<RequestReturnType, Error>> {
+    return this.authedRequest<RequestReturnType>({
+      url: toFullApiUrl(this.baseUrl, entity),
+      schema,
+      options,
+    })
   }
 
   async fetchCustomPath<RequestReturnType>({
@@ -393,29 +443,10 @@ export class RequestClient {
       searchParams?: URLSearchParams
     }
   }): Promise<Result<RequestReturnType, Error>> {
-    const accessTokenResult = await this.lock.runExclusive(async () => this.getAccessToken())
-    if (accessTokenResult.isErr()) {
-      return err(accessTokenResult.error)
-    }
-
-    const accessToken = accessTokenResult.value
-    const url = new URL(`${this.baseUrl.pathname}${path}`, this.baseUrl)
-    const { headers, searchParams, ...requestInitOptions } = options
-
-    const actualOptions = {
-      ...requestInitOptions,
-      headers: {
-        ...FETCH_HEADER_DEFAULTS,
-        source: CLIENT_SOURCE,
-        ...makeAuthHeaders(accessToken),
-        ...headers,
-      },
-    }
-
-    if (searchParams) {
-      url.search = searchParams.toString()
-    }
-
-    return withRetry(() => this._fetch<RequestReturnType>({ options: actualOptions, schema, url }))
+    return this.authedRequest<RequestReturnType>({
+      url: new URL(`${this.baseUrl.pathname}${path}`, this.baseUrl),
+      schema,
+      options,
+    })
   }
 }
