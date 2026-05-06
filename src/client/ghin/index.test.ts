@@ -619,7 +619,7 @@ describe('GhinClient', () => {
       const result = await ghinClient.golfers.getOne(1234567)
 
       expect(result).toEqual(mockResponse.golfers[0])
-      expect(mockFetch).toHaveBeenCalled()
+      expect(mockFetch).toHaveBeenCalledWith(expect.objectContaining({ entity: 'golfers_search' }))
     })
 
     it('should return undefined when no golfer found', async () => {
