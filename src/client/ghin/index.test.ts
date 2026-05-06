@@ -622,7 +622,7 @@ describe('GhinClient', () => {
       expect(mockFetch).toHaveBeenCalled()
     })
 
-    it('should return undefined when no active golfer found', async () => {
+    it('should return undefined when no golfer found', async () => {
       const mockResponse = {
         golfers: [],
       }
