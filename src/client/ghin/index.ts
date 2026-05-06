@@ -695,12 +695,14 @@ export class GhinClient {
   private async golfersGetOne(ghinNumber: number): Promise<GolfersSearchResponse['golfers'][number] | undefined> {
     try {
       const ghin = number.parse(ghinNumber)
-      const results = await this.golfersGlobalSearch({
-        ghin: ghin,
+      const results = await this.golfersSearch({
+        golfer_id: ghin,
+        page: 1,
+        per_page: 1,
         status: 'Active',
       })
 
-      return results.find((golfer) => golfer.status === 'Active')
+      return results[0]
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new ValidationError(`Invalid GHIN number: ${error.message}`)

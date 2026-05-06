@@ -624,14 +624,7 @@ describe('GhinClient', () => {
 
     it('should return undefined when no active golfer found', async () => {
       const mockResponse = {
-        golfers: [
-          {
-            ghin: 1234567,
-            first_name: 'John',
-            last_name: 'Doe',
-            status: 'Inactive',
-          },
-        ],
+        golfers: [],
       }
       mockFetch.mockResolvedValue(ok(mockResponse))
 
