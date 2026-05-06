@@ -607,7 +607,7 @@ export class GhinClient {
   private async golfersSearch(request: GolfersSearchRequest): Promise<GolfersSearchResponse['golfers']> {
     try {
       const params = schemaGolfersSearchRequest.parse(request)
-      const searchParams = new URLSearchParams()
+      const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
 
       const searchDefaults = {
         page: 1,
@@ -650,7 +650,7 @@ export class GhinClient {
 
   private async golfersGlobalSearch(request: GolfersGlobalSearchRequest): Promise<GolfersSearchResponse['golfers']> {
     try {
-      const { ghin } = schemaGolfersGlobalSearchRequest.parse(request)
+      const { ghin, ...rest } = schemaGolfersGlobalSearchRequest.parse(request)
       const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
 
       const searchDefaults = {
@@ -663,6 +663,10 @@ export class GhinClient {
 
       for (const [key, value] of Object.entries(searchDefaults)) {
         searchParams.set(key, value.toString())
+      }
+
+      for (const [key, value] of Object.entries(rest)) {
+        searchParams.set(key, value?.toString() ?? '')
       }
 
       if (ghin) {
@@ -695,12 +699,14 @@ export class GhinClient {
   private async golfersGetOne(ghinNumber: number): Promise<GolfersSearchResponse['golfers'][number] | undefined> {
     try {
       const ghin = number.parse(ghinNumber)
-      const results = await this.golfersGlobalSearch({
-        ghin: ghin,
+      const results = await this.golfersSearch({
+        golfer_id: ghin,
+        page: 1,
+        per_page: 1,
         status: 'Active',
       })
 
-      return results.find((golfer) => golfer.status === 'Active')
+      return results[0]
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new ValidationError(`Invalid GHIN number: ${error.message}`)
