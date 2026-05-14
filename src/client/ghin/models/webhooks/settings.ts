@@ -15,6 +15,12 @@ const partialEventMap = <T extends z.ZodTypeAny>(value: T) =>
     },
   )
 
+// PATCH URL leaves accept a valid URL or an empty string. The empty-string
+// case lets callers clear a registered URL via PATCH. The response schema
+// stays permissive (`z.string()`) because GHIN's returned URLs aren't ours
+// to validate.
+const webhookPatchUrl = z.union([z.literal(''), z.string().url()])
+
 export const schemaWebhookSettings = z.object({
   webhook_url: partialEventMap(z.string()).optional().default({}),
   webhook_data_type: partialEventMap(schemaWebhookDataType).optional().default({}),
@@ -25,7 +31,7 @@ export type WebhookSettings = z.infer<typeof schemaWebhookSettings>
 
 export const schemaWebhookSettingsPatch = z
   .object({
-    webhook_url: partialEventMap(z.string()).optional(),
+    webhook_url: partialEventMap(webhookPatchUrl).optional(),
     webhook_data_type: partialEventMap(schemaWebhookDataType).optional(),
     webhook_enabled: partialEventMap(z.boolean()).optional(),
   })

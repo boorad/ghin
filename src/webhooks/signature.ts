@@ -22,11 +22,15 @@ export interface VerifyWebhookSignatureResult {
  * Compute the canonical HMAC signature for a given raw body and shared secret.
  * Returned in the `sha256=<hex>` form GHIN's docs reference.
  *
- * @param rawBody - The exact bytes of the request body, as received.
+ * @param rawBody - The exact bytes of the request body, as received. Accepts
+ *   string, Buffer, or Uint8Array so callers can verify against raw bytes
+ *   straight off the wire without a lossy `toString('utf8')`.
  * @param secret - The shared webhook secret.
  */
-export function signWebhookPayload(rawBody: string, secret: string): string {
-  return `${WEBHOOK_SIGNATURE_PREFIX}${createHmac(WEBHOOK_SIGNATURE_ALGORITHM, secret).update(rawBody).digest('hex')}`
+export function signWebhookPayload(rawBody: string | Buffer | Uint8Array, secret: string): string {
+  const hmac = createHmac(WEBHOOK_SIGNATURE_ALGORITHM, secret)
+  hmac.update(rawBody)
+  return `${WEBHOOK_SIGNATURE_PREFIX}${hmac.digest('hex')}`
 }
 
 /**
@@ -42,7 +46,7 @@ export function signWebhookPayload(rawBody: string, secret: string): string {
  *   as a 500-level config issue, not a 401).
  */
 export function verifyWebhookSignature(
-  rawBody: string,
+  rawBody: string | Buffer | Uint8Array,
   signatureHeader: string | null | undefined,
   secret: string,
 ): VerifyWebhookSignatureResult {

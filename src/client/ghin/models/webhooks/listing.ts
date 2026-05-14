@@ -1,8 +1,7 @@
 import { z } from 'zod'
-import { schemaWebhookEnvelope } from './envelope'
-import { schemaWebhookEventType } from './settings'
+import { schemaWebhookEnvelope, schemaWebhookEnvelopeObjectType } from './envelope'
 
-export const schemaWebhooksListObjectType = z.union([schemaWebhookEventType, z.literal('crs')])
+export const schemaWebhooksListObjectType = schemaWebhookEnvelopeObjectType
 export type WebhooksListObjectType = z.infer<typeof schemaWebhooksListObjectType>
 
 export const schemaWebhooksListEntityType = z.enum(['CrsCourse', 'CrsFacility', 'AssociationSeason', 'CrsTeeSet'])

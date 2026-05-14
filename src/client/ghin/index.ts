@@ -1065,13 +1065,13 @@ export class GhinClient {
 
       const reasons: string[] = []
       if (normalizeWebhookUrl(currentUrl) !== normalizeWebhookUrl(url)) {
-        reasons.push(`url differs (got ${String(currentUrl)})`)
+        reasons.push(`url differs (got ${describeLeaf(currentUrl)})`)
       }
       if (currentDataType !== dataType) {
-        reasons.push(`data_type differs (got ${String(currentDataType)}, want ${dataType})`)
+        reasons.push(`data_type differs (got ${describeLeaf(currentDataType)}, want ${dataType})`)
       }
       if (currentEnabled !== enabled) {
-        reasons.push(`enabled differs (got ${String(currentEnabled)}, want ${enabled})`)
+        reasons.push(`enabled differs (got ${describeLeaf(currentEnabled)}, want ${enabled})`)
       }
 
       if (reasons.length === 0) {
@@ -1124,7 +1124,8 @@ export class GhinClient {
       })
 
       for (const envelope of response.webhooks) {
-        yield envelope as WebhookEnvelope
+        // Cast away the passthrough-inferred type; runtime shape matches WebhookEnvelope.
+        yield envelope as unknown as WebhookEnvelope
       }
 
       if (response.webhooks.length < per_page) {
@@ -1132,14 +1133,27 @@ export class GhinClient {
       }
 
       page += 1
+      if (page > ITERATE_UNDELIVERED_MAX_PAGES) {
+        throw new Error(
+          `iterateUndelivered exceeded ${ITERATE_UNDELIVERED_MAX_PAGES} pages; tighten from_date/to_date or object_type filters`,
+        )
+      }
     }
   }
 }
+
+// Safety cap. At default per_page=25 this is 250k envelopes — far past any
+// realistic backlog. Exists only to keep a misconfigured filter from spinning
+// forever; bump or remove if a real workload needs it.
+const ITERATE_UNDELIVERED_MAX_PAGES = 10_000
 
 // Strip trailing slashes so e.g. `https://x/y/` and `https://x/y` compare
 // equal — avoids a PATCH every boot when GHIN normalizes the registered URL
 // differently than the caller.
 const normalizeWebhookUrl = (url: string | undefined): string | undefined =>
   url === undefined ? undefined : url.replace(/\/+$/, '')
+
+const describeLeaf = (value: string | boolean | undefined): string =>
+  value === undefined ? '(not set)' : String(value)
 
 export * from './models'

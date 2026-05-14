@@ -396,7 +396,12 @@ export class RequestClient {
     })
 
     if (searchParams) {
-      url.search = searchParams.toString()
+      // URLSearchParams.toString() form-encodes space as `+`. Some upstream
+      // query parsers (JAX-RS/Jersey, anything using java.net.URI#getQuery)
+      // don't decode `+` to space, and GHIN's docs canonicalize spaces as
+      // `%20`. Convert to be safe — literal `+` characters are already
+      // emitted as `%2B`, so this replacement is unambiguous.
+      url.search = searchParams.toString().replace(/\+/g, '%20')
     }
 
     const accessToken = accessTokenResult.value
