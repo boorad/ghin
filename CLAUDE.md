@@ -80,3 +80,7 @@ src/
 
 - **Main CI** (all branches except main): biome check, lint, build, test with coverage → Codecov
 - **Release** (manual dispatch): changesets version → build → npm publish → GitHub release
+
+## Slash Commands
+
+When the user types `/<name>` (e.g. `/commit`, `/pr`, `/review`, `/address-pr-feedback`), look in `.claude/commands/<name>.md` first and follow that file's instructions. Project-local command files override any default behavior for the same name.

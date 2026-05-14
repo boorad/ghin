@@ -14,6 +14,8 @@ import {
   type CoursePlayerHandicapsResponse,
   type CourseSearchRequest,
   type CourseSearchResponse,
+  type EnsureRegisteredRequest,
+  type EnsureRegisteredResult,
   type FacilitySearchRequest,
   type FacilitySearchResponse,
   type GolferCourseHandicapRequest,
@@ -27,6 +29,7 @@ import {
   type GpaUpdateStatusRequest,
   type GpaUpdateStatusResponse,
   type HandicapResponse,
+  type IterateUndeliveredRequest,
   type PlayingHandicapRequest,
   type PlayingHandicapsResponse,
   type ScorePost18h9and9Request,
@@ -39,6 +42,14 @@ import {
   type TeeSetRatingRequest,
   type TeeSetRatingResponse,
   type TeeSetRatingsForScorePostingResponse,
+  type WebhookEnvelope,
+  type WebhookEventType,
+  type WebhookResendRequest,
+  type WebhookSettings,
+  type WebhookSettingsPatch,
+  type WebhookSuccessResponse,
+  type WebhooksListRequest,
+  type WebhooksListResponse,
   schemaCourseCountriesResponse,
   schemaCourseDetailsRequest,
   schemaCourseDetailsResponse,
@@ -47,6 +58,7 @@ import {
   schemaCoursePlayerHandicapsResponse,
   schemaCourseSearchRequest,
   schemaCourseSearchResponse,
+  schemaEnsureRegisteredRequest,
   schemaFacilitySearchRequest,
   schemaFacilitySearchResponse,
   schemaGolferCourseHandicapRequest,
@@ -59,6 +71,7 @@ import {
   schemaGpaRevokeAccessResponse,
   schemaGpaUpdateStatusRequest,
   schemaGpaUpdateStatusResponse,
+  schemaIterateUndeliveredRequest,
   schemaPlayingHandicapRequest,
   schemaPlayingHandicapsResponse,
   schemaScorePost18h9and9Request,
@@ -71,6 +84,13 @@ import {
   schemaTeeSetRatingRequest,
   schemaTeeSetRatingResponse,
   schemaTeeSetRatingsForScorePostingResponse,
+  schemaWebhookEventType,
+  schemaWebhookResendRequest,
+  schemaWebhookSettings,
+  schemaWebhookSettingsPatch,
+  schemaWebhookSuccessResponse,
+  schemaWebhooksListRequest,
+  schemaWebhooksListResponse,
 } from './models'
 
 const searchParameters = {
@@ -122,6 +142,17 @@ export class GhinClient {
     post18h9and9: (request: ScorePost18h9and9Request) => Promise<ScorePostResponse>
   }
 
+  webhooks: {
+    get: () => Promise<WebhookSettings>
+    patch: (settings: WebhookSettingsPatch) => Promise<WebhookSettings>
+    delete: () => Promise<WebhookSuccessResponse>
+    test: (type: WebhookEventType) => Promise<WebhookSuccessResponse>
+    list: (request?: WebhooksListRequest) => Promise<WebhooksListResponse>
+    resend: (request: WebhookResendRequest) => Promise<WebhookSuccessResponse>
+    ensureRegistered: (request: EnsureRegisteredRequest) => Promise<EnsureRegisteredResult>
+    iterateUndelivered: (request?: IterateUndeliveredRequest) => AsyncGenerator<WebhookEnvelope, void, void>
+  }
+
   constructor(config: ClientConfig) {
     const results = schemaClientConfig.safeParse(config)
 
@@ -171,6 +202,17 @@ export class GhinClient {
       postHoleByHole: this.scoresPostHoleByHole.bind(this),
       postAdjusted: this.scoresPostAdjusted.bind(this),
       post18h9and9: this.scoresPost18h9and9.bind(this),
+    }
+
+    this.webhooks = {
+      get: this.webhooksGet.bind(this),
+      patch: this.webhooksPatch.bind(this),
+      delete: this.webhooksDelete.bind(this),
+      test: this.webhooksTest.bind(this),
+      list: this.webhooksList.bind(this),
+      resend: this.webhooksResend.bind(this),
+      ensureRegistered: this.webhooksEnsureRegistered.bind(this),
+      iterateUndelivered: this.webhooksIterateUndelivered.bind(this),
     }
   }
 
@@ -853,6 +895,265 @@ export class GhinClient {
       throw error instanceof Error ? error : new Error(String(error))
     }
   }
+
+  // ── Webhooks ─────────────────────────────────────────────────────────
+
+  private async webhooksGet(): Promise<WebhookSettings> {
+    try {
+      const result = await this.httpClient.fetchCustomPath<WebhookSettings>({
+        path: '/user/webhook_settings.json',
+        schema: schemaWebhookSettings,
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  private async webhooksPatch(settings: WebhookSettingsPatch): Promise<WebhookSettings> {
+    try {
+      const validRequest = schemaWebhookSettingsPatch.parse(settings)
+
+      const result = await this.httpClient.fetchCustomPath<WebhookSettings>({
+        path: '/user/webhook_settings.json',
+        schema: schemaWebhookSettings,
+        options: {
+          method: 'PATCH',
+          body: JSON.stringify(validRequest),
+        },
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid webhook settings patch: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  private async webhooksDelete(): Promise<WebhookSuccessResponse> {
+    try {
+      const result = await this.httpClient.fetchCustomPath<WebhookSuccessResponse>({
+        path: '/user/webhook_settings.json',
+        schema: schemaWebhookSuccessResponse,
+        options: {
+          method: 'DELETE',
+        },
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  private async webhooksTest(type: WebhookEventType): Promise<WebhookSuccessResponse> {
+    try {
+      const validType = schemaWebhookEventType.parse(type)
+      const searchParams = new URLSearchParams([['type', validType]])
+
+      const result = await this.httpClient.fetchCustomPath<WebhookSuccessResponse>({
+        path: '/user/webhook_settings/test.json',
+        schema: schemaWebhookSuccessResponse,
+        options: {
+          searchParams,
+        },
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid webhook event type: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  private async webhooksList(request: WebhooksListRequest = {}): Promise<WebhooksListResponse> {
+    try {
+      const validRequest = schemaWebhooksListRequest.parse(request)
+      const searchParams = new URLSearchParams()
+
+      for (const [key, value] of Object.entries(validRequest)) {
+        if (value === undefined || value === null) {
+          continue
+        }
+        searchParams.set(key, value.toString())
+      }
+
+      const result = await this.httpClient.fetchCustomPath<WebhooksListResponse>({
+        path: '/user/webhooks.json',
+        schema: schemaWebhooksListResponse,
+        options: {
+          searchParams,
+        },
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid webhooks list request: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  private async webhooksResend(request: WebhookResendRequest): Promise<WebhookSuccessResponse> {
+    try {
+      const validRequest = schemaWebhookResendRequest.parse(request)
+      const searchParams = new URLSearchParams([
+        ['webhook_id', validRequest.webhook_id.toString()],
+        ['is_crs_webhook', validRequest.is_crs_webhook.toString()],
+      ])
+
+      const result = await this.httpClient.fetchCustomPath<WebhookSuccessResponse>({
+        path: '/user/resend_webhook.json',
+        schema: schemaWebhookSuccessResponse,
+        options: {
+          method: 'POST',
+          searchParams,
+        },
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid webhook resend request: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  // Idempotent registration: GET current settings, PATCH only if the leaf for
+  // the given event differs. PATCH upstream is itself idempotent, so a
+  // spurious update round-trips harmlessly; the GET-first dance just avoids
+  // the side-effect when nothing has changed.
+  private async webhooksEnsureRegistered(request: EnsureRegisteredRequest): Promise<EnsureRegisteredResult> {
+    try {
+      const { event, url, dataType, enabled } = schemaEnsureRegisteredRequest.parse(request)
+      const current = await this.webhooksGet()
+
+      const currentUrl = current.webhook_url[event]
+      const currentDataType = current.webhook_data_type[event]
+      const currentEnabled = current.webhook_enabled[event]
+
+      const reasons: string[] = []
+      if (normalizeWebhookUrl(currentUrl) !== normalizeWebhookUrl(url)) {
+        reasons.push(`url differs (got ${describeLeaf(currentUrl)})`)
+      }
+      if (currentDataType !== dataType) {
+        reasons.push(`data_type differs (got ${describeLeaf(currentDataType)}, want ${dataType})`)
+      }
+      if (currentEnabled !== enabled) {
+        reasons.push(`enabled differs (got ${describeLeaf(currentEnabled)}, want ${enabled})`)
+      }
+
+      if (reasons.length === 0) {
+        return { changed: false, settings: current }
+      }
+
+      const settings = await this.webhooksPatch({
+        webhook_url: { [event]: url },
+        webhook_data_type: { [event]: dataType },
+        webhook_enabled: { [event]: enabled },
+      })
+
+      return { changed: true, reason: reasons.join('; '), settings }
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid ensureRegistered request: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  // Pages through `status=not sent` deliveries and yields each envelope.
+  // Stops when a page returns fewer than `per_page` results, so the caller
+  // doesn't have to track pagination state. Filter by object_type/from_date
+  // to bound the scan window in a recovery worker.
+  private async *webhooksIterateUndelivered(
+    request: IterateUndeliveredRequest = {},
+  ): AsyncGenerator<WebhookEnvelope, void, void> {
+    let validRequest: ReturnType<typeof schemaIterateUndeliveredRequest.parse>
+    try {
+      validRequest = schemaIterateUndeliveredRequest.parse(request)
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid iterateUndelivered request: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+
+    const { per_page, object_type, from_date, to_date } = validRequest
+
+    let page = 1
+    while (true) {
+      const response = await this.webhooksList({
+        page,
+        per_page,
+        status: 'not sent',
+        ...(object_type !== undefined ? { object_type } : {}),
+        ...(from_date !== undefined ? { from_date } : {}),
+        ...(to_date !== undefined ? { to_date } : {}),
+      })
+
+      for (const envelope of response.webhooks) {
+        // Cast away the passthrough-inferred type; runtime shape matches WebhookEnvelope.
+        yield envelope as unknown as WebhookEnvelope
+      }
+
+      if (response.webhooks.length < per_page) {
+        return
+      }
+
+      page += 1
+      if (page > ITERATE_UNDELIVERED_MAX_PAGES) {
+        throw new Error(
+          `iterateUndelivered exceeded ${ITERATE_UNDELIVERED_MAX_PAGES} pages; tighten from_date/to_date or object_type filters`,
+        )
+      }
+    }
+  }
 }
+
+// Safety cap. At default per_page=25 this is 250k envelopes — far past any
+// realistic backlog. Exists only to keep a misconfigured filter from spinning
+// forever; bump or remove if a real workload needs it.
+const ITERATE_UNDELIVERED_MAX_PAGES = 10_000
+
+// Strip trailing slashes so e.g. `https://x/y/` and `https://x/y` compare
+// equal — avoids a PATCH every boot when GHIN normalizes the registered URL
+// differently than the caller.
+const normalizeWebhookUrl = (url: string | undefined): string | undefined =>
+  url === undefined ? undefined : url.replace(/\/+$/, '')
+
+const describeLeaf = (value: string | boolean | undefined): string =>
+  value === undefined ? '(not set)' : String(value)
 
 export * from './models'
