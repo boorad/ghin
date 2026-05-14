@@ -31,6 +31,15 @@ export const schemaWebhooksListResponse = z
 
 export type WebhooksListResponse = z.infer<typeof schemaWebhooksListResponse>
 
+export const schemaIterateUndeliveredRequest = z.object({
+  object_type: schemaWebhooksListObjectType.optional(),
+  from_date: z.string().optional(),
+  to_date: z.string().optional(),
+  per_page: z.number().int().positive().max(100).optional().default(25),
+})
+
+export type IterateUndeliveredRequest = z.input<typeof schemaIterateUndeliveredRequest>
+
 export const schemaWebhookResendRequest = z.object({
   webhook_id: z.number().int().positive(),
   is_crs_webhook: z.boolean().optional().default(false),

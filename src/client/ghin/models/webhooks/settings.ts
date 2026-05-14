@@ -37,6 +37,21 @@ export const schemaWebhookSettingsPatch = z
 
 export type WebhookSettingsPatch = z.infer<typeof schemaWebhookSettingsPatch>
 
+export const schemaEnsureRegisteredRequest = z.object({
+  event: schemaWebhookEventType,
+  url: z.string().url(),
+  dataType: schemaWebhookDataType.optional().default('changes_only'),
+  enabled: z.boolean().optional().default(true),
+})
+
+export type EnsureRegisteredRequest = z.input<typeof schemaEnsureRegisteredRequest>
+
+export interface EnsureRegisteredResult {
+  changed: boolean
+  reason?: string
+  settings: WebhookSettings
+}
+
 export const schemaWebhookSuccessResponse = z
   .object({
     success: z.string(),

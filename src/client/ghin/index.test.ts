@@ -1147,4 +1147,231 @@ describe('GhinClient', () => {
       await expect(ghinClient.webhooks.resend({ webhook_id: 12345 })).rejects.toThrow('Resend failed')
     })
   })
+
+  describe('webhooks.ensureRegistered', () => {
+    const matchingSettings = {
+      webhook_url: { revision: 'https://example.com/hooks' },
+      webhook_data_type: { revision: 'changes_only' },
+      webhook_enabled: { revision: true },
+    }
+
+    it('should not PATCH when settings already match', async () => {
+      mockFetchCustomPath.mockResolvedValueOnce(ok(matchingSettings))
+
+      const result = await ghinClient.webhooks.ensureRegistered({
+        event: 'revision',
+        url: 'https://example.com/hooks',
+      })
+
+      expect(result.changed).toBe(false)
+      expect(result.settings).toEqual(matchingSettings)
+      expect(mockFetchCustomPath).toHaveBeenCalledTimes(1)
+    })
+
+    it('should treat trailing-slash differences as a match', async () => {
+      mockFetchCustomPath.mockResolvedValueOnce(
+        ok({
+          ...matchingSettings,
+          webhook_url: { revision: 'https://example.com/hooks/' },
+        }),
+      )
+
+      const result = await ghinClient.webhooks.ensureRegistered({
+        event: 'revision',
+        url: 'https://example.com/hooks',
+      })
+
+      expect(result.changed).toBe(false)
+      expect(mockFetchCustomPath).toHaveBeenCalledTimes(1)
+    })
+
+    it('should PATCH when url differs and return reason', async () => {
+      mockFetchCustomPath
+        .mockResolvedValueOnce(
+          ok({
+            webhook_url: { revision: 'https://old.example.com/hooks' },
+            webhook_data_type: { revision: 'changes_only' },
+            webhook_enabled: { revision: true },
+          }),
+        )
+        .mockResolvedValueOnce(ok(matchingSettings))
+
+      const result = await ghinClient.webhooks.ensureRegistered({
+        event: 'revision',
+        url: 'https://example.com/hooks',
+      })
+
+      expect(result.changed).toBe(true)
+      expect(result.reason).toMatch(/url differs/)
+      expect(mockFetchCustomPath).toHaveBeenCalledTimes(2)
+
+      const patchCall = mockFetchCustomPath.mock.calls[1]?.[0]
+      expect(patchCall?.options?.method).toBe('PATCH')
+      const body = JSON.parse(patchCall?.options?.body as string)
+      expect(body).toEqual({
+        webhook_url: { revision: 'https://example.com/hooks' },
+        webhook_data_type: { revision: 'changes_only' },
+        webhook_enabled: { revision: true },
+      })
+    })
+
+    it('should PATCH when enabled flag differs', async () => {
+      mockFetchCustomPath
+        .mockResolvedValueOnce(
+          ok({
+            webhook_url: { revision: 'https://example.com/hooks' },
+            webhook_data_type: { revision: 'changes_only' },
+            webhook_enabled: { revision: false },
+          }),
+        )
+        .mockResolvedValueOnce(ok(matchingSettings))
+
+      const result = await ghinClient.webhooks.ensureRegistered({
+        event: 'revision',
+        url: 'https://example.com/hooks',
+      })
+
+      expect(result.changed).toBe(true)
+      expect(result.reason).toMatch(/enabled differs/)
+    })
+
+    it('should PATCH when leaf is missing entirely', async () => {
+      mockFetchCustomPath
+        .mockResolvedValueOnce(ok({ webhook_url: {}, webhook_data_type: {}, webhook_enabled: {} }))
+        .mockResolvedValueOnce(ok(matchingSettings))
+
+      const result = await ghinClient.webhooks.ensureRegistered({
+        event: 'revision',
+        url: 'https://example.com/hooks',
+      })
+
+      expect(result.changed).toBe(true)
+    })
+
+    it('should honor non-default dataType and enabled', async () => {
+      mockFetchCustomPath
+        .mockResolvedValueOnce(ok({ webhook_url: {}, webhook_data_type: {}, webhook_enabled: {} }))
+        .mockResolvedValueOnce(
+          ok({
+            webhook_url: { score: 'https://example.com/scores' },
+            webhook_data_type: { score: 'all' },
+            webhook_enabled: { score: false },
+          }),
+        )
+
+      const result = await ghinClient.webhooks.ensureRegistered({
+        event: 'score',
+        url: 'https://example.com/scores',
+        dataType: 'all',
+        enabled: false,
+      })
+
+      expect(result.changed).toBe(true)
+      const patchBody = JSON.parse(mockFetchCustomPath.mock.calls[1]?.[0]?.options?.body as string)
+      expect(patchBody).toEqual({
+        webhook_url: { score: 'https://example.com/scores' },
+        webhook_data_type: { score: 'all' },
+        webhook_enabled: { score: false },
+      })
+    })
+
+    it('should throw validation error with invalid url', async () => {
+      await expect(ghinClient.webhooks.ensureRegistered({ event: 'revision', url: 'not-a-url' })).rejects.toThrow(
+        ValidationError,
+      )
+    })
+
+    it('should throw validation error with invalid event', async () => {
+      await expect(
+        // @ts-expect-error - testing invalid input
+        ghinClient.webhooks.ensureRegistered({ event: 'tournament', url: 'https://example.com' }),
+      ).rejects.toThrow(ValidationError)
+    })
+  })
+
+  describe('webhooks.iterateUndelivered', () => {
+    const envelope = (id: number) => ({
+      id,
+      payload: {
+        object: {},
+        object_type: 'revision',
+        action: 'created',
+        webhook_key: 'k',
+        webhook_sent_at: '2026-05-12T12:00:00Z',
+        environment: 'sandbox',
+      },
+      status: 'not sent',
+    })
+
+    it('should yield envelopes from a single page and stop', async () => {
+      mockFetchCustomPath.mockResolvedValueOnce(ok({ webhooks: [envelope(1), envelope(2)] }))
+
+      const collected: number[] = []
+      for await (const item of ghinClient.webhooks.iterateUndelivered({ per_page: 25 })) {
+        collected.push(item.id)
+      }
+
+      expect(collected).toEqual([1, 2])
+      expect(mockFetchCustomPath).toHaveBeenCalledTimes(1)
+      const searchParams = mockFetchCustomPath.mock.calls[0]?.[0]?.options?.searchParams as URLSearchParams
+      expect(searchParams.get('status')).toBe('not sent')
+      expect(searchParams.get('page')).toBe('1')
+    })
+
+    it('should page until a partial page signals exhaustion', async () => {
+      const fullPage = { webhooks: [envelope(1), envelope(2)] }
+      const partialPage = { webhooks: [envelope(3)] }
+      mockFetchCustomPath.mockResolvedValueOnce(ok(fullPage)).mockResolvedValueOnce(ok(partialPage))
+
+      const collected: number[] = []
+      for await (const item of ghinClient.webhooks.iterateUndelivered({ per_page: 2 })) {
+        collected.push(item.id)
+      }
+
+      expect(collected).toEqual([1, 2, 3])
+      expect(mockFetchCustomPath).toHaveBeenCalledTimes(2)
+      expect((mockFetchCustomPath.mock.calls[1]?.[0]?.options?.searchParams as URLSearchParams).get('page')).toBe('2')
+    })
+
+    it('should stop on the first empty page', async () => {
+      mockFetchCustomPath.mockResolvedValueOnce(ok({ webhooks: [] }))
+
+      const collected: number[] = []
+      for await (const item of ghinClient.webhooks.iterateUndelivered()) {
+        collected.push(item.id)
+      }
+
+      expect(collected).toEqual([])
+      expect(mockFetchCustomPath).toHaveBeenCalledTimes(1)
+    })
+
+    it('should forward filters to list()', async () => {
+      mockFetchCustomPath.mockResolvedValueOnce(ok({ webhooks: [] }))
+
+      for await (const _item of ghinClient.webhooks.iterateUndelivered({
+        per_page: 25,
+        object_type: 'revision',
+        from_date: '2026-01-01',
+      })) {
+        // drain
+      }
+
+      const searchParams = mockFetchCustomPath.mock.calls[0]?.[0]?.options?.searchParams as URLSearchParams
+      expect(searchParams.get('object_type')).toBe('revision')
+      expect(searchParams.get('from_date')).toBe('2026-01-01')
+      expect(searchParams.get('status')).toBe('not sent')
+    })
+
+    it('should throw validation error with invalid per_page', async () => {
+      const iter = ghinClient.webhooks.iterateUndelivered({ per_page: 0 })
+      await expect(iter.next()).rejects.toThrow(ValidationError)
+    })
+
+    it('should propagate fetch errors', async () => {
+      mockFetchCustomPath.mockResolvedValueOnce(err(new Error('List failed')))
+
+      const iter = ghinClient.webhooks.iterateUndelivered()
+      await expect(iter.next()).rejects.toThrow('List failed')
+    })
+  })
 })
