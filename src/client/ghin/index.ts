@@ -39,6 +39,13 @@ import {
   type TeeSetRatingRequest,
   type TeeSetRatingResponse,
   type TeeSetRatingsForScorePostingResponse,
+  type WebhookEventType,
+  type WebhookResendRequest,
+  type WebhookSettings,
+  type WebhookSettingsPatch,
+  type WebhookSuccessResponse,
+  type WebhooksListRequest,
+  type WebhooksListResponse,
   schemaCourseCountriesResponse,
   schemaCourseDetailsRequest,
   schemaCourseDetailsResponse,
@@ -71,6 +78,13 @@ import {
   schemaTeeSetRatingRequest,
   schemaTeeSetRatingResponse,
   schemaTeeSetRatingsForScorePostingResponse,
+  schemaWebhookEventType,
+  schemaWebhookResendRequest,
+  schemaWebhookSettings,
+  schemaWebhookSettingsPatch,
+  schemaWebhookSuccessResponse,
+  schemaWebhooksListRequest,
+  schemaWebhooksListResponse,
 } from './models'
 
 const searchParameters = {
@@ -122,6 +136,15 @@ export class GhinClient {
     post18h9and9: (request: ScorePost18h9and9Request) => Promise<ScorePostResponse>
   }
 
+  webhooks: {
+    get: () => Promise<WebhookSettings>
+    patch: (settings: WebhookSettingsPatch) => Promise<WebhookSettings>
+    delete: () => Promise<WebhookSuccessResponse>
+    test: (type: WebhookEventType) => Promise<WebhookSuccessResponse>
+    list: (request?: WebhooksListRequest) => Promise<WebhooksListResponse>
+    resend: (request: WebhookResendRequest) => Promise<WebhookSuccessResponse>
+  }
+
   constructor(config: ClientConfig) {
     const results = schemaClientConfig.safeParse(config)
 
@@ -171,6 +194,15 @@ export class GhinClient {
       postHoleByHole: this.scoresPostHoleByHole.bind(this),
       postAdjusted: this.scoresPostAdjusted.bind(this),
       post18h9and9: this.scoresPost18h9and9.bind(this),
+    }
+
+    this.webhooks = {
+      get: this.webhooksGet.bind(this),
+      patch: this.webhooksPatch.bind(this),
+      delete: this.webhooksDelete.bind(this),
+      test: this.webhooksTest.bind(this),
+      list: this.webhooksList.bind(this),
+      resend: this.webhooksResend.bind(this),
     }
   }
 
@@ -849,6 +881,160 @@ export class GhinClient {
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new ValidationError(`Invalid 18h 9-and-9 score request: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  // ── Webhooks ─────────────────────────────────────────────────────────
+
+  private async webhooksGet(): Promise<WebhookSettings> {
+    try {
+      const result = await this.httpClient.fetchCustomPath<WebhookSettings>({
+        path: '/user/webhook_settings.json',
+        schema: schemaWebhookSettings,
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  private async webhooksPatch(settings: WebhookSettingsPatch): Promise<WebhookSettings> {
+    try {
+      const validRequest = schemaWebhookSettingsPatch.parse(settings)
+
+      const result = await this.httpClient.fetchCustomPath<WebhookSettings>({
+        path: '/user/webhook_settings.json',
+        schema: schemaWebhookSettings,
+        options: {
+          method: 'PATCH',
+          body: JSON.stringify(validRequest),
+        },
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid webhook settings patch: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  private async webhooksDelete(): Promise<WebhookSuccessResponse> {
+    try {
+      const result = await this.httpClient.fetchCustomPath<WebhookSuccessResponse>({
+        path: '/user/webhook_settings.json',
+        schema: schemaWebhookSuccessResponse,
+        options: {
+          method: 'DELETE',
+        },
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  private async webhooksTest(type: WebhookEventType): Promise<WebhookSuccessResponse> {
+    try {
+      const validType = schemaWebhookEventType.parse(type)
+      const searchParams = new URLSearchParams([['type', validType]])
+
+      const result = await this.httpClient.fetchCustomPath<WebhookSuccessResponse>({
+        path: '/user/webhook_settings/test.json',
+        schema: schemaWebhookSuccessResponse,
+        options: {
+          searchParams,
+        },
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid webhook event type: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  private async webhooksList(request: WebhooksListRequest = {}): Promise<WebhooksListResponse> {
+    try {
+      const validRequest = schemaWebhooksListRequest.parse(request)
+      const searchParams = new URLSearchParams()
+
+      for (const [key, value] of Object.entries(validRequest)) {
+        if (value === undefined || value === null) {
+          continue
+        }
+        searchParams.set(key, value.toString())
+      }
+
+      const result = await this.httpClient.fetchCustomPath<WebhooksListResponse>({
+        path: '/user/webhooks.json',
+        schema: schemaWebhooksListResponse,
+        options: {
+          searchParams,
+        },
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid webhooks list request: ${error.message}`)
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  private async webhooksResend(request: WebhookResendRequest): Promise<WebhookSuccessResponse> {
+    try {
+      const validRequest = schemaWebhookResendRequest.parse(request)
+      const searchParams = new URLSearchParams([
+        ['webhook_id', validRequest.webhook_id.toString()],
+        ['is_crs_webhook', validRequest.is_crs_webhook.toString()],
+      ])
+
+      const result = await this.httpClient.fetchCustomPath<WebhookSuccessResponse>({
+        path: '/user/resend_webhook.json',
+        schema: schemaWebhookSuccessResponse,
+        options: {
+          method: 'POST',
+          searchParams,
+        },
+      })
+
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      return result.value
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Invalid webhook resend request: ${error.message}`)
       }
       throw error instanceof Error ? error : new Error(String(error))
     }

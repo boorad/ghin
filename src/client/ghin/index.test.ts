@@ -39,6 +39,7 @@ describe('GhinClient', () => {
       expect(ghinClient.facilities).toBeDefined()
       expect(ghinClient.gpa).toBeDefined()
       expect(ghinClient.scores).toBeDefined()
+      expect(ghinClient.webhooks).toBeDefined()
     })
 
     it('should throw error with invalid config', () => {
@@ -911,6 +912,239 @@ describe('GhinClient', () => {
       mockFetch.mockRejectedValue('string error')
 
       await expect(ghinClient.scores.post18h9and9(valid9and9Request)).rejects.toThrow('string error')
+    })
+  })
+
+  describe('webhooks.get', () => {
+    it('should fetch and return webhook settings', async () => {
+      const mockResponse = {
+        webhook_url: { revision: 'https://example.com/hooks' },
+        webhook_data_type: { revision: 'changes_only' },
+        webhook_enabled: { revision: true },
+      }
+      mockFetchCustomPath.mockResolvedValue(ok(mockResponse))
+
+      const result = await ghinClient.webhooks.get()
+
+      expect(result).toEqual(mockResponse)
+      expect(mockFetchCustomPath).toHaveBeenCalledWith({
+        path: '/user/webhook_settings.json',
+        schema: expect.anything(),
+      })
+    })
+
+    it('should throw error when fetch fails', async () => {
+      mockFetchCustomPath.mockResolvedValue(err(new Error('Unauthorized')))
+      await expect(ghinClient.webhooks.get()).rejects.toThrow('Unauthorized')
+    })
+
+    it('should wrap non-Error throws', async () => {
+      mockFetchCustomPath.mockRejectedValue('string error')
+      await expect(ghinClient.webhooks.get()).rejects.toThrow('string error')
+    })
+  })
+
+  describe('webhooks.patch', () => {
+    it('should PATCH webhook settings and return updated body', async () => {
+      const mockResponse = {
+        webhook_url: { revision: 'https://example.com/hooks' },
+        webhook_data_type: { revision: 'changes_only' },
+        webhook_enabled: { revision: true },
+      }
+      mockFetchCustomPath.mockResolvedValue(ok(mockResponse))
+
+      const result = await ghinClient.webhooks.patch({
+        webhook_url: { revision: 'https://example.com/hooks' },
+        webhook_data_type: { revision: 'changes_only' },
+        webhook_enabled: { revision: true },
+      })
+
+      expect(result).toEqual(mockResponse)
+      expect(mockFetchCustomPath).toHaveBeenCalledWith({
+        path: '/user/webhook_settings.json',
+        schema: expect.anything(),
+        options: expect.objectContaining({
+          method: 'PATCH',
+          body: expect.any(String),
+        }),
+      })
+
+      const body = JSON.parse(mockFetchCustomPath.mock.calls.at(-1)?.[0]?.options?.body as string)
+      expect(body).toEqual({
+        webhook_url: { revision: 'https://example.com/hooks' },
+        webhook_data_type: { revision: 'changes_only' },
+        webhook_enabled: { revision: true },
+      })
+    })
+
+    it('should throw validation error with empty patch', async () => {
+      await expect(ghinClient.webhooks.patch({})).rejects.toThrow(ValidationError)
+    })
+
+    it('should throw validation error with invalid data type', async () => {
+      await expect(
+        ghinClient.webhooks.patch({
+          // @ts-expect-error - testing invalid input
+          webhook_data_type: { revision: 'invalid' },
+        }),
+      ).rejects.toThrow(ValidationError)
+    })
+
+    it('should throw error when fetch fails', async () => {
+      mockFetchCustomPath.mockResolvedValue(err(new Error('Update failed')))
+      await expect(ghinClient.webhooks.patch({ webhook_enabled: { revision: true } })).rejects.toThrow('Update failed')
+    })
+  })
+
+  describe('webhooks.delete', () => {
+    it('should DELETE webhook settings', async () => {
+      const mockResponse = { success: 'Webhook settings deleted' }
+      mockFetchCustomPath.mockResolvedValue(ok(mockResponse))
+
+      const result = await ghinClient.webhooks.delete()
+
+      expect(result).toEqual(mockResponse)
+      expect(mockFetchCustomPath).toHaveBeenCalledWith({
+        path: '/user/webhook_settings.json',
+        schema: expect.anything(),
+        options: { method: 'DELETE' },
+      })
+    })
+
+    it('should throw error when fetch fails', async () => {
+      mockFetchCustomPath.mockResolvedValue(err(new Error('Delete failed')))
+      await expect(ghinClient.webhooks.delete()).rejects.toThrow('Delete failed')
+    })
+  })
+
+  describe('webhooks.test', () => {
+    it('should fire a test event for the given event type', async () => {
+      const mockResponse = { success: 'Check your URL for test response.' }
+      mockFetchCustomPath.mockResolvedValue(ok(mockResponse))
+
+      const result = await ghinClient.webhooks.test('revision')
+
+      expect(result).toEqual(mockResponse)
+      expect(mockFetchCustomPath).toHaveBeenCalledWith({
+        path: '/user/webhook_settings/test.json',
+        schema: expect.anything(),
+        options: expect.objectContaining({
+          searchParams: expect.any(URLSearchParams),
+        }),
+      })
+
+      const searchParams = mockFetchCustomPath.mock.calls.at(-1)?.[0]?.options?.searchParams as URLSearchParams
+      expect(searchParams.get('type')).toBe('revision')
+    })
+
+    it('should throw validation error with invalid event type', async () => {
+      // @ts-expect-error - testing invalid input
+      await expect(ghinClient.webhooks.test('tournament')).rejects.toThrow(ValidationError)
+    })
+
+    it('should throw error when fetch fails', async () => {
+      mockFetchCustomPath.mockResolvedValue(err(new Error('Test failed')))
+      await expect(ghinClient.webhooks.test('revision')).rejects.toThrow('Test failed')
+    })
+  })
+
+  describe('webhooks.list', () => {
+    it('should list deliveries with default pagination', async () => {
+      const mockResponse = { webhooks: [] }
+      mockFetchCustomPath.mockResolvedValue(ok(mockResponse))
+
+      const result = await ghinClient.webhooks.list()
+
+      expect(result).toEqual(mockResponse)
+      expect(mockFetchCustomPath).toHaveBeenCalledWith({
+        path: '/user/webhooks.json',
+        schema: expect.anything(),
+        options: expect.objectContaining({
+          searchParams: expect.any(URLSearchParams),
+        }),
+      })
+
+      const searchParams = mockFetchCustomPath.mock.calls.at(-1)?.[0]?.options?.searchParams as URLSearchParams
+      expect(searchParams.get('page')).toBe('1')
+      expect(searchParams.get('per_page')).toBe('25')
+    })
+
+    it('should pass through filter parameters', async () => {
+      const mockResponse = { webhooks: [] }
+      mockFetchCustomPath.mockResolvedValue(ok(mockResponse))
+
+      await ghinClient.webhooks.list({
+        page: 2,
+        per_page: 50,
+        status: 'not sent',
+        object_type: 'revision',
+        from_date: '2026-01-01',
+        to_date: '2026-01-31',
+      })
+
+      const searchParams = mockFetchCustomPath.mock.calls.at(-1)?.[0]?.options?.searchParams as URLSearchParams
+      expect(searchParams.get('page')).toBe('2')
+      expect(searchParams.get('per_page')).toBe('50')
+      expect(searchParams.get('status')).toBe('not sent')
+      expect(searchParams.get('object_type')).toBe('revision')
+      expect(searchParams.get('from_date')).toBe('2026-01-01')
+      expect(searchParams.get('to_date')).toBe('2026-01-31')
+    })
+
+    it('should throw validation error with invalid object_type', async () => {
+      await expect(
+        ghinClient.webhooks.list({
+          // @ts-expect-error - testing invalid input
+          object_type: 'tournament',
+        }),
+      ).rejects.toThrow(ValidationError)
+    })
+
+    it('should throw error when fetch fails', async () => {
+      mockFetchCustomPath.mockResolvedValue(err(new Error('List failed')))
+      await expect(ghinClient.webhooks.list()).rejects.toThrow('List failed')
+    })
+  })
+
+  describe('webhooks.resend', () => {
+    it('should POST to resend_webhook with default is_crs_webhook=false', async () => {
+      const mockResponse = { success: 'Webhook queued for resend' }
+      mockFetchCustomPath.mockResolvedValue(ok(mockResponse))
+
+      const result = await ghinClient.webhooks.resend({ webhook_id: 12345 })
+
+      expect(result).toEqual(mockResponse)
+      expect(mockFetchCustomPath).toHaveBeenCalledWith({
+        path: '/user/resend_webhook.json',
+        schema: expect.anything(),
+        options: expect.objectContaining({
+          method: 'POST',
+          searchParams: expect.any(URLSearchParams),
+        }),
+      })
+
+      const searchParams = mockFetchCustomPath.mock.calls.at(-1)?.[0]?.options?.searchParams as URLSearchParams
+      expect(searchParams.get('webhook_id')).toBe('12345')
+      expect(searchParams.get('is_crs_webhook')).toBe('false')
+    })
+
+    it('should honor is_crs_webhook=true', async () => {
+      const mockResponse = { success: 'Webhook queued for resend' }
+      mockFetchCustomPath.mockResolvedValue(ok(mockResponse))
+
+      await ghinClient.webhooks.resend({ webhook_id: 12345, is_crs_webhook: true })
+
+      const searchParams = mockFetchCustomPath.mock.calls.at(-1)?.[0]?.options?.searchParams as URLSearchParams
+      expect(searchParams.get('is_crs_webhook')).toBe('true')
+    })
+
+    it('should throw validation error with non-positive id', async () => {
+      await expect(ghinClient.webhooks.resend({ webhook_id: 0 })).rejects.toThrow(ValidationError)
+    })
+
+    it('should throw error when fetch fails', async () => {
+      mockFetchCustomPath.mockResolvedValue(err(new Error('Resend failed')))
+      await expect(ghinClient.webhooks.resend({ webhook_id: 12345 })).rejects.toThrow('Resend failed')
     })
   })
 })
