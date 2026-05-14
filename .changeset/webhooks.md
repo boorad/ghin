@@ -1,0 +1,5 @@
+---
+'@spicygolf/ghin': minor
+---
+
+Add webhook support. New `client.webhooks` namespace covers settings CRUD (`get` / `patch` / `delete` / `test`), delivery listing and replay (`list` / `resend`), and higher-level helpers (`ensureRegistered` for idempotent registration, `iterateUndelivered` async generator for missed-delivery recovery workers). Inbound-side helpers `parseWebhookEnvelope`, `signWebhookPayload`, and `verifyWebhookSignature` (HMAC-SHA256, constant-time compare, accepts `string | Buffer | Uint8Array`) are exported from the package root. Envelope `object_type` covers the 6 settings event types plus `'crs'` for Course Rating System deliveries. The signature header name and digest scheme are unconfirmed by USGA; defaults are `X-GHIN-Signature` / `sha256=<hex>` and are exported as constants so a confirmed-different scheme is a one-line change. Additionally, `RequestClient` now emits `%20` instead of `+` for spaces in query strings so endpoints whose backend uses URI-style query parsing (e.g. JAX-RS) decode them correctly.
