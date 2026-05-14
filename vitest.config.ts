@@ -17,6 +17,10 @@ export default defineConfig({
         "**/__tests__/**",
         "**/*.test.*",
         "**/*.spec.*",
+        // Barrel re-export files have no executable code worth covering.
+        "src/index.ts",
+        "src/client/index.ts",
+        "src/webhooks/index.ts",
       ],
     },
   },

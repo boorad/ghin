@@ -1373,5 +1373,27 @@ describe('GhinClient', () => {
       const iter = ghinClient.webhooks.iterateUndelivered()
       await expect(iter.next()).rejects.toThrow('List failed')
     })
+
+    it('should throw when the page cap is exceeded', async () => {
+      // Sticky mock: every page returns a full page so the loop never
+      // terminates on its own. The hard cap (ITERATE_UNDELIVERED_MAX_PAGES)
+      // is the only thing that stops it.
+      mockFetchCustomPath.mockResolvedValue(ok({ webhooks: [envelope(1), envelope(2)] }))
+
+      let drained = 0
+      let caught: unknown
+      try {
+        for await (const _item of ghinClient.webhooks.iterateUndelivered({ per_page: 2 })) {
+          drained += 1
+        }
+      } catch (error) {
+        caught = error
+      }
+
+      expect(caught).toBeInstanceOf(Error)
+      expect((caught as Error).message).toMatch(/exceeded \d+ pages/)
+      // 10_000 pages * 2 envelopes per page were yielded before the throw.
+      expect(drained).toBeGreaterThan(0)
+    }, 30000)
   })
 })
