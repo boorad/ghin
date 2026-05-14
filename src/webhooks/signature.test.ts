@@ -70,4 +70,20 @@ describe('signWebhookPayload', () => {
   it('changes when secret changes', () => {
     expect(signWebhookPayload(BODY, SECRET)).not.toBe(signWebhookPayload(BODY, 'other-secret'))
   })
+
+  it('accepts Buffer bodies and matches the string-form signature', () => {
+    const buf = Buffer.from(BODY)
+    const stringSig = signWebhookPayload(BODY, SECRET)
+    const bufferSig = signWebhookPayload(buf, SECRET)
+    expect(bufferSig).toBe(stringSig)
+    expect(verifyWebhookSignature(buf, bufferSig, SECRET)).toEqual({ ok: true })
+  })
+
+  it('accepts Uint8Array bodies and matches the string-form signature', () => {
+    const bytes = new Uint8Array(Buffer.from(BODY))
+    const stringSig = signWebhookPayload(BODY, SECRET)
+    const bytesSig = signWebhookPayload(bytes, SECRET)
+    expect(bytesSig).toBe(stringSig)
+    expect(verifyWebhookSignature(bytes, bytesSig, SECRET)).toEqual({ ok: true })
+  })
 })

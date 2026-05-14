@@ -12,12 +12,16 @@ import { ValidationError } from '../errors'
  * envelope and returns a typed result. The inner `payload.object` shape is
  * not documented by USGA in Swagger; callers can narrow it by passing the
  * expected payload type, but no further validation happens here.
+ *
+ * The raw payload is deliberately NOT attached to the returned
+ * ValidationError — webhook bodies can carry PII (golfer IDs, scores,
+ * names) and we don't want it leaking into error logs or crash reports.
  */
 export function parseWebhookEnvelope<T = unknown>(payload: unknown): Result<WebhookEnvelope<T>, ValidationError> {
   const parsed = schemaWebhookEnvelope.safeParse(payload)
 
   if (!parsed.success) {
-    return err(new ValidationError(`Invalid webhook envelope: ${parsed.error.message}`, undefined, undefined, payload))
+    return err(new ValidationError(`Invalid webhook envelope: ${parsed.error.message}`))
   }
 
   return ok({

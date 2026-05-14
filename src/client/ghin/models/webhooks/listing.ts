@@ -9,7 +9,7 @@ export type WebhooksListEntityType = z.infer<typeof schemaWebhooksListEntityType
 
 export const schemaWebhooksListRequest = z.object({
   page: z.number().int().positive().default(1),
-  per_page: z.number().int().positive().default(25),
+  per_page: z.number().int().positive().max(100).default(25),
   from_date: z.string().optional(),
   to_date: z.string().optional(),
   status: z.union([z.literal('sent'), z.literal('not sent')]).optional(),

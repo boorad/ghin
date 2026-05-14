@@ -981,6 +981,12 @@ describe('GhinClient', () => {
       await expect(ghinClient.webhooks.patch({})).rejects.toThrow(ValidationError)
     })
 
+    it('should throw validation error when all event maps are empty', async () => {
+      await expect(
+        ghinClient.webhooks.patch({ webhook_url: {}, webhook_data_type: {}, webhook_enabled: {} }),
+      ).rejects.toThrow(ValidationError)
+    })
+
     it('should throw validation error with invalid data type', async () => {
       await expect(
         ghinClient.webhooks.patch({

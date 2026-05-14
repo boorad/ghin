@@ -36,9 +36,18 @@ export const schemaWebhookSettingsPatch = z
     webhook_enabled: partialEventMap(z.boolean()).optional(),
   })
   .refine(
-    (value) =>
-      value.webhook_url !== undefined || value.webhook_data_type !== undefined || value.webhook_enabled !== undefined,
-    { message: 'At least one of webhook_url, webhook_data_type, or webhook_enabled must be provided' },
+    (value) => {
+      // Treat empty event maps (`{ webhook_url: {} }`) as not provided —
+      // they'd PATCH nothing and silently no-op against GHIN.
+      const hasNonEmpty = (m: Record<string, unknown> | undefined) => m !== undefined && Object.keys(m).length > 0
+      return (
+        hasNonEmpty(value.webhook_url) || hasNonEmpty(value.webhook_data_type) || hasNonEmpty(value.webhook_enabled)
+      )
+    },
+    {
+      message:
+        'At least one of webhook_url, webhook_data_type, or webhook_enabled must be provided with a non-empty event map',
+    },
   )
 
 export type WebhookSettingsPatch = z.infer<typeof schemaWebhookSettingsPatch>

@@ -14,14 +14,6 @@ declare global {
 }
 
 const fn = async () => {
-  const ghinClient = new GhinClient({
-    password: process.env.GHIN_PASSWORD,
-    username: process.env.GHIN_USERNAME,
-    apiAccess: process.env.GHIN_API_ACCESS === 'true',
-    apiVersion: process.env.GHIN_API_VERSION,
-    baseUrl: process.env.GHIN_BASE_URL,
-  })
-
   const webhookUrl = process.env.GHIN_WEBHOOK_URL
   if (!webhookUrl) {
     console.error('Set GHIN_WEBHOOK_URL to a public URL (e.g. webhook.site) before running')
@@ -29,6 +21,14 @@ const fn = async () => {
   }
 
   try {
+    const ghinClient = new GhinClient({
+      password: process.env.GHIN_PASSWORD,
+      username: process.env.GHIN_USERNAME,
+      apiAccess: process.env.GHIN_API_ACCESS === 'true',
+      apiVersion: process.env.GHIN_API_VERSION,
+      baseUrl: process.env.GHIN_BASE_URL,
+    })
+
     console.log('-- current webhook settings --')
     const current = await ghinClient.webhooks.get()
     console.dir(current, { depth: null })
