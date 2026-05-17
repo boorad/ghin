@@ -22,12 +22,10 @@ import {
   type GolfersGlobalSearchRequest,
   type GolfersSearchRequest,
   type GolfersSearchResponse,
-  type GpaAccessStatus,
-  type GpaAccessesResponse,
-  type GpaRequestAccessResponse,
-  type GpaRevokeAccessResponse,
+  type GpaAccess,
+  type GpaRequestAccessRequest,
+  type GpaSuccessResponse,
   type GpaUpdateStatusRequest,
-  type GpaUpdateStatusResponse,
   type HandicapResponse,
   type IterateUndeliveredRequest,
   type PlayingHandicapRequest,
@@ -42,6 +40,7 @@ import {
   type TeeSetRatingRequest,
   type TeeSetRatingResponse,
   type TeeSetRatingsForScorePostingResponse,
+  type UserAccessesResponse,
   type WebhookEnvelope,
   type WebhookEventType,
   type WebhookResendRequest,
@@ -66,11 +65,9 @@ import {
   schemaGolfersGlobalSearchRequest,
   schemaGolfersSearchRequest,
   schemaGolfersSearchResponse,
-  schemaGpaAccessesResponse,
-  schemaGpaRequestAccessResponse,
-  schemaGpaRevokeAccessResponse,
+  schemaGpaRequestAccessRequest,
+  schemaGpaSuccessResponse,
   schemaGpaUpdateStatusRequest,
-  schemaGpaUpdateStatusResponse,
   schemaIterateUndeliveredRequest,
   schemaPlayingHandicapRequest,
   schemaPlayingHandicapsResponse,
@@ -84,6 +81,7 @@ import {
   schemaTeeSetRatingRequest,
   schemaTeeSetRatingResponse,
   schemaTeeSetRatingsForScorePostingResponse,
+  schemaUserAccessesResponse,
   schemaWebhookEventType,
   schemaWebhookResendRequest,
   schemaWebhookSettings,
@@ -123,10 +121,10 @@ export class GhinClient {
   }
 
   gpa: {
-    getAccesses: () => Promise<GpaAccessStatus[]>
-    requestAccess: (golferId: number) => Promise<GpaRequestAccessResponse>
-    updateStatus: (request: GpaUpdateStatusRequest) => Promise<GpaUpdateStatusResponse>
-    revokeAccess: (golferId: number) => Promise<GpaRevokeAccessResponse>
+    getAccesses: () => Promise<GpaAccess[]>
+    requestAccess: (golferId: number, request: GpaRequestAccessRequest) => Promise<GpaSuccessResponse>
+    updateStatus: (request: GpaUpdateStatusRequest) => Promise<GpaSuccessResponse>
+    revokeAccess: (golferId: number) => Promise<GpaSuccessResponse>
   }
 
   handicaps: {
@@ -407,34 +405,49 @@ export class GhinClient {
 
   // ── GPA (Golfer Product Access) ──────────────────────────────────────
 
-  private async gpaGetAccesses(): Promise<GpaAccessStatus[]> {
+  // The endpoint is USGA's "UserAccesses" (not GPA-specific) and returns
+  // federations/associations/clubs alongside golfers. Flatten the `golfers`
+  // branch — the only one that carries GPA state — into a clean array so
+  // callers don't have to deal with the unrelated outer fields.
+  private async gpaGetAccesses(): Promise<GpaAccess[]> {
     try {
-      const result = await this.httpClient.fetch<GpaAccessesResponse>({
+      const result = await this.httpClient.fetch<UserAccessesResponse>({
         entity: 'gpa_accesses',
-        schema: schemaGpaAccessesResponse,
+        schema: schemaUserAccessesResponse,
       })
 
       if (result.isErr()) {
         throw result.error
       }
 
-      return result.value.gpa_accesses
+      return result.value.golfers.map((entry) => ({
+        golferId: entry.golfer.id,
+        userAccessId: entry.user_access.id,
+        golferName: entry.user_access.golfer_name,
+        gpaStatus: entry.user_access.gpa_status,
+      }))
     } catch (error) {
       throw error instanceof Error ? error : new Error(String(error))
     }
   }
 
-  private async gpaRequestAccess(golferId: number): Promise<GpaRequestAccessResponse> {
+  // USGA requires an `email` in the POST body; without it the endpoint
+  // returns 400 `{ errors: { email: ["can't be blank"] } }`. The on-file
+  // golfer email is the safe choice; whether USGA validates it against
+  // their records or accepts any string is unconfirmed.
+  private async gpaRequestAccess(golferId: number, request: GpaRequestAccessRequest): Promise<GpaSuccessResponse> {
     try {
       const id = number.positive().parse(golferId)
+      const { email } = schemaGpaRequestAccessRequest.parse(request)
 
       const path = `/users/golfers/${id}/request_golfer_product_access.json`
 
-      const result = await this.httpClient.fetchCustomPath<GpaRequestAccessResponse>({
+      const result = await this.httpClient.fetchCustomPath<GpaSuccessResponse>({
         path,
-        schema: schemaGpaRequestAccessResponse,
+        schema: schemaGpaSuccessResponse,
         options: {
           method: 'POST',
+          body: JSON.stringify({ email }),
         },
       })
 
@@ -445,21 +458,25 @@ export class GhinClient {
       return result.value
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new ValidationError(`Invalid golfer ID: ${error.message}`)
+        throw new ValidationError(`Invalid GPA request access request: ${error.message}`)
       }
       throw error instanceof Error ? error : new Error(String(error))
     }
   }
 
-  private async gpaUpdateStatus(request: GpaUpdateStatusRequest): Promise<GpaUpdateStatusResponse> {
+  // `user_id` here is the **credentialed admin user's** `user.id` from
+  // `POST /users/login.json` — *not* the golfer's user and *not* the
+  // `userAccessId` returned by `getAccesses()`. Easy to confuse; the URL
+  // accepts all three numerically but only the admin id is authorized.
+  private async gpaUpdateStatus(request: GpaUpdateStatusRequest): Promise<GpaSuccessResponse> {
     try {
       const validRequest = schemaGpaUpdateStatusRequest.parse(request)
 
       const path = `/users/${validRequest.user_id}/golfers/${validRequest.golfer_id}/update_golfer_product_access_status.json`
 
-      const result = await this.httpClient.fetchCustomPath<GpaUpdateStatusResponse>({
+      const result = await this.httpClient.fetchCustomPath<GpaSuccessResponse>({
         path,
-        schema: schemaGpaUpdateStatusResponse,
+        schema: schemaGpaSuccessResponse,
         options: {
           method: 'POST',
           body: JSON.stringify({ gpa_status: validRequest.status }),
@@ -479,15 +496,18 @@ export class GhinClient {
     }
   }
 
-  private async gpaRevokeAccess(golferId: number): Promise<GpaRevokeAccessResponse> {
+  // Revoke marks the underlying `user_access` record `inactive`; it does
+  // not delete it. Re-firing `requestAccess` against the same golfer
+  // reuses that record and flips status back to `pending`.
+  private async gpaRevokeAccess(golferId: number): Promise<GpaSuccessResponse> {
     try {
       const id = number.positive().parse(golferId)
 
       const path = `/users/golfers/${id}/revoke_golfer_product_access.json`
 
-      const result = await this.httpClient.fetchCustomPath<GpaRevokeAccessResponse>({
+      const result = await this.httpClient.fetchCustomPath<GpaSuccessResponse>({
         path,
-        schema: schemaGpaRevokeAccessResponse,
+        schema: schemaGpaSuccessResponse,
         options: {
           method: 'DELETE',
         },

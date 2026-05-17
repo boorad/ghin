@@ -27,8 +27,10 @@ const fn = async () => {
     const accesses = await ghinClient.gpa.getAccesses()
     console.dir(accesses, { depth: null })
 
-    // Request access for a golfer (replace with actual golfer ID)
-    // const requestResult = await ghinClient.gpa.requestAccess(12345)
+    // Request access for a golfer (replace with actual golfer ID + email)
+    // const requestResult = await ghinClient.gpa.requestAccess(12345, {
+    //   email: 'golfer@example.com',
+    // })
     // console.log('Request result:', requestResult)
 
     // Update status (sandbox/staging only)
