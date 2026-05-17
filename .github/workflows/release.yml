@@ -45,6 +45,16 @@ jobs:
       - name: Version packages
         run: npx changeset version
 
+      - name: Annotate release version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          SUFFIX=""
+          if [ "${{ inputs.dry-run }}" = "true" ]; then
+            SUFFIX=" (dry run)"
+          fi
+          echo "::notice title=Release version::v${VERSION}${SUFFIX}"
+          echo "## Release v${VERSION}${SUFFIX}" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Build
         run: bun run build
 
