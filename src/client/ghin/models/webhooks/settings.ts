@@ -8,7 +8,21 @@ export type WebhookEventType = z.infer<typeof schemaWebhookEventType>
 export const schemaWebhookDataType = z.enum(['all', 'changes_only'])
 export type WebhookDataType = z.infer<typeof schemaWebhookDataType>
 
-const partialEventMap = <T extends z.ZodTypeAny>(value: T) =>
+// GHIN's GET response always includes every event key under each top-level
+// field, with `null` as the "unregistered" sentinel — fields aren't omitted,
+// they're nulled. So response inner schemas must accept both undefined
+// (defensive — older deployments may omit) and null (observed shape).
+const partialEventMapResponse = <T extends z.ZodTypeAny>(value: T) =>
+  z.object(
+    Object.fromEntries(WEBHOOK_EVENT_TYPES.map((event) => [event, value.nullable().optional()])) as {
+      [K in WebhookEventType]: z.ZodOptional<z.ZodNullable<T>>
+    },
+  )
+
+// PATCH bodies we send keep the original "optional, no null" shape — we
+// don't want to invite callers to send `null`, which GHIN's docs don't
+// cover. The empty-string sentinel below handles the "clear a URL" case.
+const partialEventMapRequest = <T extends z.ZodTypeAny>(value: T) =>
   z.object(
     Object.fromEntries(WEBHOOK_EVENT_TYPES.map((event) => [event, value.optional()])) as {
       [K in WebhookEventType]: z.ZodOptional<T>
@@ -22,18 +36,18 @@ const partialEventMap = <T extends z.ZodTypeAny>(value: T) =>
 const webhookPatchUrl = z.union([z.literal(''), z.string().url()])
 
 export const schemaWebhookSettings = z.object({
-  webhook_url: partialEventMap(z.string()).optional().default({}),
-  webhook_data_type: partialEventMap(schemaWebhookDataType).optional().default({}),
-  webhook_enabled: partialEventMap(z.boolean()).optional().default({}),
+  webhook_url: partialEventMapResponse(z.string()).optional().default({}),
+  webhook_data_type: partialEventMapResponse(schemaWebhookDataType).optional().default({}),
+  webhook_enabled: partialEventMapResponse(z.boolean()).optional().default({}),
 })
 
 export type WebhookSettings = z.infer<typeof schemaWebhookSettings>
 
 export const schemaWebhookSettingsPatch = z
   .object({
-    webhook_url: partialEventMap(webhookPatchUrl).optional(),
-    webhook_data_type: partialEventMap(schemaWebhookDataType).optional(),
-    webhook_enabled: partialEventMap(z.boolean()).optional(),
+    webhook_url: partialEventMapRequest(webhookPatchUrl).optional(),
+    webhook_data_type: partialEventMapRequest(schemaWebhookDataType).optional(),
+    webhook_enabled: partialEventMapRequest(z.boolean()).optional(),
   })
   .refine(
     (value) => {
