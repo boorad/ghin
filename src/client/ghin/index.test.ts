@@ -244,14 +244,16 @@ describe('GhinClient', () => {
 
     it('should return an empty array when the response has no golfers', async () => {
       mockFetch.mockResolvedValue(
-        ok({
-          federations: [],
-          associations: [],
-          clubs: [],
-          golfers: [],
-          super_user: 'false',
-          subtype: null,
-        }),
+        ok(
+          schemaUserAccessesResponse.parse({
+            federations: [],
+            associations: [],
+            clubs: [],
+            golfers: [],
+            super_user: 'false',
+            subtype: null,
+          }),
+        ),
       )
 
       await expect(ghinClient.gpa.getAccesses()).resolves.toEqual([])
