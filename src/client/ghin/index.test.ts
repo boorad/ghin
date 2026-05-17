@@ -3,6 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ValidationError } from '../../errors'
 import { InMemoryCacheClient } from '../in-memory-cache-client'
 import { GhinClient } from './index'
+import {
+  getAccessesResponseFixture,
+  requestAccessResponseFixture,
+  revokeAccessResponseFixture,
+  updateStatusResponseFixture,
+} from './models/gpa/__fixtures__'
+import { schemaUserAccessesResponse } from './models/gpa/access'
 
 // Mock the RequestClient
 const mockFetch = vi.fn()
@@ -214,22 +221,42 @@ describe('GhinClient', () => {
   })
 
   describe('gpa.getAccesses', () => {
-    it('should fetch and return GPA accesses', async () => {
-      const mockResponse = {
-        gpa_accesses: [
-          { golfer_id: 123, status: 'approved' },
-          { golfer_id: 456, status: 'pending' },
-        ],
-      }
-      mockFetch.mockResolvedValue(ok(mockResponse))
+    it('should fetch and flatten the golfers branch of the UserAccesses response', async () => {
+      // RequestClient parses through the schema before resolving the Result,
+      // so the wrapper sees coerced numeric IDs. Mirror that here.
+      mockFetch.mockResolvedValue(ok(schemaUserAccessesResponse.parse(getAccessesResponseFixture)))
 
       const result = await ghinClient.gpa.getAccesses()
 
-      expect(result).toEqual(mockResponse.gpa_accesses)
+      expect(result).toEqual([
+        {
+          golferId: 13373246,
+          userAccessId: 6863457,
+          golferName: 'Test Golfer1019',
+          gpaStatus: 'pending',
+        },
+      ])
       expect(mockFetch).toHaveBeenCalledWith({
         entity: 'gpa_accesses',
         schema: expect.anything(),
       })
+    })
+
+    it('should return an empty array when the response has no golfers', async () => {
+      mockFetch.mockResolvedValue(
+        ok(
+          schemaUserAccessesResponse.parse({
+            federations: [],
+            associations: [],
+            clubs: [],
+            golfers: [],
+            super_user: 'false',
+            subtype: null,
+          }),
+        ),
+      )
+
+      await expect(ghinClient.gpa.getAccesses()).resolves.toEqual([])
     })
 
     it('should throw error when fetch fails', async () => {
@@ -246,52 +273,62 @@ describe('GhinClient', () => {
   })
 
   describe('gpa.requestAccess', () => {
-    it('should request GPA access for a golfer', async () => {
-      const mockResponse = { golfer_id: 123, status: 'pending' }
-      mockFetchCustomPath.mockResolvedValue(ok(mockResponse))
+    it('should POST email body and return the success envelope', async () => {
+      mockFetchCustomPath.mockResolvedValue(ok(requestAccessResponseFixture))
 
-      const result = await ghinClient.gpa.requestAccess(123)
+      const result = await ghinClient.gpa.requestAccess(123, { email: 'golfer@example.com' })
 
-      expect(result).toEqual(mockResponse)
+      expect(result).toEqual(requestAccessResponseFixture)
       expect(mockFetchCustomPath).toHaveBeenCalledWith({
         path: '/users/golfers/123/request_golfer_product_access.json',
         schema: expect.anything(),
-        options: { method: 'POST' },
+        options: {
+          method: 'POST',
+          body: JSON.stringify({ email: 'golfer@example.com' }),
+        },
       })
     })
 
     it('should throw validation error with invalid golfer ID', async () => {
       // @ts-expect-error - Testing invalid input type
-      await expect(ghinClient.gpa.requestAccess('invalid')).rejects.toThrow(ValidationError)
+      await expect(ghinClient.gpa.requestAccess('invalid', { email: 'a@b.com' })).rejects.toThrow(ValidationError)
+    })
+
+    it('should throw validation error when email is missing', async () => {
+      // @ts-expect-error - Testing missing required input
+      await expect(ghinClient.gpa.requestAccess(123, {})).rejects.toThrow(ValidationError)
+    })
+
+    it('should throw validation error when email is empty', async () => {
+      await expect(ghinClient.gpa.requestAccess(123, { email: '' })).rejects.toThrow(ValidationError)
     })
 
     it('should throw error when fetch fails', async () => {
       mockFetchCustomPath.mockResolvedValue(err(new Error('Request failed')))
 
-      await expect(ghinClient.gpa.requestAccess(123)).rejects.toThrow('Request failed')
+      await expect(ghinClient.gpa.requestAccess(123, { email: 'a@b.com' })).rejects.toThrow('Request failed')
     })
 
     it('should wrap non-Error throws', async () => {
       mockFetchCustomPath.mockRejectedValue('string error')
 
-      await expect(ghinClient.gpa.requestAccess(123)).rejects.toThrow('string error')
+      await expect(ghinClient.gpa.requestAccess(123, { email: 'a@b.com' })).rejects.toThrow('string error')
     })
   })
 
   describe('gpa.updateStatus', () => {
-    it('should update GPA access status', async () => {
-      const mockResponse = { golfer_id: 123, status: 'approved' }
-      mockFetchCustomPath.mockResolvedValue(ok(mockResponse))
+    it('should POST gpa_status and return the success envelope', async () => {
+      mockFetchCustomPath.mockResolvedValue(ok(updateStatusResponseFixture))
 
       const result = await ghinClient.gpa.updateStatus({
-        user_id: 1,
-        golfer_id: 123,
+        user_id: 4695277,
+        golfer_id: 13373246,
         status: 'approved',
       })
 
-      expect(result).toEqual(mockResponse)
+      expect(result).toEqual(updateStatusResponseFixture)
       expect(mockFetchCustomPath).toHaveBeenCalledWith({
-        path: '/users/1/golfers/123/update_golfer_product_access_status.json',
+        path: '/users/4695277/golfers/13373246/update_golfer_product_access_status.json',
         schema: expect.anything(),
         options: {
           method: 'POST',
@@ -329,13 +366,12 @@ describe('GhinClient', () => {
   })
 
   describe('gpa.revokeAccess', () => {
-    it('should revoke GPA access for a golfer', async () => {
-      const mockResponse = { golfer_id: 123 }
-      mockFetchCustomPath.mockResolvedValue(ok(mockResponse))
+    it('should DELETE and return the success envelope', async () => {
+      mockFetchCustomPath.mockResolvedValue(ok(revokeAccessResponseFixture))
 
       const result = await ghinClient.gpa.revokeAccess(123)
 
-      expect(result).toEqual(mockResponse)
+      expect(result).toEqual(revokeAccessResponseFixture)
       expect(mockFetchCustomPath).toHaveBeenCalledWith({
         path: '/users/golfers/123/revoke_golfer_product_access.json',
         schema: expect.anything(),

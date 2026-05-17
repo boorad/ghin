@@ -1,29 +1,57 @@
 import { z } from 'zod'
 import { number, string } from '../../../../models'
 
-const schemaGpaAccessStatus = z
+// Raw entry as returned under `golfers[]` from `GET /users/accesses.json`
+// (the USGA "UserAccesses" endpoint). `golfer.id` and `user_access.id`
+// arrive as numeric strings; `number` (z.coerce.number().int()) handles
+// the coercion.
+const schemaUserAccessGolferEntry = z
   .object({
-    golfer_id: number,
-    status: string,
+    golfer: z
+      .object({
+        id: number,
+      })
+      .passthrough(),
+    user_access: z
+      .object({
+        id: number,
+        golfer_name: string,
+        gpa_status: z.string(),
+      })
+      .passthrough(),
   })
   .passthrough()
 
-type GpaAccessStatus = z.infer<typeof schemaGpaAccessStatus>
+// The endpoint also returns `federations` / `associations` / `clubs` /
+// `super_user` / `subtype` siblings unrelated to GPA — passthrough keeps
+// them on the parsed object so the wrapper can ignore them without Zod
+// rejecting the response.
+const schemaUserAccessesResponse = z
+  .object({
+    golfers: z.array(schemaUserAccessGolferEntry).default([]),
+  })
+  .passthrough()
 
-const schemaGpaAccessesResponse = z.object({
-  gpa_accesses: z.array(schemaGpaAccessStatus),
+type UserAccessesResponse = z.infer<typeof schemaUserAccessesResponse>
+
+// Flat, caller-friendly shape returned by `client.gpa.getAccesses()`.
+// Observed `gpaStatus` values: 'pending' | 'approved' | 'inactive'
+// (and presumably 'denied'). Left as `string` so an unexpected value
+// from USGA doesn't throw at parse time.
+const schemaGpaAccess = z.object({
+  golferId: number,
+  userAccessId: number,
+  golferName: string,
+  gpaStatus: z.string(),
 })
 
-type GpaAccessesResponse = z.infer<typeof schemaGpaAccessesResponse>
+type GpaAccess = z.infer<typeof schemaGpaAccess>
 
-const schemaGpaRequestAccessResponse = z
-  .object({
-    golfer_id: number,
-    status: string,
-  })
-  .passthrough()
+const schemaGpaRequestAccessRequest = z.object({
+  email: string,
+})
 
-type GpaRequestAccessResponse = z.infer<typeof schemaGpaRequestAccessResponse>
+type GpaRequestAccessRequest = z.infer<typeof schemaGpaRequestAccessRequest>
 
 const schemaGpaUpdateStatusRequest = z.object({
   user_id: number,
@@ -33,36 +61,22 @@ const schemaGpaUpdateStatusRequest = z.object({
 
 type GpaUpdateStatusRequest = z.infer<typeof schemaGpaUpdateStatusRequest>
 
-const schemaGpaUpdateStatusResponse = z
+// `requestAccess`, `updateStatus`, and `revokeAccess` all return
+// `{ success: "<message>" }` — a localized confirmation string. Callers
+// typically discard it; surfaced so a UI can display it verbatim.
+const schemaGpaSuccessResponse = z
   .object({
-    golfer_id: number,
-    status: string,
+    success: z.string(),
   })
   .passthrough()
 
-type GpaUpdateStatusResponse = z.infer<typeof schemaGpaUpdateStatusResponse>
-
-const schemaGpaRevokeAccessResponse = z
-  .object({
-    golfer_id: number,
-  })
-  .passthrough()
-
-type GpaRevokeAccessResponse = z.infer<typeof schemaGpaRevokeAccessResponse>
+type GpaSuccessResponse = z.infer<typeof schemaGpaSuccessResponse>
 
 export {
-  schemaGpaAccessesResponse,
-  schemaGpaAccessStatus,
-  schemaGpaRequestAccessResponse,
-  schemaGpaRevokeAccessResponse,
+  schemaGpaAccess,
+  schemaGpaRequestAccessRequest,
+  schemaGpaSuccessResponse,
   schemaGpaUpdateStatusRequest,
-  schemaGpaUpdateStatusResponse,
+  schemaUserAccessesResponse,
 }
-export type {
-  GpaAccessesResponse,
-  GpaAccessStatus,
-  GpaRequestAccessResponse,
-  GpaRevokeAccessResponse,
-  GpaUpdateStatusRequest,
-  GpaUpdateStatusResponse,
-}
+export type { GpaAccess, GpaRequestAccessRequest, GpaSuccessResponse, GpaUpdateStatusRequest, UserAccessesResponse }
