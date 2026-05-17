@@ -1254,6 +1254,30 @@ describe('GhinClient', () => {
       expect(result.changed).toBe(true)
     })
 
+    it('should PATCH when GHIN returns null leaves (unregistered sentinel)', async () => {
+      // GHIN's GET response always includes every event key with `null` for
+      // unset slots, not an empty object. Verifies the response schema
+      // accepts null and ensureRegistered treats it as "not set".
+      mockFetchCustomPath
+        .mockResolvedValueOnce(
+          ok({
+            webhook_url: { golfer: null, score: null, revision: null, club: null, course: null, gpa: null },
+            webhook_data_type: { golfer: null, score: null, revision: null, club: null, course: null, gpa: null },
+            webhook_enabled: { golfer: null, score: null, revision: null, club: null, course: null, gpa: null },
+          }),
+        )
+        .mockResolvedValueOnce(ok(matchingSettings))
+
+      const result = await ghinClient.webhooks.ensureRegistered({
+        event: 'revision',
+        url: 'https://example.com/hooks',
+      })
+
+      expect(result.changed).toBe(true)
+      expect(result.reason).toMatch(/url differs.*\(not set\)/)
+      expect(mockFetchCustomPath).toHaveBeenCalledTimes(2)
+    })
+
     it('should honor non-default dataType and enabled', async () => {
       mockFetchCustomPath
         .mockResolvedValueOnce(ok({ webhook_url: {}, webhook_data_type: {}, webhook_enabled: {} }))

@@ -1149,11 +1149,12 @@ const ITERATE_UNDELIVERED_MAX_PAGES = 10_000
 
 // Strip trailing slashes so e.g. `https://x/y/` and `https://x/y` compare
 // equal — avoids a PATCH every boot when GHIN normalizes the registered URL
-// differently than the caller.
-const normalizeWebhookUrl = (url: string | undefined): string | undefined =>
-  url === undefined ? undefined : url.replace(/\/+$/, '')
+// differently than the caller. Treats null (GHIN's "unregistered" sentinel
+// in GET responses) the same as undefined.
+const normalizeWebhookUrl = (url: string | null | undefined): string | undefined =>
+  url == null ? undefined : url.replace(/\/+$/, '')
 
-const describeLeaf = (value: string | boolean | undefined): string =>
-  value === undefined ? '(not set)' : String(value)
+const describeLeaf = (value: string | boolean | null | undefined): string =>
+  value == null ? '(not set)' : String(value)
 
 export * from './models'
