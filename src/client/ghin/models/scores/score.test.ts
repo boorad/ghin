@@ -75,4 +75,17 @@ describe('schemaScore', () => {
     expect(parsed.course_name).toBeUndefined()
     expect(parsed.facility_name).toBeUndefined()
   })
+
+  it('accepts null for the course fields', () => {
+    const parsed = schemaScore.parse({
+      ...baseScore,
+      course_id: null,
+      course_name: null,
+      facility_name: null,
+    })
+
+    expect(parsed.course_id).toBeNull()
+    expect(parsed.course_name).toBeNull()
+    expect(parsed.facility_name).toBeNull()
+  })
 })
