@@ -5,7 +5,7 @@ const schemaScorePostResponseInner = z
   .object({
     id: number,
     golfer_id: number,
-    status: z.enum(['Validated', 'UnderReview']),
+    status: z.enum(['Validated', 'UnderReview', 'Temporary']),
     validation_message: string.nullable().optional(),
     adjusted_gross_score: number,
     number_of_holes: number,
