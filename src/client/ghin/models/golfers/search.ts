@@ -59,7 +59,7 @@ export type GolfersGlobalSearchRequest = z.infer<typeof schemaGolfersGlobalSearc
 
 export const schemaGolfer = z.object({
   ghin: number,
-  first_name: string,
+  first_name: emptyStringToNull.optional(),
   last_name: string,
   association_id: number,
   association_name: string,
