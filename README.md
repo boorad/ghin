@@ -10,6 +10,23 @@
 
 This TypeScript library provides a convenient and easy-to-use API wrapper for accessing the Golfer Handicap Index Network (GHIN) api unofficially. It allows you to interact with GHIN data, retrieve golfer handicaps, scores, and perform various operations related to golf handicaps.
 
+## API Access
+
+This library is a client only — it ships no GHIN code or data, and it does not
+bypass authentication. You must supply your own credentials.
+
+It also implements no part of the World Handicap System — no handicap formula, no
+Course Rating System. Handicap indexes and course/playing handicaps are returned
+by the USGA's centralized computation service; this library only transports them.
+
+Bring credentials you are authorized to use. Vendor access is granted through the
+USGA's Golfer Product Access (GPA) program, under a GPA and API agreement between
+the vendor and the USGA — that agreement, not the consumer
+[GHIN Terms of Service](https://www.usga.org/content/usga/home-page/Handicap-ghin/ghin-terms-of-service.html),
+governs API use, and each account carries its own GPA entitlements. If you aren't
+a GPA Technology Vendor, confirm your intended use is permitted before pointing
+this at the API. Your compliance with USGA's terms is your responsibility.
+
 ## About This Fork
 
 This is a fork of [n8io/ghin](https://github.com/n8io/ghin), originally created by Nate Clark. This fork includes additional features and improvements.
@@ -17,7 +34,7 @@ This is a fork of [n8io/ghin](https://github.com/n8io/ghin), originally created 
 ## Features
 
 - Retrieve golfer handicap information.
-- Calculate course handicaps for golfers.
+- Retrieve course and playing handicaps for golfers.
 - Search for golfers by name, ID, or other criteria.
 - Access golfer scoring history.
 - And more!
