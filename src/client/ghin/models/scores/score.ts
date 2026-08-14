@@ -30,7 +30,7 @@ const schemaScoreTypeWithTransform: z.ZodType<ScoreType, z.ZodTypeDef, RawScoreT
   (value) => scoreTypesMap[value],
 )
 
-const scoreStatuses = ['VALIDATED', 'UNDER_REVIEW'] as const
+const scoreStatuses = ['VALIDATED', 'UNDER_REVIEW', 'TEMPORARY'] as const
 const schemaScoreStatus = z.enum(scoreStatuses)
 type ScoreStatus = z.infer<typeof schemaScoreStatus>
 
@@ -97,5 +97,5 @@ const schemaScore = z.object({
 
 type Score = Prettify<z.infer<typeof schemaScore>>
 
-export { rawScoreTypes, schemaScore }
+export { rawScoreTypes, schemaRawScoreStatus, schemaScore }
 export type { Score, ScoreType, ScoreStatus }
