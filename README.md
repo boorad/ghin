@@ -34,7 +34,7 @@ This is a fork of [n8io/ghin](https://github.com/n8io/ghin), originally created 
 ## Features
 
 - Retrieve golfer handicap information.
-- Calculate course handicaps for golfers.
+- Retrieve course and playing handicaps for golfers.
 - Search for golfers by name, ID, or other criteria.
 - Access golfer scoring history.
 - And more!
