@@ -102,7 +102,7 @@ export class GhinClient {
   courses: {
     getCountries: () => Promise<CourseCountry[]>
     getDetails: (request: CourseDetailsRequest) => Promise<CourseDetailsResponse>
-    search: (request: CourseSearchRequest) => Promise<CourseSearchResponse['courses']>
+    search: (request: CourseSearchRequest) => Promise<CourseSearchResponse>
     getTeeSetRating: (request: TeeSetRatingRequest) => Promise<TeeSetRatingResponse>
     getTeeSetRatingsForScorePosting: (
       request: TeeSetRatingForScorePostingRequest,
@@ -337,7 +337,7 @@ export class GhinClient {
     }
   }
 
-  private async courseSearch(request: CourseSearchRequest): Promise<CourseSearchResponse['courses']> {
+  private async courseSearch(request: CourseSearchRequest): Promise<CourseSearchResponse> {
     try {
       const validRequest = schemaCourseSearchRequest.parse(request)
       const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
@@ -360,7 +360,7 @@ export class GhinClient {
         throw result.error
       }
 
-      return result.value.courses
+      return result.value
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new ValidationError(`Invalid course search request: ${error.message}`)

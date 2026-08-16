@@ -1,7 +1,63 @@
 import { describe, expect, it } from 'vitest'
-import { schemaCourseDetailsResponse } from './response'
+import { schemaCourseDetailsResponse, schemaCourseSearchResponse } from './response'
 
 describe('Course Response Schema', () => {
+  describe('schemaCourseSearchResponse', () => {
+    // GHIN omits Address1/Address2/LegacyCRPCourseId on search results; every row
+    // failing meant the whole array was rejected and course search 500'd.
+    it('should parse a courses array whose rows omit the address keys', () => {
+      const searchResponse = {
+        courses: [
+          {
+            City: 'Atlanta',
+            CourseID: 13995,
+            CourseName: 'Druid Hills Golf Club',
+            CourseStatus: 'Active',
+            FacilityID: 11807,
+            FacilityName: 'Druid Hills Golf Club',
+            FacilityStatus: 'Active',
+            FullName: 'Druid Hills Golf Club - Druid Hills Golf Club',
+            GeoLocationLatitude: 33.7756,
+            GeoLocationLongitude: -84.3963,
+            Ratings: [],
+          },
+        ],
+      }
+
+      const result = schemaCourseSearchResponse.safeParse(searchResponse)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.courses).toHaveLength(1)
+        expect(result.data.courses[0]?.Address1).toBeUndefined()
+        expect(result.data.courses[0]?.CourseID).toBe(13995)
+        expect(result.data.invalid).toEqual([])
+      }
+    })
+
+    it('should drop rows that fail validation and return them raw in invalid', () => {
+      const goodCourse = {
+        CourseID: 13995,
+        CourseName: 'Druid Hills Golf Club',
+        CourseStatus: 'Active',
+        FacilityID: 11807,
+        FacilityName: 'Druid Hills Golf Club',
+        FacilityStatus: 'Active',
+        FullName: 'Druid Hills Golf Club - Druid Hills Golf Club',
+        Ratings: [],
+      }
+      // CourseName is load-bearing — a row missing it is genuinely unusable.
+      const badCourse = { ...goodCourse, CourseID: 999, CourseName: undefined }
+
+      const result = schemaCourseSearchResponse.safeParse({ courses: [goodCourse, badCourse] })
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.courses).toHaveLength(1)
+        expect(result.data.courses[0]?.CourseID).toBe(13995)
+        expect(result.data.invalid).toEqual([badCourse])
+      }
+    })
+  })
+
   describe('schemaCourseDetailsResponse', () => {
     it('should parse course details with valid Season', () => {
       const validCourseDetails = {
