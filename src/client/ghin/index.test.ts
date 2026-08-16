@@ -135,7 +135,7 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.courses.search({ name: 'Test' })
 
-      expect(result).toEqual(mockResponse.courses)
+      expect(result).toEqual(mockResponse)
       expect(mockFetch).toHaveBeenCalled()
     })
 

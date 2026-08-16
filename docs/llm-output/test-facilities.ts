@@ -51,7 +51,7 @@ const fn = async () => {
     });
 
     console.log(
-      `\nFound ${druidHillsCourses.length} courses matching "Druid Hills" in Georgia:`
+      `\nFound ${druidHillsCourses.courses.length} courses matching "Druid Hills" in Georgia:`
     );
     console.dir(druidHillsCourses, { depth: null });
   } catch (error) {
@@ -88,7 +88,7 @@ const fn = async () => {
     });
 
     console.log(
-      `\nFound ${pinehurstCourses.length} courses matching "Pinehurst" in North Carolina:`
+      `\nFound ${pinehurstCourses.courses.length} courses matching "Pinehurst" in North Carolina:`
     );
     console.dir(pinehurstCourses, { depth: null });
   } catch (error) {

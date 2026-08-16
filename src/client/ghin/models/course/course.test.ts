@@ -175,6 +175,37 @@ describe('Course Schema', () => {
       }
     })
 
+    // GHIN omits descriptive keys entirely on search results — Address1, Address2
+    // and LegacyCRPCourseId were all absent (not null) on every row of a search.
+    it('should handle course with descriptive keys omitted entirely', () => {
+      const courseWithoutAddress = {
+        // Address1: missing
+        // Address2: missing
+        // City, Country, Email, EntCountryCode, EntStateCode, State, Telephone,
+        // UpdatedOn, Zip: missing
+        CourseID: 13995,
+        CourseName: 'Druid Hills Golf Club',
+        CourseStatus: 'Active',
+        FacilityID: 11807,
+        FacilityName: 'Druid Hills Golf Club',
+        FacilityStatus: 'Active',
+        FullName: 'Druid Hills Golf Club - Druid Hills Golf Club',
+        GeoLocationLatitude: 33.7756,
+        GeoLocationLongitude: -84.3963,
+        // LegacyCRPCourseId: missing
+        Ratings: [],
+      }
+
+      const result = schemaCourse.safeParse(courseWithoutAddress)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.Address1).toBeUndefined()
+        expect(result.data.Address2).toBeUndefined()
+        expect(result.data.LegacyCRPCourseId).toBeUndefined()
+        expect(result.data.CourseName).toBe('Druid Hills Golf Club')
+      }
+    })
+
     it('should handle course status case insensitivity', () => {
       const courseWithLowercaseStatus = {
         Address1: '123 Golf Road',

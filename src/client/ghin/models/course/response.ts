@@ -14,9 +14,31 @@ const schemaCourseCountriesResponse = z.object({
 
 type CourseCountriesResponse = z.infer<typeof schemaCourseCountriesResponse>
 
-const schemaCourseSearchResponse = z.object({
-  courses: z.array(schemaCourse.passthrough()),
-})
+// GHIN drops keys from search results without warning (see schemaCourse). A single
+// malformed row used to reject the entire array and 500 the caller, so rows are
+// parsed individually now — the good ones come back in `courses`, the rejects come
+// back raw in `invalid` so callers can log what GHIN actually sent.
+const schemaCourseSearchRow = schemaCourse.passthrough()
+
+const schemaCourseSearchResponse = z
+  .object({
+    courses: z.array(z.unknown()),
+  })
+  .transform(({ courses }) => {
+    const valid: z.infer<typeof schemaCourseSearchRow>[] = []
+    const invalid: unknown[] = []
+
+    for (const row of courses) {
+      const result = schemaCourseSearchRow.safeParse(row)
+      if (result.success) {
+        valid.push(result.data)
+      } else {
+        invalid.push(row)
+      }
+    }
+
+    return { courses: valid, invalid }
+  })
 
 type CourseSearchResponse = z.infer<typeof schemaCourseSearchResponse>
 
