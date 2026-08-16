@@ -61,6 +61,7 @@ jobs:
         run: bun run build
 
       - name: Commit and push version changes
+        if: ${{ inputs.dry-run == false }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
           git add .
