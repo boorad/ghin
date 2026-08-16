@@ -249,6 +249,34 @@ describe('TeeSetRating Schemas', () => {
       }
     })
 
+    // Issue #46: holes carry no Allocation when StrokeAllocation is false.
+    it('should parse holes that omit Allocation', () => {
+      const responseWithoutAllocation = {
+        Season: validSeason,
+        Course: validCourse,
+        Facility: validFacility,
+        TeeSetRatingId: 612076,
+        TeeSetRatingName: 'Granite',
+        Gender: 'Male',
+        HolesNumber: 18,
+        TotalPar: 71,
+        TotalYardage: 5919,
+        TotalMeters: 5412,
+        StrokeAllocation: false,
+        IsShorter: false,
+        LegacyCRPTeeId: 999,
+        EligibleSides: null,
+        Holes: [{ Number: 1, HoleId: 3915428, Length: 345, Par: 4 }],
+        Ratings: [],
+      }
+
+      const result = schemaTeeSetRatingResponse.safeParse(responseWithoutAllocation)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.Holes[0]?.Allocation).toBeUndefined()
+      }
+    })
+
     it('should parse response with multiple ratings (Front, Back, Total)', () => {
       const ratings = [
         {
