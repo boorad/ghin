@@ -19,7 +19,9 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_TOKEN }}
+          # Deploy key, not a PAT: never expires, repo-scoped, and listed as a
+          # ruleset bypass actor so the version-bump commit can push to main.
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
