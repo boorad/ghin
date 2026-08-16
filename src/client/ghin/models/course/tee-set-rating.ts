@@ -57,7 +57,8 @@ const schemaTeeSetRatingHole = z.object({
   Number: number,
   Par: number,
   Length: number,
-  Allocation: number,
+  // Omitted by GHIN when StrokeAllocation is false — see schemaCourseDetailsTeeSetHole.
+  Allocation: number.nullish(),
 })
 
 const schemaTeeSetRatingRating = z.object({

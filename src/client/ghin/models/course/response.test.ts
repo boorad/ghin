@@ -140,5 +140,56 @@ describe('Course Response Schema', () => {
         expect(result.data.Season?.SeasonEndDate).toBe(null)
       }
     })
+
+    // Issue #46: GB&I courses report StrokeAllocation: false and omit the per-hole
+    // Allocation key. St. Patrick's Links (31291), tee set Granite.
+    it('should parse a tee set whose holes omit Allocation', () => {
+      const courseDetailsWithoutAllocation = {
+        CourseCity: 'Downings',
+        CourseId: 31291,
+        CourseName: "St. Patrick's Links",
+        CourseNumber: 1,
+        CourseState: 'IE-DL',
+        CourseStatus: 'ACTIVE',
+        Facility: {
+          FacilityId: 1,
+          FacilityName: 'Rosapenna Hotel & Golf Resort',
+          FacilityNumber: 1,
+          FacilityStatus: 'ACTIVE',
+          GeoLocationFormattedAddress: 'Downings, Co. Donegal',
+          GeoLocationLatitude: 55.1901,
+          GeoLocationLongitude: -7.8342,
+          GolfAssociationId: 1,
+        },
+        Season: null,
+        TeeSets: [
+          {
+            EligibleSides: null,
+            Gender: 'Male',
+            Holes: [
+              { Number: 1, HoleId: 3915428, Length: 345, Par: 4 },
+              { Number: 2, HoleId: 3915429, Length: 339, Par: 4 },
+            ],
+            HolesNumber: 18,
+            IsShorter: false,
+            LegacyCRPTeeId: 999,
+            Ratings: [{ RatingType: 'Total', CourseRating: 68.7, SlopeRating: 121, BogeyRating: 91.1 }],
+            StrokeAllocation: false,
+            TeeSetRatingId: 612076,
+            TeeSetRatingName: 'Granite',
+            TotalMeters: 5412,
+            TotalPar: 71,
+            TotalYardage: 5919,
+          },
+        ],
+      }
+
+      const result = schemaCourseDetailsResponse.safeParse(courseDetailsWithoutAllocation)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.TeeSets[0]?.Holes[0]?.Allocation).toBeUndefined()
+        expect(result.data.TeeSets[0]?.Holes[0]?.Par).toBe(4)
+      }
+    })
   })
 })

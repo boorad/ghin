@@ -58,7 +58,9 @@ const schemaCourseDetailsTeeSetRatings = z.object({
 })
 
 const schemaCourseDetailsTeeSetHole = z.object({
-  Allocation: number,
+  // GHIN omits Allocation entirely when the tee set reports StrokeAllocation: false
+  // (common outside the US — Irish/GB&I courses). See issue #46.
+  Allocation: number.nullish(),
   HoleId: number,
   Length: number,
   Number: number,
