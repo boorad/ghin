@@ -247,5 +247,63 @@ describe('Course Response Schema', () => {
         expect(result.data.TeeSets[0]?.Holes[0]?.Par).toBe(4)
       }
     })
+
+    // GHIN stopped sending LegacyCRPTeeId on Druid Hills (13995) — all 22 tee sets
+    // lost the key at once, and `number` is z.coerce.number(), so an absent key
+    // coerces to NaN and rejected the entire response with a ValidationError.
+    it.each([
+      [
+        'omits',
+        (teeSet: Record<string, unknown>) => {
+          const { LegacyCRPTeeId: _omitted, ...rest } = teeSet
+          return rest
+        },
+      ],
+      ['nulls', (teeSet: Record<string, unknown>) => ({ ...teeSet, LegacyCRPTeeId: null })],
+    ])('should parse a tee set that %s LegacyCRPTeeId', (_label, mutate) => {
+      const teeSet = {
+        EligibleSides: null,
+        Gender: 'Male',
+        Holes: [{ Allocation: 1, Number: 1, HoleId: 3915428, Length: 345, Par: 4 }],
+        HolesNumber: 18,
+        IsShorter: false,
+        LegacyCRPTeeId: 999,
+        Ratings: [{ RatingType: 'Total', CourseRating: 68.7, SlopeRating: 121, BogeyRating: 91.1 }],
+        StrokeAllocation: true,
+        TeeSetRatingId: 612076,
+        TeeSetRatingName: 'Blue',
+        TotalMeters: 5412,
+        TotalPar: 71,
+        TotalYardage: 5919,
+      }
+
+      const result = schemaCourseDetailsResponse.safeParse({
+        CourseCity: 'Atlanta',
+        CourseId: 13995,
+        CourseName: 'Druid Hills Golf Club',
+        CourseNumber: 1,
+        CourseState: 'US-GA',
+        CourseStatus: 'ACTIVE',
+        Facility: {
+          FacilityId: 1,
+          FacilityName: 'Druid Hills Golf Club',
+          FacilityNumber: 1,
+          FacilityStatus: 'ACTIVE',
+          GeoLocationFormattedAddress: 'Atlanta, GA',
+          GeoLocationLatitude: 33.7748,
+          GeoLocationLongitude: -84.3373,
+          GolfAssociationId: 1,
+        },
+        Season: null,
+        TeeSets: [mutate(teeSet)],
+      })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.TeeSets).toHaveLength(1)
+        expect(result.data.TeeSets[0]?.TeeSetRatingName).toBe('Blue')
+        expect(result.data.TeeSets[0]?.LegacyCRPTeeId ?? null).toBe(null)
+      }
+    })
   })
 })
