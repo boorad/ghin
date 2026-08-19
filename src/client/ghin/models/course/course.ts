@@ -16,7 +16,12 @@ const schemaCourse = z.object({
   CourseID: number,
   CourseName: string,
   CourseStatus: schemaStatus,
-  Email: string.email().nullish(),
+  // NOT validated as an email. GHIN puts whatever it has in this field —
+  // Parkview Fairways (course 3363) carries "www.parkview18.com" — and
+  // `.email()` rejected the row, so the course vanished from search results
+  // entirely. Nothing consumes this field; validating it only ever costs a
+  // playable course. Caught in production by the onDegraded reporter.
+  Email: string.nullish(),
   EntCountryCode: number.nullish(),
   EntStateCode: number.nullish(),
   FacilityID: number,

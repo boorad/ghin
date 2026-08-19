@@ -20,7 +20,9 @@ const schemaFacility = z.object({
   City: string.nullable(),
   Country: string.nullable(),
   Courses: z.array(schemaFacilityCourse).optional(),
-  Email: string.email().nullable().optional(),
+  // Not validated — see the note on schemaCourse.Email. GHIN stores websites
+  // and free text here, and a bad value must not cost the caller the facility.
+  Email: string.nullish(),
   EntCountryCode: number.nullable(),
   EntStateCode: number.nullable(),
   FacilityId: number,

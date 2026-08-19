@@ -240,4 +240,28 @@ describe('Course Schema', () => {
       }
     })
   })
+  // Production regression: GHIN returned "www.parkview18.com" in Email for
+  // Parkview Fairways (course 3363). `.email()` rejected the row, so a real,
+  // playable course disappeared from search results over a field nothing reads.
+  // Found by the onDegraded reporter within hours of it shipping.
+  it('should accept a non-email value in Email', () => {
+    const result = schemaCourse.safeParse({
+      CourseID: 3363,
+      CourseName: 'Parkview Fairways Golf Course',
+      CourseStatus: 'Active',
+      FacilityID: 3196,
+      FacilityName: 'Parkview Fairways Golf Course',
+      FacilityStatus: 'Active',
+      FullName: 'Parkview Fairways Golf Course - Parkview Fairways Golf Course',
+      GeoLocationLatitude: 42.9292,
+      GeoLocationLongitude: -77.4206,
+      Email: 'www.parkview18.com',
+      Ratings: [],
+    })
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.Email).toBe('www.parkview18.com')
+    }
+  })
 })
