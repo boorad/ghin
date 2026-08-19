@@ -387,7 +387,7 @@ describe('TeeSetRating Schemas', () => {
       const result = schemaTeeSetRatingResponse.safeParse(responseWithLowercaseStatus)
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.Course.CourseStatus).toBe('ACTIVE')
+        expect(result.data.Course?.CourseStatus).toBe('ACTIVE')
       }
     })
 
@@ -579,6 +579,57 @@ describe('TeeSetRating Schemas', () => {
       }
 
       const result = schemaTeeSetRatingResponse.safeParse(invalidResponse)
+      expect(result.success).toBe(false)
+    })
+  })
+  describe('leniency', () => {
+    // The break that took this endpoint down entirely: GHIN omits
+    // LegacyCRPTeeId, `.nullable()` permits null but not a MISSING key, and
+    // `number` is z.coerce.number() so absent coerces to NaN. Every valid tee
+    // failed. Fourth occurrence of that class after #46, #51 and the same field
+    // on course details.
+    const minimal = {
+      TeeSetRatingId: 921728,
+      TeeSetRatingName: 'Championship',
+      Holes: [{ Number: 1 }],
+      Ratings: [{ RatingType: 'Total', CourseRating: 72.4, SlopeRating: 132 }],
+    }
+
+    it('should parse a tee set rating with only identity, holes and ratings', () => {
+      const result = schemaTeeSetRatingResponse.safeParse(minimal)
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.TeeSetRatingId).toBe(921728)
+        expect(result.data.LegacyCRPTeeId ?? null).toBe(null)
+      }
+    })
+
+    it('should parse when LegacyCRPTeeId is omitted entirely', () => {
+      const { LegacyCRPTeeId: _omitted, ...rest } = { ...minimal, LegacyCRPTeeId: 1 }
+      expect(schemaTeeSetRatingResponse.safeParse(rest).success).toBe(true)
+    })
+
+    // This endpoint is the only place GHIN reports whether a tee is retired, so
+    // the status has to survive whatever else is missing around it.
+    it('should surface TeeSetStatus on an otherwise minimal payload', () => {
+      const result = schemaTeeSetRatingResponse.safeParse({
+        ...minimal,
+        TeeSetStatus: 'Inactive',
+      })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.TeeSetStatus).toBe('inactive')
+      }
+    })
+
+    it('should still require a rating row to carry Course and Slope Rating', () => {
+      const result = schemaTeeSetRatingResponse.safeParse({
+        ...minimal,
+        Ratings: [{ RatingType: 'Total', CourseRating: 72.4 }],
+      })
+
       expect(result.success).toBe(false)
     })
   })
