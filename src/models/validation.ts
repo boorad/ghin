@@ -157,27 +157,6 @@ export const shortDate = z
   })
 
 /**
- * Build a transform that parses each row of an array independently, keeping the
- * ones that validate and discarding the ones that don't.
- *
- * GHIN drops keys from responses without warning — three separate outages so far
- * (issues #46, #51, and `LegacyCRPTeeId` on 2026-08-19). Parsing an array as a
- * unit means one malformed row rejects every good row beside it. Use this
- * wherever losing a row degrades the response but losing the response breaks the
- * caller.
- *
- * Pair it with `.transform()` on `z.array(z.unknown())`, and prefer
- * {@link partitionRows} when the caller needs to see and report what was dropped.
- *
- * @param schema - Row schema applied to each element.
- * @returns A transform from raw rows to the subset that parsed.
- */
-export const dropInvalidRows =
-  <T extends z.ZodTypeAny>(schema: T) =>
-  (rows: unknown[]): z.infer<T>[] =>
-    partitionRows(schema, rows).valid
-
-/**
  * Parse each row independently, returning the ones that validated and the raw
  * ones that didn't.
  *

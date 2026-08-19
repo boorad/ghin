@@ -372,26 +372,36 @@ describe('Course Response Schema', () => {
       }
     })
 
-    // Ratings are the opposite call: buildTeeFromDetails zero-fills the slots it
-    // doesn't find, so a bad Front-9 row costs a number, not a playable tee.
-    it('should drop an unparseable rating row and keep the tee set', () => {
+    // Course Rating and Slope Rating ARE the rating. Defaulting a missing one to
+    // zero produced a confidently wrong Course Handicap rather than "unavailable",
+    // because 0 passes the `typeof x === 'number'` guard downstream. Losing the
+    // tee is recoverable; a fabricated handicap is not.
+    it.each([
+      ['CourseRating', { RatingType: 'Total', SlopeRating: 121 }],
+      ['SlopeRating', { RatingType: 'Total', CourseRating: 68.7 }],
+    ])('should reject the tee set when a rating row omits %s', (_label, rating) => {
+      const teeSet = { ...minimalTeeSet, Ratings: [rating] }
+      const result = schemaCourseDetailsResponse.safeParse(minimalCourse([teeSet]))
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.TeeSets).toHaveLength(0)
+        expect(result.data.invalidTeeSets).toEqual([teeSet])
+      }
+    })
+
+    // Bogey Rating is absent from the Course Handicap formula, so a tee without
+    // one is still perfectly playable — it must not cost the player the tee.
+    it('should keep a tee set whose rating omits BogeyRating', () => {
       const result = schemaCourseDetailsResponse.safeParse(
-        minimalCourse([
-          {
-            ...minimalTeeSet,
-            Ratings: [
-              { RatingType: 'Total', CourseRating: 68.7, SlopeRating: 121, BogeyRating: 91.1 },
-              { RatingType: 'Sideways', CourseRating: 1 },
-            ],
-          },
-        ]),
+        minimalCourse([{ ...minimalTeeSet, Ratings: [{ RatingType: 'Total', CourseRating: 68.7, SlopeRating: 121 }] }]),
       )
 
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data.TeeSets).toHaveLength(1)
-        expect(result.data.TeeSets[0]?.Ratings).toHaveLength(1)
-        expect(result.data.TeeSets[0]?.Ratings[0]?.RatingType).toBe('Total')
+        expect(result.data.TeeSets[0]?.Ratings[0]?.CourseRating).toBe(68.7)
+        expect(result.data.TeeSets[0]?.Ratings[0]?.BogeyRating ?? null).toBe(null)
       }
     })
 

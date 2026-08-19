@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { boolean, dropInvalidRows, float, monthDay, number, partitionRows, string } from '../../../../models'
+import { boolean, float, monthDay, number, partitionRows, string } from '../../../../models'
 import { schemaCourseCountry } from './country'
 import { schemaCourse } from './course'
 import { schemaGeoAddress, schemaGeoCoordinate } from './geolocation'
@@ -66,15 +66,21 @@ const schemaCourseDetailsSeason = z.object({
   }),
 })
 
-// RatingType is the key `buildTeeFromDetails` slots the numbers under, so a row
-// without it is unusable — but a rating row is per-tee-set decoration, so an
-// unusable row drops itself rather than the tee set (see schemaCourseDetailsTeeSet).
+// Course Rating and Slope Rating are the rating — a row without them isn't
+// partial data, it's not a rating at all. They were briefly nullish in 0.15.0,
+// which let a missing value default to 0 downstream; 0 passes a
+// `typeof x === 'number'` guard, so it reached the Course Handicap formula as a
+// real rating and produced a confidently wrong number instead of "unavailable".
+// Fabricating a handicap is worse than losing a tee.
+//
+// BogeyRating stays nullish deliberately: it's absent from the Course Handicap
+// formula, and a rating/slope pair on a bogey-less tee is still perfectly usable.
 const schemaCourseDetailsTeeSetRatings = z
   .object({
     BogeyRating: float.nullish(),
-    CourseRating: float.nullish(),
+    CourseRating: float,
     RatingType: z.enum(['Front', 'Back', 'Total']),
-    SlopeRating: float.nullish(),
+    SlopeRating: float,
   })
   .passthrough()
 
@@ -99,8 +105,6 @@ const schemaCourseDetailsTeeSetHole = z
 // other field is descriptive or defaulted downstream, so GHIN dropping one must
 // not cost the player a playable tee.
 //
-// Rating rows drop individually — a malformed Front-9 rating shouldn't cost you
-// the tee, and `buildTeeFromDetails` already zero-fills the slots it doesn't find.
 const schemaCourseDetailsTeeSet = z
   .object({
     EligibleSides: z.unknown(),
@@ -116,7 +120,12 @@ const schemaCourseDetailsTeeSet = z
     // missing key must not reject the whole course. Same class as issue #46 and
     // the search keys in #51; `schemaTeeSetRating` already had it nullable.
     LegacyCRPTeeId: number.nullish(),
-    Ratings: z.array(z.unknown()).transform(dropInvalidRows(schemaCourseDetailsTeeSetRatings)),
+    // All-or-nothing, like Holes and for the same reason. Dropping a bad rating
+    // row on its own would leave the slot at zero and be silent about it —
+    // indistinguishable from a tee GHIN rates only partially, and the resulting
+    // handicap would be wrong with no signal anywhere. A tee set with an
+    // unparseable rating fails into `invalidTeeSets`, which reports.
+    Ratings: z.array(schemaCourseDetailsTeeSetRatings),
     StrokeAllocation: boolean.nullish(),
     TeeSetRatingId: number,
     TeeSetRatingName: string,
