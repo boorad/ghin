@@ -95,7 +95,11 @@ const schemaCourseDetailsTeeSet = z.object({
   Holes: z.array(schemaCourseDetailsTeeSetHole),
   HolesNumber: number,
   IsShorter: boolean.nullable(),
-  LegacyCRPTeeId: number,
+  // GHIN drops this legacy CRP identifier without warning — Druid Hills (13995)
+  // returned all 22 tee sets without it. It identifies nothing we use, so a
+  // missing key must not reject the whole course. Same class as issue #46 and
+  // the search keys in #51; `schemaTeeSetRating` already had it nullable.
+  LegacyCRPTeeId: number.nullish(),
   Ratings: z.array(schemaCourseDetailsTeeSetRatings),
   StrokeAllocation: boolean,
   TeeSetRatingId: number,
