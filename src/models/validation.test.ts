@@ -248,4 +248,37 @@ describe('Validation', () => {
       expect(result.success).toBe(false)
     })
   })
+  describe('handicap with a WHS status suffix', () => {
+    // Production: GHIN returned handicap_index "19.1M" for a real golfer, the
+    // refine rejected it, and `golfers.search` dropped that golfer entirely.
+    // The suffix is a status marker (M = modified by the Handicap Committee,
+    // WD = withdrawn), not malformed data.
+    it.each([
+      ['19.1M', 19.1],
+      ['12.4WD', 12.4],
+      ['+2.4M', 2.4],
+      ['0.0M', 0],
+    ])('parses %s as %s', (input, expected) => {
+      const result = handicap.safeParse(input)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe(expected)
+      }
+    })
+
+    it('still maps the no-handicap markers to null', () => {
+      expect(handicap.parse('NH')).toBe(null)
+      expect(handicap.parse('-')).toBe(null)
+    })
+
+    it('still parses a plain numeric index', () => {
+      expect(handicap.parse('19.1')).toBe(19.1)
+      expect(handicap.parse(19.1)).toBe(19.1)
+    })
+
+    it('still rejects a string that is not a handicap at all', () => {
+      expect(handicap.safeParse('not a handicap').success).toBe(false)
+      expect(handicap.safeParse('M').success).toBe(false)
+    })
+  })
 })
