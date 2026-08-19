@@ -98,10 +98,14 @@ describe('GhinClient', () => {
 
   describe('courses.getDetails', () => {
     it('should fetch and return course details', async () => {
+      // Mirrors what schemaCourseDetailsResponse actually produces: the client
+      // reads TeeSets/invalidTeeSets to report degradation.
       const mockDetails = {
         course_id: 12345,
         name: 'Test Course',
         city: 'Test City',
+        TeeSets: [],
+        invalidTeeSets: [],
       }
       mockFetch.mockResolvedValue(ok(mockDetails))
 
@@ -130,6 +134,7 @@ describe('GhinClient', () => {
           { course_id: 1, name: 'Course 1' },
           { course_id: 2, name: 'Course 2' },
         ],
+        invalid: [],
       }
       mockFetch.mockResolvedValue(ok(mockResponse))
 
@@ -137,6 +142,50 @@ describe('GhinClient', () => {
 
       expect(result).toEqual(mockResponse)
       expect(mockFetch).toHaveBeenCalled()
+    })
+
+    // Degradation must never be silent: a search that quietly returns 2 of 3
+    // rows is indistinguishable from a search that found 2 rows, which is
+    // exactly how a GHIN payload change hides until a user reports it.
+    it('should report dropped rows through onDegraded', async () => {
+      const onDegraded = vi.fn()
+      const client = new GhinClient({ password: 'p', username: 'u', onDegraded })
+      const rejected = { course_id: 3, busted: true }
+      mockFetch.mockResolvedValue(ok({ courses: [{ course_id: 1, name: 'Course 1' }], invalid: [rejected] }))
+
+      await client.courses.search({ name: 'Test' })
+
+      expect(onDegraded).toHaveBeenCalledWith({
+        entity: 'course_search',
+        dropped: 1,
+        total: 2,
+        sample: [rejected],
+      })
+    })
+
+    it('should not call onDegraded when nothing was dropped', async () => {
+      const onDegraded = vi.fn()
+      const client = new GhinClient({ password: 'p', username: 'u', onDegraded })
+      mockFetch.mockResolvedValue(ok({ courses: [{ course_id: 1 }], invalid: [] }))
+
+      await client.courses.search({ name: 'Test' })
+
+      expect(onDegraded).not.toHaveBeenCalled()
+    })
+
+    // Telemetry is a side channel — a caller's broken reporter must not turn a
+    // working GHIN response into a failed request.
+    it('should survive an onDegraded callback that throws', async () => {
+      const client = new GhinClient({
+        password: 'p',
+        username: 'u',
+        onDegraded: () => {
+          throw new Error('reporter exploded')
+        },
+      })
+      mockFetch.mockResolvedValue(ok({ courses: [{ course_id: 1 }], invalid: [{ bad: true }] }))
+
+      await expect(client.courses.search({ name: 'Test' })).resolves.toBeDefined()
     })
 
     it('should throw error when fetch fails', async () => {
@@ -596,6 +645,7 @@ describe('GhinClient', () => {
     it('should search and return golfers', async () => {
       const mockResponse = {
         golfers: [{ ghin: 1234567, first_name: 'John', last_name: 'Doe' }],
+        invalid: [],
       }
       mockFetch.mockResolvedValue(ok(mockResponse))
 
@@ -623,6 +673,7 @@ describe('GhinClient', () => {
             status: 'Active',
           },
         ],
+        invalid: [],
       }
       mockFetch.mockResolvedValue(ok(mockResponse))
 
@@ -650,6 +701,7 @@ describe('GhinClient', () => {
             status: 'Active',
           },
         ],
+        invalid: [],
       }
       mockFetch.mockResolvedValue(ok(mockResponse))
 
@@ -662,6 +714,7 @@ describe('GhinClient', () => {
     it('should return undefined when no golfer found', async () => {
       const mockResponse = {
         golfers: [],
+        invalid: [],
       }
       mockFetch.mockResolvedValue(ok(mockResponse))
 

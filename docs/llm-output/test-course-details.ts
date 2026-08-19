@@ -29,15 +29,15 @@ async function test() {
     console.log("CourseCity:", details.CourseCity);
     console.log(
       "Facility.GeoLocationFormattedAddress:",
-      details.Facility.GeoLocationFormattedAddress
+      details.Facility?.GeoLocationFormattedAddress
     );
     console.log(
       "Facility.GeoLocationLatitude:",
-      details.Facility.GeoLocationLatitude
+      details.Facility?.GeoLocationLatitude
     );
     console.log(
       "Facility.GeoLocationLongitude:",
-      details.Facility.GeoLocationLongitude
+      details.Facility?.GeoLocationLongitude
     );
     console.log("\nFull response:");
     console.dir(details, { depth: null });
