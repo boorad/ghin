@@ -106,6 +106,14 @@ export const emptyStringToNull = emptyString.nullable().transform((value) => val
 export const float = z.coerce.number()
 export const gender = z.enum(['M', 'F'])
 
+/**
+ * A Handicap Index value carrying a WHS status suffix, e.g. `19.1M` (modified by
+ * the Handicap Committee) or `12.4WD` (withdrawn). GHIN returns these in
+ * `handicap_index`, and only `hi_display` is guaranteed to be a display string —
+ * so the numeric field has to cope with them too.
+ */
+const HANDICAP_WITH_SUFFIX = /^([+-]?\d+(?:\.\d+)?)[A-Za-z]+$/
+
 export const handicap = z
   .union([float, z.string(), z.null()])
   .refine((value) => {
@@ -117,11 +125,22 @@ export const handicap = z
       return true
     }
 
-    return false
+    // A suffixed index is a real value, not malformed data. Rejecting it dropped
+    // the entire golfer from `golfers.search` — caught in production, where GHIN
+    // returned `"19.1M"` for a golfer who then simply didn't appear in results.
+    return typeof value === 'string' && HANDICAP_WITH_SUFFIX.test(value)
   })
   .transform((value) => {
     if (value === 'NH' || value === '-') {
       return null
+    }
+
+    if (typeof value === 'string') {
+      const match = value.match(HANDICAP_WITH_SUFFIX)
+      // Sign handling is unchanged from the plain-number path: `float` is
+      // `z.coerce.number()`, so a leading `+` on a plus handicap already parsed
+      // to a positive number and callers apply their own plus convention.
+      return match?.[1] ? Number(match[1]) : null
     }
 
     return value
