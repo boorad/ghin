@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { ConfigurationError, ValidationError } from '../../errors'
-import { type ClientConfig, number, schemaClientConfig } from '../../models'
+import { type ClientConfig, number, reportDegradation, schemaClientConfig } from '../../models'
 import { InMemoryCacheClient } from '../in-memory-cache-client'
 import { CLIENT_SOURCE, RequestClient } from '../request-client'
 import {
@@ -151,12 +151,17 @@ export class GhinClient {
     iterateUndelivered: (request?: IterateUndeliveredRequest) => AsyncGenerator<WebhookEnvelope, void, void>
   }
 
+  /** Caller's degradation reporter — see {@link ClientConfig.onDegraded}. */
+  private readonly onDegraded: ClientConfig['onDegraded']
+
   constructor(config: ClientConfig) {
     const results = schemaClientConfig.safeParse(config)
 
     if (!results.success) {
       throw new ConfigurationError(`Invalid GhinClientConfig: ${results.error.message}`)
     }
+
+    this.onDegraded = results.data.onDegraded
 
     this.httpClient = new RequestClient({
       ...results.data,
@@ -262,7 +267,15 @@ export class GhinClient {
         throw result.error
       }
 
-      return result.value
+      const { invalidTeeSets, ...details } = result.value
+      reportDegradation(
+        this.onDegraded,
+        'course_details',
+        invalidTeeSets,
+        details.TeeSets.length + invalidTeeSets.length,
+      )
+
+      return { ...details, invalidTeeSets }
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new ValidationError(`Invalid course details request: ${error.message}`)
@@ -359,6 +372,13 @@ export class GhinClient {
       if (result.isErr()) {
         throw result.error
       }
+
+      reportDegradation(
+        this.onDegraded,
+        'course_search',
+        result.value.invalid,
+        result.value.courses.length + result.value.invalid.length,
+      )
 
       return result.value
     } catch (error) {
@@ -701,6 +721,13 @@ export class GhinClient {
         throw result.error
       }
 
+      reportDegradation(
+        this.onDegraded,
+        'golfers_search',
+        result.value.invalid,
+        result.value.golfers.length + result.value.invalid.length,
+      )
+
       return result.value.golfers
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -748,6 +775,13 @@ export class GhinClient {
       if (result.isErr()) {
         throw result.error
       }
+
+      reportDegradation(
+        this.onDegraded,
+        'golfers_global_search',
+        result.value.invalid,
+        result.value.golfers.length + result.value.invalid.length,
+      )
 
       return result.value.golfers
     } catch (error) {

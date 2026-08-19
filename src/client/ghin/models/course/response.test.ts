@@ -306,4 +306,116 @@ describe('Course Response Schema', () => {
       }
     })
   })
+
+  describe('schemaCourseDetailsResponse leniency', () => {
+    // A tee set carrying only what makes it usable: an id to key the CoValue on,
+    // a name to pick from a list, and holes to score. Every other GHIN key is
+    // absent — the shape we'd get if they dropped the lot tomorrow.
+    const minimalTeeSet = {
+      TeeSetRatingId: 612076,
+      TeeSetRatingName: 'Blue',
+      Holes: [
+        { Number: 1, HoleId: 1, Length: 345, Par: 4 },
+        { Number: 2, HoleId: 2, Length: 339, Par: 4 },
+      ],
+      Ratings: [{ RatingType: 'Total', CourseRating: 68.7, SlopeRating: 121, BogeyRating: 91.1 }],
+    }
+
+    const minimalCourse = (teeSets: unknown[]) => ({
+      CourseId: 13995,
+      CourseName: 'Druid Hills Golf Club',
+      TeeSets: teeSets,
+    })
+
+    it('should parse a course carrying only CourseId, CourseName and tee sets', () => {
+      const result = schemaCourseDetailsResponse.safeParse(minimalCourse([minimalTeeSet]))
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.TeeSets).toHaveLength(1)
+        expect(result.data.invalidTeeSets).toHaveLength(0)
+        expect(result.data.TeeSets[0]?.TeeSetRatingName).toBe('Blue')
+      }
+    })
+
+    // The 2026-08-19 shape generalized: whatever GHIN drops next, the tees that
+    // still parse must reach the player.
+    it('should keep the good tee sets and report the bad ones separately', () => {
+      const unusable = { TeeSetRatingName: 'No Id', Holes: [{ Number: 1 }] }
+      const result = schemaCourseDetailsResponse.safeParse(
+        minimalCourse([minimalTeeSet, unusable, { ...minimalTeeSet, TeeSetRatingId: 99 }]),
+      )
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.TeeSets.map((t) => t.TeeSetRatingId)).toEqual([612076, 99])
+        expect(result.data.invalidTeeSets).toEqual([unusable])
+      }
+    })
+
+    // Dropping the bad hole instead would hand back a 17-hole tee that scores
+    // silently wrong. Losing the tee is recoverable; a wrong scorecard is not.
+    it('should reject the whole tee set when a hole is unparseable, not just that hole', () => {
+      const brokenHole = {
+        ...minimalTeeSet,
+        Holes: [
+          { Number: 1, HoleId: 1, Length: 345, Par: 4 },
+          { HoleId: 2, Length: 339 },
+        ],
+      }
+      const result = schemaCourseDetailsResponse.safeParse(minimalCourse([brokenHole]))
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.TeeSets).toHaveLength(0)
+        expect(result.data.invalidTeeSets).toEqual([brokenHole])
+      }
+    })
+
+    // Ratings are the opposite call: buildTeeFromDetails zero-fills the slots it
+    // doesn't find, so a bad Front-9 row costs a number, not a playable tee.
+    it('should drop an unparseable rating row and keep the tee set', () => {
+      const result = schemaCourseDetailsResponse.safeParse(
+        minimalCourse([
+          {
+            ...minimalTeeSet,
+            Ratings: [
+              { RatingType: 'Total', CourseRating: 68.7, SlopeRating: 121, BogeyRating: 91.1 },
+              { RatingType: 'Sideways', CourseRating: 1 },
+            ],
+          },
+        ]),
+      )
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.TeeSets).toHaveLength(1)
+        expect(result.data.TeeSets[0]?.Ratings).toHaveLength(1)
+        expect(result.data.TeeSets[0]?.Ratings[0]?.RatingType).toBe('Total')
+      }
+    })
+
+    it('should preserve unknown keys GHIN adds rather than stripping them', () => {
+      const result = schemaCourseDetailsResponse.safeParse({
+        ...minimalCourse([{ ...minimalTeeSet, SomeNewTeeKey: 'tee' }]),
+        SomeNewCourseKey: 'course',
+      })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        const passthrough = result.data as unknown as {
+          SomeNewCourseKey?: string
+          TeeSets: { SomeNewTeeKey?: string }[]
+        }
+        expect(passthrough.SomeNewCourseKey).toBe('course')
+        expect(passthrough.TeeSets[0]?.SomeNewTeeKey).toBe('tee')
+      }
+    })
+
+    // A course with no id or name is genuinely unusable — leniency has a floor,
+    // and this is it.
+    it('should still reject a course with no identity', () => {
+      expect(schemaCourseDetailsResponse.safeParse({ TeeSets: [] }).success).toBe(false)
+    })
+  })
 })

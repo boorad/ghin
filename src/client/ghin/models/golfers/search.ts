@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { boolean, date, emptyStringToNull, gender, handicap, number, string } from '../../../../models'
+import { boolean, date, emptyStringToNull, gender, handicap, number, partitionRows, string } from '../../../../models'
 
 const schemaStatus = z.enum(['Active', 'Inactive'])
 
@@ -57,43 +57,58 @@ export const schemaGolfersSearchRequest = z
 export type GolfersSearchRequest = z.infer<typeof schemaGolfersSearchRequest>
 export type GolfersGlobalSearchRequest = z.infer<typeof schemaGolfersGlobalSearchRequest>
 
-export const schemaGolfer = z.object({
-  ghin: number,
-  first_name: emptyStringToNull.optional(),
-  last_name: string,
-  association_id: number,
-  association_name: string,
-  handicap_index: handicap,
-  club_affiliation_id: number,
-  club_id: number,
-  club_name: emptyStringToNull,
-  country: emptyStringToNull,
-  entitlement: boolean,
-  gender,
-  hard_cap: boolean,
-  has_digital_profile: boolean,
-  hi_display: string,
-  hi_value: handicap,
-  is_home_club: boolean,
-  low_hi_date: date.nullable(),
-  low_hi_display: string,
-  low_hi_value: handicap,
-  low_hi: handicap,
-  message_club_authorized: string.nullable(),
-  middle_name: emptyStringToNull.nullable().optional(),
-  phone_number: emptyStringToNull.nullable().optional(),
-  prefix: emptyStringToNull.optional(),
-  rev_date: date.nullable(),
-  soft_cap: boolean,
-  state: emptyStringToNull,
-  status: schemaStatus,
-  suffix: emptyStringToNull.optional(),
-})
+// `ghin` is the only field that makes a golfer usable — it's what a handicap
+// links against. `last_name` is what a human picks from a result list. Every
+// other key is descriptive, and GHIN has already dropped optional fields mid-
+// batch once (an empty optional field rejected an entire `golfers.search`).
+export const schemaGolfer = z
+  .object({
+    ghin: number,
+    first_name: emptyStringToNull.nullish(),
+    last_name: string,
+    association_id: number.nullish(),
+    association_name: string.nullish(),
+    handicap_index: handicap.nullish(),
+    club_affiliation_id: number.nullish(),
+    club_id: number.nullish(),
+    club_name: emptyStringToNull.nullish(),
+    country: emptyStringToNull.nullish(),
+    entitlement: boolean.nullish(),
+    gender: gender.nullish(),
+    hard_cap: boolean.nullish(),
+    has_digital_profile: boolean.nullish(),
+    hi_display: string.nullish(),
+    hi_value: handicap.nullish(),
+    is_home_club: boolean.nullish(),
+    low_hi_date: date.nullish(),
+    low_hi_display: string.nullish(),
+    low_hi_value: handicap.nullish(),
+    low_hi: handicap.nullish(),
+    message_club_authorized: string.nullish(),
+    middle_name: emptyStringToNull.nullish(),
+    phone_number: emptyStringToNull.nullish(),
+    prefix: emptyStringToNull.nullish(),
+    rev_date: date.nullish(),
+    soft_cap: boolean.nullish(),
+    state: emptyStringToNull.nullish(),
+    status: schemaStatus.nullish(),
+    suffix: emptyStringToNull.nullish(),
+  })
+  .passthrough()
 
 export type Golfer = z.infer<typeof schemaGolfer>
 
-export const schemaGolfersSearchResponse = z.object({
-  golfers: z.array(schemaGolfer),
-})
+// Rows are parsed individually: one golfer GHIN sends malformed used to reject
+// every golfer beside them, turning a partial-data problem into "no search
+// results at all". Rejects come back raw in `invalid` so the caller can log what
+// GHIN actually sent rather than discovering it during an outage.
+export const schemaGolfersSearchResponse = z
+  .object({
+    golfers: z.array(z.unknown()),
+  })
+  .transform(({ golfers }) => {
+    const { valid, invalid } = partitionRows(schemaGolfer, golfers)
+    return { golfers: valid, invalid }
+  })
 
 export type GolfersSearchResponse = z.infer<typeof schemaGolfersSearchResponse>
