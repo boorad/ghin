@@ -150,7 +150,10 @@ export class GhinClient {
     /**
      * Yields one `Result` per envelope and never throws or rejects — a failure
      * arrives as a yielded `err`, so a recovery worker can decide whether to
-     * carry on. See {@link GhinClient.webhooksIterateUndelivered}.
+     * carry on. All three failure modes are terminal: the generator yields the
+     * `err` and then returns. Bad input means there is nothing to page through;
+     * a failed page fetch means there are no further pages to read; and the
+     * page cap only fires when the filters are too broad to finish the scan.
      */
     iterateUndelivered: (
       request?: IterateUndeliveredRequest,

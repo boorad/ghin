@@ -8,6 +8,7 @@ import {
   NetworkError,
   RateLimitError,
   ValidationError,
+  toGhinError,
 } from './index'
 
 describe('GhinError', () => {
@@ -101,6 +102,35 @@ describe('CacheError', () => {
     expect(error.statusCode).toBeUndefined()
     expect(error.name).toBe('CacheError')
     expect(error).toBeInstanceOf(GhinError)
+  })
+})
+
+describe('toGhinError', () => {
+  it('should pass a GhinError subclass through as the same instance', () => {
+    const error = new RateLimitError('Rate limited', 60)
+
+    // Identity, not shape: `statusCode`, `retryAfter` and `field` only survive
+    // the wrap because the original instance is handed back untouched.
+    expect(toGhinError(error)).toBe(error)
+  })
+
+  it('should wrap a plain Error, preserving the message and the original as cause', () => {
+    const cause = new Error('Original error')
+    const error = toGhinError(cause)
+
+    expect(error).toBeInstanceOf(NetworkError)
+    expect(error.message).toBe('Original error')
+    expect(error.code).toBe(ErrorCodes.NETWORK_ERROR)
+    expect(error.cause).toBe(cause)
+  })
+
+  it('should wrap a non-Error throw with String(x) as the message', () => {
+    const error = toGhinError('kaboom')
+
+    expect(error).toBeInstanceOf(NetworkError)
+    expect(error.message).toBe('kaboom')
+    expect(error.code).toBe(ErrorCodes.NETWORK_ERROR)
+    expect(error.cause).toBeUndefined()
   })
 })
 

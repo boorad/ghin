@@ -1,6 +1,6 @@
 import type { Result } from 'neverthrow'
 import { err, ok } from 'neverthrow'
-import { type GhinError, NetworkError, RateLimitError, toGhinError } from '../errors'
+import { GhinError, NetworkError, RateLimitError, toGhinError } from '../errors'
 
 export interface RetryConfig {
   maxAttempts: number
@@ -83,7 +83,20 @@ export async function withRetryAsync<T>(
       const result = await operation()
       return ok(result)
     } catch (error) {
-      return err(toGhinError(error))
+      // A thrown `GhinError` keeps its class, and with it its retryability.
+      // Anything else must not gain any: `toGhinError` would wrap it in a
+      // `NetworkError`, and a `NetworkError` without a status code is
+      // retryable, so an arbitrary throw would burn every attempt where it
+      // used to come straight back after one. Re-home it on the base
+      // `GhinError` — which `isRetryableError` refuses — keeping the message
+      // and `cause` `toGhinError` produces.
+      if (error instanceof GhinError) {
+        return err(error)
+      }
+
+      const wrapped = toGhinError(error)
+
+      return err(new GhinError(wrapped.message, wrapped.code, wrapped.statusCode, wrapped.cause))
     }
   }, config)
 }

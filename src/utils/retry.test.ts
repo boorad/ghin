@@ -125,5 +125,24 @@ describe('retry utilities', () => {
         expect(result.error.message).toBe('Network error')
       }
     })
+
+    // An arbitrary thrown `Error` is not evidence of a retryable failure, so it
+    // comes straight back after one attempt. Wrapping it in a `NetworkError`
+    // would make it retryable (no status code means retryable), which is why
+    // this pins the attempt count rather than just the error.
+    it('should not retry a plain thrown Error', async () => {
+      const cause = new Error('Boom')
+      const operation = vi.fn().mockRejectedValue(cause)
+
+      const result = await withRetryAsync(operation, { maxAttempts: 3 })
+
+      expect(operation).toHaveBeenCalledTimes(1)
+      expect(result.isErr()).toBe(true)
+      if (result.isErr()) {
+        expect(result.error.message).toBe('Boom')
+        expect(result.error.cause).toBe(cause)
+        expect(isRetryableError(result.error)).toBe(false)
+      }
+    })
   })
 })
