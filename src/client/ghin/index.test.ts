@@ -475,18 +475,65 @@ describe('GhinClient', () => {
   })
 
   describe('handicaps.getCoursePlayerHandicaps', () => {
+    const request = [{ ghin: 1234567, tee_set_id: 12345, tee_set_side: 'All 18' }] as const
+    // `POST /playing_handicaps.json` answers with one bucket per allowance
+    // percentage, each keyed by `golfer_id`. Trimmed to two buckets here; the
+    // shape is `schemaCoursePlayerHandicapsResponse`'s output, since `fetch` is
+    // mocked and the schema never runs.
+    const bucket = { '1234567': { playing_handicap: 15, playing_handicap_display: '15', shots_off: 15 } }
+
     it('should fetch and return course player handicaps', async () => {
-      const mockResponse = {
-        handicaps: [{ ghin: 1234567, course_handicap: 15 }],
-      }
+      const mockResponse = { 100: bucket, 5: bucket, invalid: [] }
       mockFetch.mockResolvedValue(ok(mockResponse))
 
-      const result = await ghinClient.handicaps.getCoursePlayerHandicaps([
-        { ghin: 1234567, tee_set_id: 12345, tee_set_side: 'All 18' },
-      ])
+      const result = await ghinClient.handicaps.getCoursePlayerHandicaps([...request])
 
       expect(result).toEqual(mockResponse)
       expect(mockFetch).toHaveBeenCalled()
+    })
+
+    // Degradation must never be silent: a foursome that quietly comes back with
+    // three golfers is indistinguishable from a threesome, which is exactly how
+    // this endpoint's NH-golfer bug hid until it was reproduced against staging.
+    it('should report dropped rows through onDegraded', async () => {
+      const onDegraded = vi.fn()
+      const client = new GhinClient({ password: 'p', username: 'u', onDegraded })
+      const rejected = { golfer_id: '7654321', row: { playing_handicap: null, shots_off: 'N/A' } }
+      mockFetch.mockResolvedValue(ok({ 100: bucket, 5: bucket, invalid: [rejected] }))
+
+      await client.handicaps.getCoursePlayerHandicaps([...request])
+
+      // One golfer parsed across both buckets and one was dropped — two golfers
+      // in the payload, not four, because the buckets echo the same golfer set.
+      expect(onDegraded).toHaveBeenCalledWith({
+        entity: 'course_handicaps',
+        dropped: 1,
+        total: 2,
+        sample: [rejected],
+      })
+    })
+
+    it('should not call onDegraded when nothing was dropped', async () => {
+      const onDegraded = vi.fn()
+      const client = new GhinClient({ password: 'p', username: 'u', onDegraded })
+      mockFetch.mockResolvedValue(ok({ 100: bucket, 5: bucket, invalid: [] }))
+
+      await client.handicaps.getCoursePlayerHandicaps([...request])
+
+      expect(onDegraded).not.toHaveBeenCalled()
+    })
+
+    it('should survive an onDegraded callback that throws', async () => {
+      const client = new GhinClient({
+        password: 'p',
+        username: 'u',
+        onDegraded: () => {
+          throw new Error('reporter exploded')
+        },
+      })
+      mockFetch.mockResolvedValue(ok({ 100: bucket, 5: bucket, invalid: [{ golfer_id: '7654321', row: {} }] }))
+
+      await expect(client.handicaps.getCoursePlayerHandicaps([...request])).resolves.toBeDefined()
     })
 
     it('should throw error when fetch fails', async () => {
@@ -499,20 +546,42 @@ describe('GhinClient', () => {
   })
 
   describe('handicaps.getCourseHandicaps', () => {
+    // `GET /course_handicaps.json` answers with `tee_sets`, each rating carrying
+    // the Course Handicap. It has never returned a `course_handicaps` array.
+    const validRequest = {
+      golfer_id: 123,
+      course_id: 2539,
+      tee_set_id: 262908,
+      tee_set_side: 'All 18',
+      played_at: '2026-03-17',
+      gender: 'M',
+    } as const
+
+    const teeSet = {
+      tee_set_id: 161278,
+      name: 'Black Tees',
+      gender: 'M',
+      holes_number: 18,
+      holes: [{ Number: 1, HoleId: 322337, Length: 528, Par: 5, Allocation: 15 }],
+      is_shorter: null,
+      eligible_sides: null,
+      ratings: [
+        {
+          tee_set_side: 'All 18',
+          course_rating: 73.2,
+          slope_rating: 132,
+          par: 72,
+          course_handicap: 11,
+          course_handicap_display: '11',
+        },
+      ],
+    }
+
     it('should fetch and return course handicaps', async () => {
-      const mockResponse = {
-        course_handicaps: [{ golfer_id: 123, course_handicap: 15.2 }],
-      }
+      const mockResponse = { tee_sets: [teeSet], invalid: [] }
       mockFetch.mockResolvedValue(ok(mockResponse))
 
-      const result = await ghinClient.handicaps.getCourseHandicaps({
-        golfer_id: 123,
-        course_id: 2539,
-        tee_set_id: 262908,
-        tee_set_side: 'All18',
-        played_at: '2026-03-17',
-        gender: 'M',
-      })
+      const result = await ghinClient.handicaps.getCourseHandicaps(validRequest)
 
       expect(result).toEqual(mockResponse)
       expect(mockFetch).toHaveBeenCalledWith({
@@ -524,120 +593,74 @@ describe('GhinClient', () => {
       })
     })
 
+    // Degradation must never be silent: a course that quietly comes back with 14
+    // of its 15 tee sets is indistinguishable from a course with 14 tees, which
+    // is exactly how a GHIN payload change hides until a user reports it.
+    it('should report dropped rows through onDegraded', async () => {
+      const onDegraded = vi.fn()
+      const client = new GhinClient({ password: 'p', username: 'u', onDegraded })
+      const rejected = { tee_set_id: 999, name: 'No Ratings' }
+      mockFetch.mockResolvedValue(ok({ tee_sets: [teeSet], invalid: [rejected] }))
+
+      await client.handicaps.getCourseHandicaps(validRequest)
+
+      expect(onDegraded).toHaveBeenCalledWith({
+        entity: 'course_handicaps_get',
+        dropped: 1,
+        total: 2,
+        sample: [rejected],
+      })
+    })
+
+    it('should not call onDegraded when nothing was dropped', async () => {
+      const onDegraded = vi.fn()
+      const client = new GhinClient({ password: 'p', username: 'u', onDegraded })
+      mockFetch.mockResolvedValue(ok({ tee_sets: [teeSet], invalid: [] }))
+
+      await client.handicaps.getCourseHandicaps(validRequest)
+
+      expect(onDegraded).not.toHaveBeenCalled()
+    })
+
+    it('should survive an onDegraded callback that throws', async () => {
+      const client = new GhinClient({
+        password: 'p',
+        username: 'u',
+        onDegraded: () => {
+          throw new Error('reporter exploded')
+        },
+      })
+      mockFetch.mockResolvedValue(ok({ tee_sets: [teeSet], invalid: [{ bad: true }] }))
+
+      await expect(client.handicaps.getCourseHandicaps(validRequest)).resolves.toBeDefined()
+    })
+
     it('should throw error when fetch fails', async () => {
       mockFetch.mockResolvedValue(err(new Error('Failed')))
 
+      await expect(ghinClient.handicaps.getCourseHandicaps(validRequest)).rejects.toThrow('Failed')
+    })
+
+    // GHIN rejects the spaceless `'All18'` outright:
+    // `{"errors":{"tee_set_side":["must be one of the following: 'All 18', 'F9', 'B9'"]}}`.
+    it('should throw validation error for the spaceless All18 tee_set_side', async () => {
       await expect(
-        ghinClient.handicaps.getCourseHandicaps({
-          golfer_id: 123,
-          course_id: 2539,
-          tee_set_id: 262908,
-          tee_set_side: 'All18',
-          played_at: '2026-03-17',
-          gender: 'M',
-        }),
-      ).rejects.toThrow('Failed')
+        // @ts-expect-error - Testing invalid input type
+        ghinClient.handicaps.getCourseHandicaps({ ...validRequest, tee_set_side: 'All18' }),
+      ).rejects.toThrow(ValidationError)
     })
 
     it('should throw validation error with invalid request', async () => {
       await expect(
-        ghinClient.handicaps.getCourseHandicaps({
-          golfer_id: 123,
-          course_id: 2539,
-          tee_set_id: 262908,
-          // @ts-expect-error - Testing invalid input type
-          tee_set_side: 'invalid',
-          played_at: '2026-03-17',
-          gender: 'M',
-        }),
+        // @ts-expect-error - Testing invalid input type
+        ghinClient.handicaps.getCourseHandicaps({ ...validRequest, tee_set_side: 'invalid' }),
       ).rejects.toThrow(ValidationError)
     })
 
     it('should wrap non-Error throws', async () => {
       mockFetch.mockRejectedValue('string error')
 
-      await expect(
-        ghinClient.handicaps.getCourseHandicaps({
-          golfer_id: 123,
-          course_id: 2539,
-          tee_set_id: 262908,
-          tee_set_side: 'All18',
-          played_at: '2026-03-17',
-          gender: 'M',
-        }),
-      ).rejects.toThrow('string error')
-    })
-  })
-
-  describe('handicaps.getPlayingHandicaps', () => {
-    it('should fetch and return playing handicaps', async () => {
-      const mockResponse = {
-        playing_handicaps: [{ golfer_id: 123, playing_handicap: 14, course_handicap: 15.2 }],
-      }
-      mockFetch.mockResolvedValue(ok(mockResponse))
-
-      const result = await ghinClient.handicaps.getPlayingHandicaps({
-        golfer_id: 123,
-        course_id: 2539,
-        tee_set_id: 262908,
-        tee_set_side: 'All18',
-        played_at: '2026-03-17',
-        gender: 'M',
-      })
-
-      expect(result).toEqual(mockResponse)
-      expect(mockFetch).toHaveBeenCalledWith({
-        entity: 'playing_handicaps_post',
-        options: expect.objectContaining({
-          method: 'POST',
-          body: expect.any(String),
-        }),
-        schema: expect.anything(),
-      })
-    })
-
-    it('should throw error when fetch fails', async () => {
-      mockFetch.mockResolvedValue(err(new Error('Failed')))
-
-      await expect(
-        ghinClient.handicaps.getPlayingHandicaps({
-          golfer_id: 123,
-          course_id: 2539,
-          tee_set_id: 262908,
-          tee_set_side: 'All18',
-          played_at: '2026-03-17',
-          gender: 'M',
-        }),
-      ).rejects.toThrow('Failed')
-    })
-
-    it('should throw validation error with invalid request', async () => {
-      await expect(
-        ghinClient.handicaps.getPlayingHandicaps({
-          golfer_id: 123,
-          course_id: 2539,
-          tee_set_id: 262908,
-          // @ts-expect-error - Testing invalid input type
-          tee_set_side: 'invalid',
-          played_at: '2026-03-17',
-          gender: 'M',
-        }),
-      ).rejects.toThrow(ValidationError)
-    })
-
-    it('should wrap non-Error throws', async () => {
-      mockFetch.mockRejectedValue('string error')
-
-      await expect(
-        ghinClient.handicaps.getPlayingHandicaps({
-          golfer_id: 123,
-          course_id: 2539,
-          tee_set_id: 262908,
-          tee_set_side: 'All18',
-          played_at: '2026-03-17',
-          gender: 'M',
-        }),
-      ).rejects.toThrow('string error')
+      await expect(ghinClient.handicaps.getCourseHandicaps(validRequest)).rejects.toThrow('string error')
     })
   })
 

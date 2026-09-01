@@ -28,8 +28,6 @@ import {
   type GpaUpdateStatusRequest,
   type HandicapResponse,
   type IterateUndeliveredRequest,
-  type PlayingHandicapRequest,
-  type PlayingHandicapsResponse,
   type ScorePost18h9and9Request,
   type ScorePostAdjustedRequest,
   type ScorePostHbhRequest,
@@ -69,8 +67,6 @@ import {
   schemaGpaSuccessResponse,
   schemaGpaUpdateStatusRequest,
   schemaIterateUndeliveredRequest,
-  schemaPlayingHandicapRequest,
-  schemaPlayingHandicapsResponse,
   schemaScorePost18h9and9Request,
   schemaScorePostAdjustedRequest,
   schemaScorePostHbhRequest,
@@ -131,7 +127,6 @@ export class GhinClient {
     getOne: (ghinNumber: number) => Promise<HandicapResponse['golfer']>
     getCoursePlayerHandicaps: (requests: GolferCourseHandicapRequest[]) => Promise<CoursePlayerHandicapsResponse>
     getCourseHandicaps: (request: CourseHandicapGetRequest) => Promise<CourseHandicapsGetResponse>
-    getPlayingHandicaps: (request: PlayingHandicapRequest) => Promise<PlayingHandicapsResponse>
   }
 
   scores: {
@@ -191,7 +186,6 @@ export class GhinClient {
       getOne: this.handicapsGetOne.bind(this),
       getCoursePlayerHandicaps: this.handicapsGetCoursePlayerHandicaps.bind(this),
       getCourseHandicaps: this.handicapsGetCourseHandicaps.bind(this),
-      getPlayingHandicaps: this.handicapsGetPlayingHandicaps.bind(this),
     }
 
     this.golfers = {
@@ -580,6 +574,8 @@ export class GhinClient {
     }
   }
 
+  // The single entry point for `POST /playing_handicaps.json`; the duplicate
+  // `getPlayingHandicaps` sent a request shape the API rejects and was removed in #62.
   private async handicapsGetCoursePlayerHandicaps(
     request: GolferCourseHandicapRequest[],
   ): Promise<CoursePlayerHandicapsResponse> {
@@ -615,6 +611,15 @@ export class GhinClient {
         throw result.error
       }
 
+      // One report per dropped golfer, not per dropped bucket: `invalid` is
+      // already deduplicated by `golfer_id`, and every percentage bucket carries
+      // the same golfer set, so `total` counts the golfers GHIN sent rather than
+      // twenty times that.
+      const { invalid, ...percentages } = result.value
+      const golferIds = new Set(Object.values(percentages).flatMap((bucket) => Object.keys(bucket)))
+
+      reportDegradation(this.onDegraded, 'course_handicaps', invalid, golferIds.size + invalid.length)
+
       return result.value
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -647,38 +652,17 @@ export class GhinClient {
         throw result.error
       }
 
+      reportDegradation(
+        this.onDegraded,
+        'course_handicaps_get',
+        result.value.invalid,
+        result.value.tee_sets.length + result.value.invalid.length,
+      )
+
       return result.value
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new ValidationError(`Invalid course handicap request: ${error.message}`)
-      }
-      throw error instanceof Error ? error : new Error(String(error))
-    }
-  }
-
-  private async handicapsGetPlayingHandicaps(request: PlayingHandicapRequest): Promise<PlayingHandicapsResponse> {
-    try {
-      const validRequest = schemaPlayingHandicapRequest.parse(request)
-
-      const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
-        method: 'POST',
-        body: JSON.stringify(validRequest),
-      }
-
-      const result = await this.httpClient.fetch<PlayingHandicapsResponse>({
-        entity: 'playing_handicaps_post',
-        options,
-        schema: schemaPlayingHandicapsResponse,
-      })
-
-      if (result.isErr()) {
-        throw result.error
-      }
-
-      return result.value
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        throw new ValidationError(`Invalid playing handicap request: ${error.message}`)
       }
       throw error instanceof Error ? error : new Error(String(error))
     }
