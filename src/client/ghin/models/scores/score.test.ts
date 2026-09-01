@@ -64,6 +64,12 @@ describe('schemaScore', () => {
     expect(parsed.facility_name).toBe('Test Facility')
   })
 
+  it('passes through undeclared keys (#64)', () => {
+    const parsed = schemaScore.parse({ ...baseScore, some_future_ghin_key: 'kept' })
+    // toHaveProperty avoids the TS4111 / biome useLiteralKeys conflict on index-signature access
+    expect(parsed).toHaveProperty('some_future_ghin_key', 'kept')
+  })
+
   it('accepts a numeric course_id', () => {
     const parsed = schemaScore.parse({ ...baseScore, course_id: 2539 })
     expect(parsed.course_id).toBe(2539)
