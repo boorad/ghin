@@ -28,7 +28,7 @@ is "nine-hole Competition Away", which closes the open question from #59.
 ## Live tracker
 
 - [x] Phase 1 — Relabel `T` → `'COMPETITION'`, drop `'TOURNAMENT'` from the output union, rewrite the comment, update the transform tests
-- [ ] Phase 2 — Partition `schemaScoresResponse` rows with `partitionRows` + `onDegraded`
+- [x] Phase 2 — Partition `schemaScoresResponse` rows with `partitionRows` + `onDegraded`
 - [ ] Phase 3 — Changesets: new `minor` changeset, and correct the unreleased `.changeset/score-type-competition.md`
 
 ## Decisions

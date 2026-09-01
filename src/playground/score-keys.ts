@@ -101,7 +101,8 @@ class Level {
   }
 }
 
-const envelope = new Level('envelope (schemaScoresResponse)', Object.keys(schemaScoresResponse.shape))
+// `.innerType()` steps past the `partitionRows` transform (#66) to the object that still has a `.shape`.
+const envelope = new Level('envelope (schemaScoresResponse)', Object.keys(schemaScoresResponse.innerType().shape))
 const score = new Level('score row (schemaScore)', Object.keys(schemaScore.shape))
 const hole = new Level('hole_details[] (schemaHoleDetail)', Object.keys(schemaHoleDetail.shape))
 const adj = new Level('adjustments[] (schemaScoringAdjustment)', Object.keys(schemaScoringAdjustment.shape))

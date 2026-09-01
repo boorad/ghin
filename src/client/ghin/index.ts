@@ -839,6 +839,13 @@ export class GhinClient {
         throw result.error
       }
 
+      reportDegradation(
+        this.onDegraded,
+        'scores',
+        result.value.invalid,
+        result.value.scores.length + result.value.invalid.length,
+      )
+
       return result.value
     } catch (error) {
       if (error instanceof z.ZodError) {

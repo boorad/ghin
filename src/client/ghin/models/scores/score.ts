@@ -61,10 +61,11 @@ const schemaScoreStatusWithTransform = schemaRawScoreStatus.transform(
 
 // The rating, slope and both differentials are `strictFloat` (#63): plain `float`
 // coerced an explicit `null` to a fabricated 0 that a consumer would compute on.
-// Blast radius is the whole `getScores` response — `schemaScoresResponse` wraps
-// this in a plain `z.array`, not `partitionRows`, so one null score rejects the
-// lot. No captured payload carries a null there; if one turns up, the fix is
-// `partitionRows` in `scores/response.ts`, not a nullable rating.
+// Blast radius is now one round, not the whole history — `schemaScoresResponse`
+// partitions this schema with `partitionRows` (#66), so a null rating costs the
+// row it arrived on and surfaces through `onDegraded` instead of rejecting every
+// score beside it. Still not a nullable rating: a fabricated 0 differential is
+// worse than a missing round.
 const schemaScore = z
   .object({
     adjusted_gross_score: number,

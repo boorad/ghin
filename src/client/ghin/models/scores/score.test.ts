@@ -232,4 +232,52 @@ describe('schemaScoresResponse', () => {
     expect(parsed).toHaveProperty('some_new_key', 'kept')
     expect(parsed.scores).toHaveLength(1)
   })
+
+  // The exact failure mode #66 raised: a letter the map doesn't know used to reject
+  // the golfer's entire history. It now costs the one round it arrived on.
+  it('drops a row with an unrecognised score_type and keeps the rest (#66)', () => {
+    const poison = { ...baseScore, id: 2, score_type: 'Z' }
+    const parsed = schemaScoresResponse.parse({
+      highest_score: 95,
+      lowest_score: 78,
+      scores: [baseScore, poison],
+    })
+
+    expect(parsed.scores).toHaveLength(1)
+    expect(parsed.scores[0]?.id).toBe(1)
+    // Rejects come back raw and untransformed — `score_type` is still the wire letter,
+    // not the mapped enum, so a log of `invalid` shows exactly what GHIN sent.
+    expect(parsed.invalid).toEqual([poison])
+  })
+
+  it('leaves invalid empty when every row parses', () => {
+    const parsed = schemaScoresResponse.parse({
+      highest_score: 95,
+      lowest_score: 78,
+      scores: [baseScore],
+    })
+
+    expect(parsed.scores).toHaveLength(1)
+    expect(parsed.invalid).toEqual([])
+  })
+
+  // Regression guard: a transform that destructured only `scores` would silently
+  // drop the envelope fields and everything `.passthrough()` was added for (#64).
+  it('preserves the envelope fields and passthrough keys across the partition transform', () => {
+    const parsed = schemaScoresResponse.parse({
+      average: 10.5,
+      highest_score: 95,
+      lowest_score: 78,
+      scores: [baseScore, { ...baseScore, score_type: 'Z' }],
+      total_count: 2,
+      some_new_key: 'kept',
+    })
+
+    expect(parsed.average).toBe(10.5)
+    expect(parsed.highest_score).toBe(95)
+    expect(parsed.lowest_score).toBe(78)
+    expect(parsed.total_count).toBe(2)
+    expect(parsed).toHaveProperty('some_new_key', 'kept')
+    expect(parsed.invalid).toHaveLength(1)
+  })
 })
