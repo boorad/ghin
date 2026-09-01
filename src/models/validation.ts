@@ -114,14 +114,18 @@ export const gender = z.enum(['M', 'F'])
  */
 const HANDICAP_WITH_SUFFIX = /^([+-]?\d+(?:\.\d+)?)[A-Za-z]+$/
 
+// `z.null()` and `''` are ordered ahead of `float` on purpose: `float` is
+// `z.coerce.number()` and `Number(null) === Number('') === 0`, so with `float`
+// first a no-handicap golfer parsed as scratch (issue #63). Unions take the
+// first branch that succeeds, so the null-ish inputs must win before coercion.
 export const handicap = z
-  .union([float, z.string(), z.null()])
+  .union([z.null(), z.literal(''), float, z.string()])
   .refine((value) => {
-    if (typeof value === 'number') {
+    if (value === null || value === '' || typeof value === 'number') {
       return true
     }
 
-    if (typeof value === 'string' && (value === 'NH' || value === '-')) {
+    if (value === 'NH' || value === '-') {
       return true
     }
 
@@ -131,7 +135,7 @@ export const handicap = z
     return typeof value === 'string' && HANDICAP_WITH_SUFFIX.test(value)
   })
   .transform((value) => {
-    if (value === 'NH' || value === '-') {
+    if (value === null || value === '' || value === 'NH' || value === '-') {
       return null
     }
 

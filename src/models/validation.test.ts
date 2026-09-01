@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { boolean, date, handicap, monthDay, number, shortDate, string } from './validation'
+import { boolean, date, float, handicap, monthDay, number, shortDate, string } from './validation'
 
 describe('Validation', () => {
   describe('string', () => {
@@ -35,6 +35,24 @@ describe('Validation', () => {
     })
   })
 
+  describe('float', () => {
+    it('should coerce numeric strings', () => {
+      expect(float.parse('12.5')).toBe(12.5)
+      expect(float.parse(12.5)).toBe(12.5)
+    })
+
+    it('should reject non-numeric strings', () => {
+      expect(float.safeParse('abc').success).toBe(false)
+    })
+
+    // Known issue #63 hazard, documented rather than fixed here: `z.coerce.number()`
+    // coerces before the type check, so an explicit `null` becomes a fabricated `0`.
+    // A `strictFloat` helper in a later phase is the fix for required fields.
+    it('coerces null to 0 (issue #63 hazard)', () => {
+      expect(float.parse(null)).toBe(0)
+    })
+  })
+
   describe('boolean', () => {
     it('should validate valid booleans', () => {
       expect(boolean.safeParse(true).success).toBe(true)
@@ -64,7 +82,16 @@ describe('Validation', () => {
 
     it('should reject invalid handicap values', () => {
       expect(handicap.safeParse('abc').success).toBe(false) // Non-numeric
-      expect(handicap.safeParse('').success).toBe(true) // '' coerces to 0
+    })
+
+    // Issue #63: `float` is `z.coerce.number()` and `Number(null) === Number('') === 0`,
+    // so a no-handicap golfer used to parse as scratch. `z.null()` now precedes
+    // `float` in the union, so these stay `null`.
+    it('should preserve null and the empty-string sentinel as null, not 0', () => {
+      expect(handicap.parse(null)).toBe(null)
+      expect(handicap.parse('')).toBe(null)
+      expect(handicap.nullable().parse(null)).toBe(null)
+      expect(handicap.nullish().parse(undefined)).toBe(undefined)
     })
 
     it('should handle edge cases', () => {
