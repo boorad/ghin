@@ -1,0 +1,15 @@
+---
+'@spicygolf/ghin': patch
+---
+
+Declare `estimated_handicap_display` on the score post response, and bring the rest of that response in line with the leniency policy.
+
+GHIN returns `estimated_handicap_display` — the pending Handicap Index® for the score just posted — on every successful `scores.postHoleByHole`, `scores.postAdjusted`, and `scores.post18h9and9`. It was never declared, so it reached consumers only through `.passthrough()`: absent from the emitted TypeScript type, untypechecked, and untested. If GHIN stopped sending it, nothing here or downstream would fail — the value would just quietly stop rendering. `onDegraded` cannot cover it either, since that path counts dropped **rows** in a list response and this is one absent scalar on a single object.
+
+It is now `z.union([z.string(), z.number()]).transform(String).nullish()`, emitting `string`. A string because `NH` comes back for a golfer with no established index and plus golfers are expected as `+1.2`; the union also accepts a number because the wire type is unconfirmed — observed values print unquoted (`15.4`, `16.2`) — and guessing wrong would reject an otherwise fine post. Same union-then-normalize shape as the `handicap` helper added for the `19.1M` suffix in 0.15.3.
+
+The rest of `schemaScorePostResponseInner` now follows the same policy as the course and golfer schemas: `id`, `golfer_id`, `status`, `adjusted_gross_score`, and `differential` stay required, and everything descriptive — `validation_message`, hole counts, the scaled-up differentials, `course_id`, `course_name`, `facility_name`, `played_at`, `tee_name`, `tee_set_id`, `course_rating`, `slope_rating`, `score_type` — is `.nullish()`, never a bare `.nullable()`, because GHIN drops keys entirely rather than nulling them (#46, #51, #55, #56, #57). The 0.15.1 carve-out that keeps Course Rating and Slope Rating required does not apply here: on this response they are echoes of the values just posted, not inputs to a Course Handicap calculation.
+
+Leniency matters more on this response than anywhere else in the library, because a parse failure here is the one you cannot walk back. The score is **already posted** at GHIN by the time the response is parsed, `schemaScorePostResponse` is a single object with no `partitionRows` salvage path, and this library exposes no score-delete method — so a rejected parse leaves the caller holding a score they can neither read back nor undo.
+
+Caught reading live UAT posts (`api-uat.ghin.com`, golfer 13373248), which returned `estimated_handicap_display` on all five posts while the schema said nothing about it.

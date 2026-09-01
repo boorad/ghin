@@ -25,7 +25,7 @@ Observed values (real UAT posts, `api-uat.ghin.com`, 2026-08-28, golfer 13373248
       (new `src/client/ghin/models/scores/post-response.test.ts`)
 - [x] **Phase 2** — Apply the leniency policy to the rest of
       `schemaScorePostResponseInner`
-- [ ] **Phase 3** — Client-level round trip in `index.test.ts` + changeset
+- [x] **Phase 3** — Client-level round trip in `index.test.ts` + changeset
 
 ## Decisions
 

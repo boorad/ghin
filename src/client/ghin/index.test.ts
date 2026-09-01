@@ -808,12 +808,17 @@ describe('GhinClient', () => {
         course_rating: 72.5,
         slope_rating: 130,
         score_type: 'H',
+        estimated_handicap_display: '15.4',
       }
       mockFetch.mockResolvedValue(ok({ score: mockResponse }))
 
       const result = await ghinClient.scores.postHoleByHole(validHbhRequest)
 
       expect(result).toEqual(mockResponse)
+      // `RequestClient` is mocked wholesale, so this asserts the field is
+      // carried through `scores.postHoleByHole` to the caller — it does not
+      // exercise the schema. Parse coverage lives in `post-response.test.ts`.
+      expect(result.estimated_handicap_display).toBe('15.4')
       expect(mockFetch).toHaveBeenCalledWith({
         entity: 'scores_hbh',
         options: expect.objectContaining({
@@ -884,12 +889,15 @@ describe('GhinClient', () => {
         course_rating: 72.5,
         slope_rating: 130,
         score_type: 'A',
+        // A golfer with no established index posts back `NH`, not a number.
+        estimated_handicap_display: 'NH',
       }
       mockFetch.mockResolvedValue(ok({ score: mockResponse }))
 
       const result = await ghinClient.scores.postAdjusted(validAdjustedRequest)
 
       expect(result).toEqual(mockResponse)
+      expect(result.estimated_handicap_display).toBe('NH')
       expect(mockFetch).toHaveBeenCalledWith({
         entity: 'scores_adjusted',
         options: expect.objectContaining({
@@ -959,12 +967,15 @@ describe('GhinClient', () => {
         course_rating: 72.5,
         slope_rating: 130,
         score_type: 'H',
+        // A plus golfer's index keeps its leading `+`.
+        estimated_handicap_display: '+1.2',
       }
       mockFetch.mockResolvedValue(ok({ score: mockResponse }))
 
       const result = await ghinClient.scores.post18h9and9(valid9and9Request)
 
       expect(result).toEqual(mockResponse)
+      expect(result.estimated_handicap_display).toBe('+1.2')
       expect(mockFetch).toHaveBeenCalledWith({
         entity: 'scores_18h9and9',
         options: expect.objectContaining({
