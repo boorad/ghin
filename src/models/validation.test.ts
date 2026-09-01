@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { boolean, date, handicap, monthDay, number, shortDate, string } from './validation'
+import {
+  boolean,
+  date,
+  float,
+  handicap,
+  monthDay,
+  number,
+  shortDate,
+  strictFloat,
+  strictNumber,
+  string,
+} from './validation'
 
 describe('Validation', () => {
   describe('string', () => {
@@ -35,6 +46,83 @@ describe('Validation', () => {
     })
   })
 
+  describe('float', () => {
+    it('should coerce numeric strings', () => {
+      expect(float.parse('12.5')).toBe(12.5)
+      expect(float.parse(12.5)).toBe(12.5)
+    })
+
+    it('should reject non-numeric strings', () => {
+      expect(float.safeParse('abc').success).toBe(false)
+    })
+
+    // Known issue #63 hazard, kept on purpose: `z.coerce.number()` coerces before
+    // the type check, so an explicit `null` becomes a fabricated `0`. `strictFloat`
+    // is the fix for required fields; `float` stays coercing for the call sites
+    // that chain ZodNumber methods on it or can salvage a null.
+    it('coerces null to 0 (issue #63 hazard)', () => {
+      expect(float.parse(null)).toBe(0)
+    })
+  })
+
+  describe('strictFloat', () => {
+    // The #63 fix: null and '' must read as "missing", never as 0.
+    it('should reject null, empty string, whitespace-only string and undefined', () => {
+      expect(strictFloat.safeParse(null).success).toBe(false)
+      expect(strictFloat.safeParse('').success).toBe(false)
+      expect(strictFloat.safeParse('  ').success).toBe(false)
+      expect(strictFloat.safeParse(undefined).success).toBe(false)
+    })
+
+    // Pin the claimed failure mode: null fails exactly the way a missing key does
+    // (the preprocess yields `undefined`, which `z.coerce.number()` turns into NaN),
+    // not as a fabricated 0.
+    it('should fail null with the same invalid_type/nan issue as a missing key', () => {
+      const result = strictFloat.safeParse(null)
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.issues[0]).toMatchObject({ code: 'invalid_type', received: 'nan' })
+      }
+    })
+
+    it('should still coerce numeric strings', () => {
+      expect(strictFloat.parse('73.2')).toBe(73.2)
+      expect(strictFloat.parse('0')).toBe(0)
+    })
+
+    it('should pass real numbers through', () => {
+      expect(strictFloat.parse(73.2)).toBe(73.2)
+      expect(strictFloat.parse(0)).toBe(0)
+    })
+
+    it('should reject non-numeric strings', () => {
+      expect(strictFloat.safeParse('abc').success).toBe(false)
+    })
+  })
+
+  describe('strictNumber', () => {
+    it('should reject null, empty string, whitespace-only string and undefined', () => {
+      expect(strictNumber.safeParse(null).success).toBe(false)
+      expect(strictNumber.safeParse('').success).toBe(false)
+      expect(strictNumber.safeParse('  ').success).toBe(false)
+      expect(strictNumber.safeParse(undefined).success).toBe(false)
+    })
+
+    it('should still coerce integer strings', () => {
+      expect(strictNumber.parse('123')).toBe(123)
+    })
+
+    it('should pass real integers through', () => {
+      expect(strictNumber.parse(123)).toBe(123)
+    })
+
+    it('should reject a non-integer', () => {
+      expect(strictNumber.safeParse(1.5).success).toBe(false)
+      expect(strictNumber.safeParse('1.5').success).toBe(false)
+    })
+  })
+
   describe('boolean', () => {
     it('should validate valid booleans', () => {
       expect(boolean.safeParse(true).success).toBe(true)
@@ -64,7 +152,34 @@ describe('Validation', () => {
 
     it('should reject invalid handicap values', () => {
       expect(handicap.safeParse('abc').success).toBe(false) // Non-numeric
-      expect(handicap.safeParse('').success).toBe(true) // '' coerces to 0
+    })
+
+    // Issue #63: `float` is `z.coerce.number()` and `Number(null) === Number('') === 0`,
+    // so a no-handicap golfer used to parse as scratch. `z.null()` now precedes
+    // `float` in the union, so these stay `null`.
+    it('should preserve null and the empty-string sentinel as null, not 0', () => {
+      expect(handicap.parse(null)).toBe(null)
+      expect(handicap.parse('')).toBe(null)
+      expect(handicap.parse('  ')).toBe(null)
+      expect(handicap.nullable().parse(null)).toBe(null)
+      expect(handicap.nullish().parse(undefined)).toBe(undefined)
+    })
+
+    // GHIN's numeric no-handicap sentinel: `hi_value`/`low_hi_value` on
+    // `golfers.search` and `handicap_index`/`net_score` on scores come back as
+    // 999 where the display field says "NH" (confirmed on api-uat.ghin.com).
+    // 999 is far past the WHS maximum index of 54.0, so it cannot be real.
+    it('should map the 999 no-handicap sentinel to null', () => {
+      expect(handicap.parse(999)).toBe(null)
+      expect(handicap.parse('999')).toBe(null)
+      expect(handicap.parse('999M')).toBe(null)
+      expect(handicap.nullish().parse(999)).toBe(null)
+    })
+
+    it('should leave values near the sentinel untouched', () => {
+      expect(handicap.parse(99.9)).toBe(99.9)
+      expect(handicap.parse(54)).toBe(54)
+      expect(handicap.parse(999.1)).toBe(999.1)
     })
 
     it('should handle edge cases', () => {

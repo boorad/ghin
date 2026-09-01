@@ -35,6 +35,21 @@ describe('Handicap Response Schemas', () => {
       expect(result.success).toBe(true)
     })
 
+    // GHIN sends an explicit `null` for a golfer with no established index
+    // (staging golfer 13373258). It must stay `null` — a fabricated `0` is a
+    // scratch golfer, not a missing handicap (#63).
+    it('should keep a null handicap_index as null, not scratch', () => {
+      const result = schemaGolferHandicapResponse.parse({ golfer: { handicap_index: null, clubs: [] } })
+
+      expect(result.golfer.handicap_index).toBeNull()
+    })
+
+    it('should map an empty handicap_index to null', () => {
+      const result = schemaGolferHandicapResponse.parse({ golfer: { handicap_index: '', clubs: [] } })
+
+      expect(result.golfer.handicap_index).toBeNull()
+    })
+
     it('should reject response without golfer', () => {
       const invalidResponse = {}
 

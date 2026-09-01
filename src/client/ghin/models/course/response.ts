@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { boolean, float, monthDay, number, partitionRows, string } from '../../../../models'
+import { boolean, float, monthDay, number, partitionRows, strictFloat, string } from '../../../../models'
 import { schemaCourseCountry } from './country'
 import { schemaCourse } from './course'
 import { schemaGeoAddress, schemaGeoCoordinate } from './geolocation'
@@ -73,14 +73,19 @@ const schemaCourseDetailsSeason = z.object({
 // real rating and produced a confidently wrong number instead of "unavailable".
 // Fabricating a handicap is worse than losing a tee.
 //
+// Making them required only closed the missing-key path: `float` is
+// `z.coerce.number()` and `Number(null) === 0`, so an explicit `null` still
+// produced that same fabricated 0 (#63). `strictFloat` rejects the null as well,
+// and the tee lands in `invalidTeeSets` like any other unusable row.
+//
 // BogeyRating stays nullish deliberately: it's absent from the Course Handicap
 // formula, and a rating/slope pair on a bogey-less tee is still perfectly usable.
 const schemaCourseDetailsTeeSetRatings = z
   .object({
     BogeyRating: float.nullish(),
-    CourseRating: float,
+    CourseRating: strictFloat,
     RatingType: z.enum(['Front', 'Back', 'Total']),
-    SlopeRating: float,
+    SlopeRating: strictFloat,
   })
   .passthrough()
 

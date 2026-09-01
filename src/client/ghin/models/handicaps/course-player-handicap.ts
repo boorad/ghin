@@ -9,9 +9,10 @@ import { handicap, partitionRows, string } from '../../../../models'
 // api-uat.ghin.com, where adding NH golfer 13373258 to a foursome of three
 // established golfers lost all four.
 //
-// `handicap` must be wrapped in `.nullable()`: bare, its inner union tries
-// `float` first and `Number(null) === 0`, which would fabricate a scratch
-// handicap for a golfer who has none.
+// Before #63 a bare `handicap` tried `float` first and `Number(null) === 0`,
+// which fabricated a scratch handicap for a golfer who has none. `handicap` now
+// maps null to null at the source; `.nullable()` is kept so the intent is
+// explicit at the field.
 const schemaPlayerCourseHandicap = z.object({
   playing_handicap: handicap.nullable(),
   playing_handicap_display: string,

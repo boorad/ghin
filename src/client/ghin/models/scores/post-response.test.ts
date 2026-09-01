@@ -271,5 +271,38 @@ describe('schemaScorePostResponse', () => {
 
       expect(schemaInner.safeParse(rest).success).toBe(false)
     })
+
+    // Issue #63: `number` is `z.coerce.number()` and `Number(null) === 0`, so an
+    // explicit null on these four used to parse as score 0 for golfer 0 with a 0
+    // differential. They are the one place this schema rejects rather than bends.
+    it.each(['id', 'golfer_id', 'adjusted_gross_score', 'differential'] as const)(
+      'rejects an explicit null %s rather than fabricating 0',
+      (field) => {
+        const result = schemaInner.safeParse({ ...baseResponse, [field]: null })
+
+        expect(result.success).toBe(false)
+      },
+    )
+
+    // The failure shape is the claim: a null differential fails exactly the way a
+    // missing key does (`invalid_type`, received `nan`), not as a fabricated 0.
+    it('fails a null differential the same way as a missing key', () => {
+      const result = schemaInner.safeParse({ ...baseResponse, differential: null })
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        const issue = result.error.issues.find((candidate) => candidate.path[0] === 'differential')
+        expect(issue).toMatchObject({ code: 'invalid_type', received: 'nan' })
+      }
+    })
+
+    it('still coerces a quoted id', () => {
+      const result = schemaInner.safeParse({ ...baseResponse, id: '987654321' })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.id).toBe(987654321)
+      }
+    })
   })
 })

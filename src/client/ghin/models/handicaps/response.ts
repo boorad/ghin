@@ -17,7 +17,15 @@ const schemaGolferHandicapResponse = z
   .object({
     golfer: z.object({
       clubs: z.array(schemaGolferHandicapClub),
-      handicap_index: handicap,
+      // `handicap_index` is an explicit `null` on the wire for a golfer with no
+      // established index (staging golfer 13373258), so this is `.nullable()` and
+      // not `.nullish()` — GHIN sends the key, it does not drop it. Before #63 a
+      // bare `handicap` tried `float` (`z.coerce.number()`) first and
+      // `Number(null) === 0`, so `handicaps.getOne` reported that golfer as
+      // scratch. `handicap` now maps `null` / `''` / `'NH'` / `'-'` to `null` at
+      // the source; the wrapper is kept so this schema reads the same as
+      // `course_handicap` and `playing_handicap` in its two siblings.
+      handicap_index: handicap.nullable(),
     }),
   })
   .passthrough()

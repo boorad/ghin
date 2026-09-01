@@ -405,6 +405,24 @@ describe('Course Response Schema', () => {
       }
     })
 
+    // Issue #63: `float` is `z.coerce.number()`, so an explicit null CourseRating
+    // used to parse as 0 — the exact fabricated rating the 0.15.1 fix rejected
+    // when the key was missing. It now costs the tee, like a missing id would.
+    it('should drop a tee set whose CourseRating is an explicit null', () => {
+      const nullRated = {
+        ...minimalTeeSet,
+        TeeSetRatingId: 99,
+        Ratings: [{ RatingType: 'Total', CourseRating: null, SlopeRating: 121 }],
+      }
+      const result = schemaCourseDetailsResponse.safeParse(minimalCourse([minimalTeeSet, nullRated]))
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.TeeSets.map((t) => t.TeeSetRatingId)).toEqual([612076])
+        expect(result.data.invalidTeeSets).toEqual([nullRated])
+      }
+    })
+
     it('should preserve unknown keys GHIN adds rather than stripping them', () => {
       const result = schemaCourseDetailsResponse.safeParse({
         ...minimalCourse([{ ...minimalTeeSet, SomeNewTeeKey: 'tee' }]),

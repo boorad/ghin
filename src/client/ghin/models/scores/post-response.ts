@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { emptyStringToNull, float, number } from '../../../../models'
+import { emptyStringToNull, float, number, strictFloat, strictNumber } from '../../../../models'
 import { schemaRawScoreStatus } from './score'
 
 // By the time this parses, the score is already posted at GHIN. This response is
@@ -37,16 +37,23 @@ import { schemaRawScoreStatus } from './score'
 // Handicap" — does not bind `course_rating` / `slope_rating` here. On this
 // response they are echoes of the values just posted, not inputs to a Course
 // Handicap calculation, so an absent one cannot fabricate a handicap.
+//
+// The four required numerics are the one exception to the leniency above, and
+// use `strictFloat` / `strictNumber` (issue #63): `number` is `z.coerce.number()`
+// and `Number(null) === 0`, so an explicit `null` would parse as score `0` for
+// golfer `0` with a `0` differential — a fabricated response, not a lost one.
+// Those four are identity plus the numbers a consumer computes on, and a
+// confidently wrong 0 there is worse than the rejected parse described above.
 const schemaScorePostResponseInner = z
   .object({
-    id: number,
-    golfer_id: number,
+    id: strictNumber,
+    golfer_id: strictNumber,
     status: schemaRawScoreStatus,
     validation_message: emptyStringToNull.nullish(),
-    adjusted_gross_score: number,
+    adjusted_gross_score: strictNumber,
     number_of_holes: number.nullish(),
     number_of_played_holes: number.nullish(),
-    differential: float,
+    differential: strictFloat,
     scaled_up_differential: float.nullish(),
     adjusted_scaled_up_differential: float.nullish(),
     course_id: emptyStringToNull.nullish(),

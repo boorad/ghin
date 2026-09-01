@@ -632,5 +632,16 @@ describe('TeeSetRating Schemas', () => {
 
       expect(result.success).toBe(false)
     })
+
+    // The null twin of the test above (#63): plain `float` coerced an explicit
+    // null to the same fabricated 0 that required-ness was meant to prevent.
+    it('should reject a rating row whose Slope Rating is an explicit null', () => {
+      const result = schemaTeeSetRatingResponse.safeParse({
+        ...minimal,
+        Ratings: [{ RatingType: 'Total', CourseRating: 72.4, SlopeRating: null }],
+      })
+
+      expect(result.success).toBe(false)
+    })
   })
 })

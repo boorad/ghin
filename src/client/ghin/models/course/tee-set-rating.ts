@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { boolean, float, number, string } from '../../../../models'
+import { boolean, float, number, strictFloat, string } from '../../../../models'
 import { schemaGeoAddress, schemaGeoCoordinate } from './geolocation'
 import { schemaSeasonDate, schemaSeasonName } from './season'
 import { schemaCourseSearchState } from './state'
@@ -72,11 +72,13 @@ const schemaTeeSetRatingHole = z
 // Course Rating and Slope Rating stay required — see the note on
 // schemaCourseDetailsTeeSetRatings. A zero there is a fabricated rating that
 // passes a `typeof x === 'number'` guard and yields a wrong Course Handicap.
+// Required-ness only caught a missing key; `strictFloat` also rejects an
+// explicit `null`, which plain `float` coerced to that same fabricated 0 (#63).
 const schemaTeeSetRatingRating = z
   .object({
     RatingType: z.enum(['Front', 'Back', 'Total']),
-    CourseRating: float,
-    SlopeRating: float,
+    CourseRating: strictFloat,
+    SlopeRating: strictFloat,
     BogeyRating: float.nullish(),
   })
   .passthrough()
