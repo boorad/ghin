@@ -79,7 +79,17 @@ Unit tests cannot prove any of these; every test in this repo mocks
    against a UAT-derived declaration drops rows into `invalid` silently.
    Also uncaptured on UAT: a non-empty `adjustments[]` (0 of 85 rows) and score
    types `N`, `E`, `P` (no rows).
-3. **#73 — confirm which id score posting accepts.** The payload's identifier is
+3. ~~**#73 — confirm which id score posting accepts.**~~ **DONE 2026-09-01.**
+   `TeeSetRatingId` *is* the `tee_set_id` score posting accepts — verified by
+   posting a real score (`tee_set_id: '605066'`, course 7817, golfer 13373246),
+   which GHIN accepted (score id `1138055404`, `tee_name: 'Red'`). No mapping
+   needed; the id sets from this endpoint, `/course_handicaps.json` and
+   `courses.getDetails` are identical across courses 7817, 13995 and 1424. The
+   `161278` in the handicaps fixture is a `TeeSetRatingId` for a *different*
+   course (Heritage Golf Club), not a second number space. Triplets confirmed on
+   two non-Pebble courses (3.0 rows per tee set), but the order within a triplet
+   is **not** guaranteed. Documented in the schema header and the changeset.
+   Original wording: The payload's identifier is
    `TeeSetRatingId`, but `scores/post-request.ts` wants `tee_set_id` and
    `/course_handicaps.json` returns a different `tee_set_id`. Post one real
    score end-to-end with an id from this endpoint. Also confirm on a second,
@@ -93,3 +103,10 @@ Unit tests cannot prove any of these; every test in this repo mocks
   coercion.
 - `course/tee-set-rating.ts:79` pins `RatingType: z.enum([...])` on a response,
   inconsistent with the plain-`string` policy this branch adopted next door.
+
+- `scores.delete` does not exist on the client, and `DELETE /scores/{id}.json`
+  answers `AccessDenied` for club/association credentials (it returns a specific
+  error rather than a bare 404, so the endpoint is real — just out of scope for
+  this credential class). `post-response.ts` already leans on the absence to
+  justify unusual parse leniency. The verification post above could not be
+  cleaned up as a result: score `1138055404` is still on UAT golfer 13373246.

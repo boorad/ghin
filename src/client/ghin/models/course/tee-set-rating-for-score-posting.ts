@@ -43,6 +43,20 @@ const schemaTeeSetRatingForScorePostingHole = z
 // is indistinguishable from an eighteen-hole rating without it. `TeeSetRatingId` is
 // shared by all three rows of a tee set, so it does not identify a row either.
 //
+// Filter on `RatingType`; do not index by position. The triplet order is not
+// guaranteed — probed 2026-09-01, `TeeSetRatingId 586548` ("Jones") on course 13995
+// came back `[Total, Back, Front]` while the other 21 tee sets on that course were
+// `[Total, Front, Back]`.
+//
+// `TeeSetRatingId` is the id score posting wants: pass it verbatim as
+// `tee_set_id` on `scores.postAdjusted` / `postHoleByHole` / `post18h9and9`. The
+// names differ but the number space does not — verified 2026-09-01 by posting a
+// real score with `tee_set_id: '605066'` (the `TeeSetRatingId` of Red on course
+// 7817), which GHIN accepted and echoed back as `tee_name: 'Red'`. It is also the
+// `tee_set_id` that `/course_handicaps.json` accepts and returns; across courses
+// 7817, 13995 and 1424 the id sets from this endpoint, `/course_handicaps.json`
+// and `courses.getDetails` are identical.
+//
 // It is a plain `string`, not a `z.enum([...])`, for the reason given at
 // `handicaps/course-handicap.ts:62-64`: an enum is right on a request, but pinning
 // one on a response drops the whole row the day GHIN publishes a type we haven't
