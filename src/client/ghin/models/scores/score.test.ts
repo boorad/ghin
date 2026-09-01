@@ -88,4 +88,17 @@ describe('schemaScore', () => {
     expect(parsed.course_name).toBeNull()
     expect(parsed.facility_name).toBeNull()
   })
+
+  it.each([
+    ['A', 'AWAY'],
+    ['C', 'COMPETITION'],
+    ['E', 'EXCEPTIONAL'],
+    ['H', 'HOME'],
+    ['N', '9_HOLE_ROUNDS'],
+    ['P', 'PENALTY'],
+    ['T', 'TOURNAMENT'],
+  ])('transforms score_type %s to %s', (raw, meaning) => {
+    const parsed = schemaScore.parse({ ...baseScore, score_type: raw })
+    expect(parsed.score_type).toBe(meaning)
+  })
 })
