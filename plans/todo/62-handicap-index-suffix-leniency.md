@@ -25,13 +25,15 @@ hazard with no `.nullish()` cushion, plus a live correctness bug: `Number(null)
 
 ## Fix
 
-Swap `float`/`number` → the `handicap` helper on all three numeric handicap
-fields across both files, then partition both list responses so a single
-malformed row degrades rather than failing the batch.
+Swap `float` → the `handicap` helper on `handicap_index` in both files, then
+partition both list responses so a single malformed row degrades rather than
+failing the batch. The sibling `course_handicap` / `playing_handicap` fields are
+deliberately left as-is — see Decision 2.
 
 ## Live tracker
 
 - [x] Phase 1 — Leniency: `handicap` on `handicap_index`, `course_handicap`, `playing_handicap` in both schemas; co-located model tests
+- [ ] Phase 1b — Revert the sibling fields to `float`/`number` per Decision 2's reversal; document `null` → `0` for #63
 - [ ] Phase 2 — Partitioning: `partitionRows` on both list responses, `reportDegradation` wired at both client call sites, tests
 
 ## Decisions
@@ -43,24 +45,38 @@ Both asked and answered before implementation:
    fixing the field that prompted the issue *and* bringing the schema in line
    with the leniency policy. It is also the only mechanism this repo has for
    noticing the next GHIN payload change on these two endpoints.
-2. **The sibling fields get the helper too.** The type widening from `number` to
-   `number | null` on `course_handicap`/`playing_handicap` is breaking for TS
-   consumers, and that is accepted: it does not introduce a null, it reveals one
-   that consumers already receive today silently coerced to `0`. Partitioning
-   does not fix this — a `null` parses fine, it just parses to the wrong number.
-   Only the helper swap does.
+2. **The sibling fields are left alone, deferred to #63.** Initially decided the
+   other way (widen `course_handicap`/`playing_handicap` to `number | null` via
+   the helper), then reversed once #63 was brought into scope. #63 is the
+   repo-wide issue for exactly this hazard — `z.coerce.number()` turning an
+   explicit `null` into `0` — and it proposes the *opposite* remedy: reject
+   `null` so it fails loudly, rather than accept it and surface it. Resolving one
+   instance here in the other direction would pre-decide #63's repo-wide rule
+   from inside an unrelated PR, and would cost a breaking type widening to do it.
+
+   Phase 2's partitioning already softens the case for acting now: once rows are
+   partitioned, a genuinely malformed entry degrades and fires `onDegraded`
+   instead of failing the batch, which is the loud-not-silent outcome #63 wants.
+   So these two fields keep `float` / `number`, and a test documents today's
+   `null` → `0` behaviour as the landing spot for #63.
+
+   Note for #63, found while implementing this: the `handicap` helper itself has
+   the bug. `handicap` is `z.union([float, z.string(), z.null()])` and Zod unions
+   take the first success, so `float` (`z.coerce.number()`) swallows `null` as
+   `0` and the `z.null()` branch is unreachable. Any **bare** `handicap` is
+   therefore affected — `src/client/ghin/models/handicaps/response.ts:16` is a
+   live instance. `handicap.nullish()` is safe because the wrapper short-circuits
+   `null` before the inner union.
 
 ## Assumptions
 
 Self-answered, not asked:
 
-- **Published surface: `minor`.** Package is `0.15.4`; pre-1.0, the minor slot is
-  the conventional home for a breaking change. The changeset must state the
-  breaking type widening explicitly.
-- **`playing_handicap` loses its `.int()` constraint** (`number` is
-  `float.int()`). Accepted for one consistent rule across the three fields — a
-  fractional playing handicap from GHIN was never the hazard being guarded
-  against.
+- **Published surface: `patch`.** With Decision 2 reversed, the emitted type of
+  `handicap_index` (`number | null | undefined`) is unchanged and the siblings
+  stay `number`; only previously-rejected inputs now parse. Matches #56. Phase 2
+  adds an `invalid` key to both responses — additive, and `patch` by this repo's
+  precedent (#51, #53, #57 all shipped partitioning as `patch`).
 - **Use `.nullish()`, not `.nullable().optional()`**, per the standing convention
   in `.changeset/estimated-handicap-display.md`: GHIN drops keys entirely rather
   than nulling them (#46, #51, #55, #56, #57). Matches `golfers/search.ts:71`.
@@ -78,14 +94,14 @@ Self-answered, not asked:
    raw body inside `RequestClient._fetch` before `schema.safeParse`.
 2. Same capture: what do `course_handicap` / `playing_handicap` contain for a
    golfer with no established index — `"NH"`, `null`, a suffixed string, or a
-   plain number? This is the live evidence for Decision 2.
+   plain number? This is the live evidence #63 needs, and it decides whether
+   these two fields are actually exposed to the `null` → `0` hazard in practice.
 3. The foursome case end to end against UAT: POST `playing_handicaps` with 4
    golfers where exactly one has a suffixed index. Confirm nothing comes back on
    `0.15.4` and all four come back after the fix.
 4. Sandbox vs production: suffixed indexes are a production-data phenomenon and
    UAT test golfers may never carry an `M`/`WD` status. A clean UAT run does not
    clear item 1.
-5. Downstream, after publish: any consumer doing arithmetic on
-   `course_handicap`/`playing_handicap` now has to handle `null`, and anyone
-   catching the `ValidationError` these endpoints used to throw on a bad row will
-   find that throw no longer happens.
+5. Downstream, after publish: anyone catching the `ValidationError` these
+   endpoints used to throw on a bad row will find that throw no longer happens —
+   the row comes back in `invalid` and `onDegraded` fires instead.
