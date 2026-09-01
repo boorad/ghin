@@ -20,10 +20,18 @@ the TS4111 / biome `useLiteralKeys` conflict on index-signature access.
 ## Live tracker
 
 - [x] Add `.passthrough()` + test + changeset
+- [x] Nested passthrough — the rest of the score tree
 
 ## Decisions
 
-None asked — the fix is exactly as specified in the issue.
+- The user chose to widen the whole score tree, not just the score row: a
+  `.passthrough()` on `schemaScore` does not reach inside its nested object
+  schemas, which strip unknown keys independently. So `schemaHoleDetail`,
+  `schemaStatistics`, `schemaScoringAdjustment` and the `schemaScoresResponse`
+  envelope are `.passthrough()` too — matching the all-levels precedent in
+  `course/tee-set-rating.ts` and `gpa/access.ts`. Purely additive: no declared
+  field's validation changed, and `scores` stays a plain `z.array`, not
+  `partitionRows`.
 
 ## Assumptions
 

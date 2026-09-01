@@ -10,13 +10,16 @@ const schemaFloatOrDash = z
   .union([float, z.literal('-')])
   .transform((value) => (value === '-' ? null : Number.parseFloat(value.toString())))
 
-const schemaScoresResponse = z.object({
-  average: schemaFloatOrDash.default(0),
-  highest_score: schemaNumberOrDash,
-  lowest_score: schemaNumberOrDash,
-  scores: z.array(schemaScore),
-  total_count: schemaNumberOrDash.default(0),
-})
+const schemaScoresResponse = z
+  .object({
+    average: schemaFloatOrDash.default(0),
+    highest_score: schemaNumberOrDash,
+    lowest_score: schemaNumberOrDash,
+    scores: z.array(schemaScore),
+    total_count: schemaNumberOrDash.default(0),
+  })
+  // New sibling keys alongside the declared envelope fields survive instead of being stripped (#64).
+  .passthrough()
 
 type ScoresResponse = z.infer<typeof schemaScoresResponse>
 
