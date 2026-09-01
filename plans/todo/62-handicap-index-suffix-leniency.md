@@ -78,7 +78,11 @@ production before a consumer depends on it.
 - [x] Phase 3 — Fixtures captured from staging into `handicaps/__fixtures__/`
 - [x] Phase 4 — Fix the foursome bug: `playing_handicap` / `shots_off` leniency in `course-player-handicap.ts`
 - [x] Phase 5 — Fix `getCourseHandicaps`: real `tee_sets` response schema + `'All 18'` enum
-- [ ] Phase 6 — Fix `getPlayingHandicaps`: `golfers[]` request + percent-record response
+- [x] Phase 6 — Remove `getPlayingHandicaps` rather than fix it: repairing it (`golfers[]`
+      request + percent-record response) would have produced a byte-for-byte duplicate of
+      `getCoursePlayerHandicaps`, which already POSTs the same URL with the right request
+      shape. The method, `playing-handicap.ts` and the `PlayingHandicap*` schemas/types are
+      deleted, along with the now-unreferenced `playing_handicaps_post` entity.
 
 ## Decisions
 

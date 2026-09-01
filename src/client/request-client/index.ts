@@ -58,7 +58,6 @@ const apiPathnames = {
   gpa_accesses: '/users/accesses.json',
   login: '/golfer_login.json',
   course_handicaps_get: '/course_handicaps.json',
-  playing_handicaps_post: '/playing_handicaps.json',
   scores: '/scores.json',
   scores_hbh: '/scores/hbh.json',
   scores_adjusted: '/scores/adjusted.json',

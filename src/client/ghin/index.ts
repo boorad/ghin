@@ -28,8 +28,6 @@ import {
   type GpaUpdateStatusRequest,
   type HandicapResponse,
   type IterateUndeliveredRequest,
-  type PlayingHandicapRequest,
-  type PlayingHandicapsResponse,
   type ScorePost18h9and9Request,
   type ScorePostAdjustedRequest,
   type ScorePostHbhRequest,
@@ -69,8 +67,6 @@ import {
   schemaGpaSuccessResponse,
   schemaGpaUpdateStatusRequest,
   schemaIterateUndeliveredRequest,
-  schemaPlayingHandicapRequest,
-  schemaPlayingHandicapsResponse,
   schemaScorePost18h9and9Request,
   schemaScorePostAdjustedRequest,
   schemaScorePostHbhRequest,
@@ -131,7 +127,6 @@ export class GhinClient {
     getOne: (ghinNumber: number) => Promise<HandicapResponse['golfer']>
     getCoursePlayerHandicaps: (requests: GolferCourseHandicapRequest[]) => Promise<CoursePlayerHandicapsResponse>
     getCourseHandicaps: (request: CourseHandicapGetRequest) => Promise<CourseHandicapsGetResponse>
-    getPlayingHandicaps: (request: PlayingHandicapRequest) => Promise<PlayingHandicapsResponse>
   }
 
   scores: {
@@ -191,7 +186,6 @@ export class GhinClient {
       getOne: this.handicapsGetOne.bind(this),
       getCoursePlayerHandicaps: this.handicapsGetCoursePlayerHandicaps.bind(this),
       getCourseHandicaps: this.handicapsGetCourseHandicaps.bind(this),
-      getPlayingHandicaps: this.handicapsGetPlayingHandicaps.bind(this),
     }
 
     this.golfers = {
@@ -580,6 +574,12 @@ export class GhinClient {
     }
   }
 
+  // The single entry point for `POST /playing_handicaps.json`. `getPlayingHandicaps`
+  // hit the same URL but sent one `golfer_id` where the API requires a `golfers[]`
+  // array, so every call it ever made came back `400 {"errors":{"golfers":["is
+  // required"]}}` — and its `{ playing_handicaps: [...] }` response schema described
+  // a payload the endpoint does not return. Fixing it would have produced a duplicate
+  // of this method, so it was removed in #62 rather than repaired.
   private async handicapsGetCoursePlayerHandicaps(
     request: GolferCourseHandicapRequest[],
   ): Promise<CoursePlayerHandicapsResponse> {
@@ -658,41 +658,6 @@ export class GhinClient {
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new ValidationError(`Invalid course handicap request: ${error.message}`)
-      }
-      throw error instanceof Error ? error : new Error(String(error))
-    }
-  }
-
-  private async handicapsGetPlayingHandicaps(request: PlayingHandicapRequest): Promise<PlayingHandicapsResponse> {
-    try {
-      const validRequest = schemaPlayingHandicapRequest.parse(request)
-
-      const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
-        method: 'POST',
-        body: JSON.stringify(validRequest),
-      }
-
-      const result = await this.httpClient.fetch<PlayingHandicapsResponse>({
-        entity: 'playing_handicaps_post',
-        options,
-        schema: schemaPlayingHandicapsResponse,
-      })
-
-      if (result.isErr()) {
-        throw result.error
-      }
-
-      reportDegradation(
-        this.onDegraded,
-        'playing_handicaps_post',
-        result.value.invalid,
-        result.value.playing_handicaps.length + result.value.invalid.length,
-      )
-
-      return result.value
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        throw new ValidationError(`Invalid playing handicap request: ${error.message}`)
       }
       throw error instanceof Error ? error : new Error(String(error))
     }
