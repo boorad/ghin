@@ -12,19 +12,30 @@ const rawScoreTypes = ['A', 'C', 'E', 'H', 'N', 'P', 'T'] as const
 const schemaRawScoreTypes = z.enum(rawScoreTypes)
 type RawScoreType = z.infer<typeof schemaRawScoreTypes>
 
-const scoreTypes = ['AWAY', 'COMPETITION', 'EXCEPTIONAL', 'HOME', '9_HOLE_ROUNDS', 'PENALTY', 'TOURNAMENT'] as const
+const scoreTypes = ['AWAY', 'COMPETITION', 'EXCEPTIONAL', 'HOME', '9_HOLE_ROUNDS', 'PENALTY'] as const
 const schemaScoreType = z.enum(scoreTypes)
 type ScoreType = z.infer<typeof schemaScoreType>
 
 const scoreTypesMap: Record<RawScoreType, ScoreType> = {
   A: 'AWAY',
-  // C is COMPETITION under the 2020 USGA WHS; T (TOURNAMENT) is legacy but the API still emits it, so keep accepting it.
+  // Both C and T mean Competition; the duplication is deliberate, do not collapse it (#66).
+  // T is the letter GHIN actually puts on the wire: in the UAT sample every row GHIN renders
+  // as C / CA / NCA carries `score_type: 'T'`, and `score_types=C` matches nothing. T is the
+  // pre-2020 storage letter with the display moved to the WHS name, not a legacy TOURNAMENT.
+  // C stays accepted because its absence is unproven — a bogus letter also returns 0 rows, so
+  // the filter cannot tell "no such rows" from "unrecognised letter" — and `PATCH
+  // /scores/hbh/{id}` documents score_type as ["H","A","C"], so C is plausibly live elsewhere.
   C: 'COMPETITION',
   E: 'EXCEPTIONAL',
   H: 'HOME',
+  // N never appears in wire `score_type` (#66) — it is only the nine-hole prefix on the
+  // *display* fields (N, NA, NCA), and nine-hole-ness is already carried by `number_of_holes`.
+  // It stays accepted anyway: the evidence against it is absence in a 38-row UAT sample, the
+  // same standard under which C is kept, and narrowing `rawScoreTypes` would also narrow the
+  // caller-facing `ScoresRequest['score_types']` input at `scores/request.ts:11`.
   N: '9_HOLE_ROUNDS',
   P: 'PENALTY',
-  T: 'TOURNAMENT',
+  T: 'COMPETITION',
 } as const
 
 const schemaScoreTypeWithTransform: z.ZodType<ScoreType, z.ZodTypeDef, RawScoreType> = schemaRawScoreTypes.transform(

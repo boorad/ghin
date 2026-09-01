@@ -8,7 +8,7 @@ accepted (documented on `PATCH /scores/hbh/{id}`, cheap to keep).
 
 ## Live tracker
 
-- [ ] Phase 1 — Relabel `T` to `'COMPETITION'` in `score.ts` + `score.test.ts`, drop `'TOURNAMENT'` from union
+- [x] Phase 1 — Relabel `T` to `'COMPETITION'` in `score.ts` + `score.test.ts`, drop `'TOURNAMENT'` from union
 - [ ] Phase 2 — Add `patch` changeset spelling out the breaking union change
 - [ ] Phase 5 — Whole-branch tests
 - [ ] Phase 6 — Review + move plan doc

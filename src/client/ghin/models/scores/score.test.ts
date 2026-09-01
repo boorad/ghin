@@ -186,15 +186,35 @@ describe('schemaScore', () => {
 
   it.each([
     ['A', 'AWAY'],
+    // C and T both mean COMPETITION (#66) — the duplicate is intentional, not a typo to clean up.
     ['C', 'COMPETITION'],
     ['E', 'EXCEPTIONAL'],
     ['H', 'HOME'],
     ['N', '9_HOLE_ROUNDS'],
     ['P', 'PENALTY'],
-    ['T', 'TOURNAMENT'],
+    ['T', 'COMPETITION'],
   ])('transforms score_type %s to %s', (raw, meaning) => {
     const parsed = schemaScore.parse({ ...baseScore, score_type: raw })
     expect(parsed.score_type).toBe(meaning)
+  })
+
+  // A real nine-hole Competition Away row from the UAT sample in #66. The display fields are
+  // compositional ([N] + [C] + [A]) and disagree with the wire letter on purpose; consumers must
+  // read `score_type` and `number_of_holes`, never re-derive the type from the display strings.
+  it('maps a wire T row displayed as NCA to COMPETITION and leaves the display fields untouched', () => {
+    const parsed = schemaScore.parse({
+      ...baseScore,
+      score_type: 'T',
+      score_type_display_short: 'C',
+      score_type_display_full: 'NCA',
+      number_of_holes: 9,
+      number_of_played_holes: 9,
+    })
+
+    expect(parsed.score_type).toBe('COMPETITION')
+    expect(parsed.score_type_display_short).toBe('C')
+    expect(parsed.score_type_display_full).toBe('NCA')
+    expect(parsed.number_of_holes).toBe(9)
   })
 })
 
