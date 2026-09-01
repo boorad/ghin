@@ -762,6 +762,7 @@ describe('GhinClient', () => {
     it('should fetch and return golfer scores', async () => {
       const mockResponse = {
         scores: [{ score_id: 1, adjusted_gross_score: 85 }],
+        invalid: [],
       }
       mockFetch.mockResolvedValue(ok(mockResponse))
 
@@ -772,7 +773,7 @@ describe('GhinClient', () => {
     })
 
     it('should handle optional request parameters', async () => {
-      const mockResponse = { scores: [] }
+      const mockResponse = { scores: [], invalid: [] }
       mockFetch.mockResolvedValue(ok(mockResponse))
 
       const result = await ghinClient.golfers.getScores(1234567, {
@@ -788,6 +789,50 @@ describe('GhinClient', () => {
     it('should throw validation error with invalid ghin', async () => {
       // @ts-expect-error - Testing invalid input type
       await expect(ghinClient.golfers.getScores('invalid')).rejects.toThrow(ValidationError)
+    })
+
+    // Degradation must never be silent: a history that quietly comes back one
+    // round short is indistinguishable from a golfer who played one round fewer,
+    // which is exactly how the #66 score_type drift would have hidden.
+    it('should report dropped rows through onDegraded', async () => {
+      const onDegraded = vi.fn()
+      const client = new GhinClient({ password: 'p', username: 'u', onDegraded })
+      const rejected = { id: 2, score_type: 'Z' }
+      mockFetch.mockResolvedValue(ok({ scores: [{ id: 1, adjusted_gross_score: 85 }], invalid: [rejected] }))
+
+      await client.golfers.getScores(1234567)
+
+      expect(onDegraded).toHaveBeenCalledWith({
+        entity: 'scores',
+        dropped: 1,
+        total: 2,
+        sample: [rejected],
+      })
+    })
+
+    it('should not call onDegraded when nothing was dropped', async () => {
+      const onDegraded = vi.fn()
+      const client = new GhinClient({ password: 'p', username: 'u', onDegraded })
+      mockFetch.mockResolvedValue(ok({ scores: [{ id: 1 }], invalid: [] }))
+
+      await client.golfers.getScores(1234567)
+
+      expect(onDegraded).not.toHaveBeenCalled()
+    })
+
+    // Telemetry is a side channel — a caller's broken reporter must not turn a
+    // working GHIN response into a failed request.
+    it('should survive an onDegraded callback that throws', async () => {
+      const client = new GhinClient({
+        password: 'p',
+        username: 'u',
+        onDegraded: () => {
+          throw new Error('reporter exploded')
+        },
+      })
+      mockFetch.mockResolvedValue(ok({ scores: [{ id: 1 }], invalid: [{ bad: true }] }))
+
+      await expect(client.golfers.getScores(1234567)).resolves.toBeDefined()
     })
 
     it('should throw error when fetch fails', async () => {

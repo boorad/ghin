@@ -186,15 +186,58 @@ describe('schemaScore', () => {
 
   it.each([
     ['A', 'AWAY'],
-    ['C', 'COMPETITION'],
+    // C is COMBINED (two nines combined into an 18), NOT Competition — #65 relabelled it the
+    // wrong way and #66 reverts that. Only T means Competition.
+    ['C', 'COMBINED'],
     ['E', 'EXCEPTIONAL'],
     ['H', 'HOME'],
     ['N', '9_HOLE_ROUNDS'],
     ['P', 'PENALTY'],
-    ['T', 'TOURNAMENT'],
+    ['T', 'COMPETITION'],
   ])('transforms score_type %s to %s', (raw, meaning) => {
     const parsed = schemaScore.parse({ ...baseScore, score_type: raw })
     expect(parsed.score_type).toBe(meaning)
+  })
+
+  // A real nine-hole Competition Away row from the UAT sample in #66. The display fields are
+  // compositional ([N] + [C] + [A]) and disagree with the wire letter on purpose; consumers must
+  // read `score_type` and `number_of_holes`, never re-derive the type from the display strings.
+  it('maps a wire T row displayed as NCA to COMPETITION and leaves the display fields untouched', () => {
+    const parsed = schemaScore.parse({
+      ...baseScore,
+      score_type: 'T',
+      score_type_display_short: 'C',
+      score_type_display_full: 'NCA',
+      number_of_holes: 9,
+      number_of_played_holes: 9,
+    })
+
+    expect(parsed.score_type).toBe('COMPETITION')
+    expect(parsed.score_type_display_short).toBe('C')
+    expect(parsed.score_type_display_full).toBe('NCA')
+    expect(parsed.number_of_holes).toBe(9)
+  })
+
+  // The real wire-C row from UAT golfer 13373254 (#66): an 18-hole score that is the exact sum of
+  // that golfer's two nine-hole rounds (48 + 46 = 94, ratings 34.6 + 35.6 = 70.2). It displays as
+  // N because it is *derived from* nines, not because it is a nine-hole round — which is why
+  // `number_of_holes` is 18 and the display prefix must never be used to infer hole count.
+  it('maps a wire C row displayed as N on 18 holes to COMBINED', () => {
+    const parsed = schemaScore.parse({
+      ...baseScore,
+      score_type: 'C',
+      score_type_display_short: 'N',
+      score_type_display_full: 'N',
+      number_of_holes: 18,
+      number_of_played_holes: 18,
+      adjusted_gross_score: 94,
+      course_rating: 70.2,
+      slope_rating: 127,
+    })
+
+    expect(parsed.score_type).toBe('COMBINED')
+    expect(parsed.score_type_display_full).toBe('N')
+    expect(parsed.number_of_holes).toBe(18)
   })
 })
 
@@ -211,5 +254,65 @@ describe('schemaScoresResponse', () => {
 
     expect(parsed).toHaveProperty('some_new_key', 'kept')
     expect(parsed.scores).toHaveLength(1)
+  })
+
+  // The exact failure mode #66 raised: a letter the map doesn't know used to reject
+  // the golfer's entire history. It now costs the one round it arrived on.
+  it('drops a row with an unrecognised score_type and keeps the rest (#66)', () => {
+    const poison = { ...baseScore, id: 2, score_type: 'Z' }
+    const parsed = schemaScoresResponse.parse({
+      highest_score: 95,
+      lowest_score: 78,
+      scores: [baseScore, poison],
+    })
+
+    expect(parsed.scores).toHaveLength(1)
+    expect(parsed.scores[0]?.id).toBe(1)
+    // Rejects come back raw and untransformed — `score_type` is still the wire letter,
+    // not the mapped enum, so a log of `invalid` shows exactly what GHIN sent.
+    expect(parsed.invalid).toEqual([poison])
+  })
+
+  it('leaves invalid empty when every row parses', () => {
+    const parsed = schemaScoresResponse.parse({
+      highest_score: 95,
+      lowest_score: 78,
+      scores: [baseScore],
+    })
+
+    expect(parsed.scores).toHaveLength(1)
+    expect(parsed.invalid).toEqual([])
+    // `average` and `total_count` are omitted above on purpose: this pins the
+    // `.default(0)`-through-`ZodDefault`-through-transform path, which would break silently
+    // if the defaults were applied after the transform or stripped by it.
+    expect(parsed.average).toBe(0)
+    expect(parsed.total_count).toBe(0)
+  })
+
+  // Regression guard: a transform that destructured only `scores` would silently
+  // drop the envelope fields and everything `.passthrough()` was added for (#64).
+  it('preserves the envelope fields and passthrough keys across the partition transform', () => {
+    const parsed = schemaScoresResponse.parse({
+      average: 10.5,
+      highest_score: 95,
+      lowest_score: 78,
+      scores: [baseScore, { ...baseScore, score_type: 'Z' }],
+      total_count: 2,
+      some_new_key: 'kept',
+    })
+
+    expect(parsed.average).toBe(10.5)
+    expect(parsed.highest_score).toBe(95)
+    expect(parsed.lowest_score).toBe(78)
+    expect(parsed.total_count).toBe(2)
+    expect(parsed).toHaveProperty('some_new_key', 'kept')
+    // Type-level guard: this indexed read only compiles while the `.passthrough()` index signature
+    // survives the transform, which a bare spread would drop from the inferred type (runtime alone
+    // would not catch that). The key goes through a variable to satisfy both TS4111 and biome's
+    // useLiteralKeys, per the convention noted above.
+    const passthroughKey = 'some_new_key'
+    const passthroughValue: unknown = parsed[passthroughKey]
+    expect(passthroughValue).toBe('kept')
+    expect(parsed.invalid).toHaveLength(1)
   })
 })

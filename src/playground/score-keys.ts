@@ -8,8 +8,10 @@
  *   look present even when GHIN never sent them.
  * - Reported JSON types are post-transform: `played_at` / `posted_at` show as
  *   `object` (Dates) and `score_type` / `status` as the transformed enums.
- * - A golfer whose payload fails to parse contributes nothing to the tallies, so
- *   the very drift this script hunts for can hide its own evidence.
+ * - Rows are partitioned since #66: a row that fails to parse is dropped from
+ *   `scores` into `invalid` rather than failing the whole payload, so it never
+ *   reaches the tallies — the very drift this script hunts for can hide its own
+ *   evidence. Rejected rows are dumped raw below, which is the higher-value signal.
  */
 import {
   schemaHoleDetail,
@@ -101,7 +103,13 @@ class Level {
   }
 }
 
-const envelope = new Level('envelope (schemaScoresResponse)', Object.keys(schemaScoresResponse.shape))
+// `.innerType()` steps past the `partitionRows` transform (#66) to the object that still has a `.shape`.
+// `invalid` is added by that transform, so it is not in the shape — declare it explicitly or every
+// run reports it as an undeclared envelope key.
+const envelope = new Level('envelope (schemaScoresResponse)', [
+  ...Object.keys(schemaScoresResponse.innerType().shape),
+  'invalid',
+])
 const score = new Level('score row (schemaScore)', Object.keys(schemaScore.shape))
 const hole = new Level('hole_details[] (schemaHoleDetail)', Object.keys(schemaHoleDetail.shape))
 const adj = new Level('adjustments[] (schemaScoringAdjustment)', Object.keys(schemaScoringAdjustment.shape))
@@ -134,6 +142,10 @@ const fn = async () => {
     try {
       const res = await ghinClient.golfers.getScores(g, { limit: 100 })
       envelope.add(res)
+      // Rows rejected by the partition never reach the tallies below, and they are raw wire data —
+      // the single highest-value drift signal this script can emit. Dump them in full (#66).
+      if (res.invalid.length)
+        console.error(`golfer ${g}: ${res.invalid.length} rows rejected ->`, JSON.stringify(res.invalid, null, 2))
       const rows = (get(res, 'scores') ?? []) as Record<string, unknown>[]
       console.log(`golfer ${g}: ${rows.length} score rows (total_count=${String(get(res, 'total_count'))})`)
       for (const r of rows) {
