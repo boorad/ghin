@@ -66,17 +66,28 @@ Both asked and answered before implementation:
    `0` and the `z.null()` branch is unreachable. Any **bare** `handicap` is
    therefore affected — `src/client/ghin/models/handicaps/response.ts:16` is a
    live instance. `handicap.nullish()` is safe because the wrapper short-circuits
-   `null` before the inner union.
+   `null` before the inner union. Also for #63: `handicap_index: ''` yields `0`
+   for the same reason (`Number('') === 0`), a live instance shared with
+   `golfers.search`.
 
 ## Assumptions
 
 Self-answered, not asked:
 
-- **Published surface: `patch`.** With Decision 2 reversed, the emitted type of
-  `handicap_index` (`number | null | undefined`) is unchanged and the siblings
-  stay `number`; only previously-rejected inputs now parse. Matches #56. Phase 2
-  adds an `invalid` key to both responses — additive, and `patch` by this repo's
-  precedent (#51, #53, #57 all shipped partitioning as `patch`).
+- **Published surface: `minor`.** Corrected during review — an earlier draft of
+  this doc claimed "#51, #53, #57 all shipped partitioning as `patch`", which is
+  wrong on every count. Verified against the commits: #51 (`c577576`) and #53
+  (`40a24b8`) both shipped partitioning as **`minor`**, and #57 (`a5f84ff`) was
+  `patch` but added no `partitionRows` at all (`git show a5f84ff | grep -c
+  partitionRows` → 0). So the only two real precedents for "add an `invalid` key
+  and stop throwing on a bad row" are both `minor`.
+
+  The type of `handicap_index` (`number | null | undefined`) is unchanged and the
+  siblings stay `number`, so Phase 1/1b on its own would be a `patch`. Phase 2 is
+  what forces `minor`: adding a `.transform()` turns the two exported response
+  schemas from `ZodObject` into `ZodEffects`, so `.shape`, `.extend()`, `.pick()`,
+  `.merge()`, `.partial()` and `.passthrough()` stop compiling for any consumer
+  calling them. Parsing is unaffected.
 - **Use `.nullish()`, not `.nullable().optional()`**, per the standing convention
   in `.changeset/estimated-handicap-display.md`: GHIN drops keys entirely rather
   than nulling them (#46, #51, #55, #56, #57). Matches `golfers/search.ts:71`.
@@ -85,6 +96,31 @@ Self-answered, not asked:
 - Schema assertions go in co-located model test files, **not** `index.test.ts` —
   those tests mock `httpClient.fetch`, so the schema never runs there and any
   assertion added would pass regardless.
+
+## Review outcomes
+
+Reviewed by a fresh agent that did not write the code. The implementation itself
+needed no changes — schema, transform and degradation wiring were all correct and
+consistent with `golfers/search.ts`. Every finding was in the changeset/plan/test
+layer, and all were applied:
+
+- Changeset bumped `patch` → `minor`, with the precedent claim corrected (above).
+- Changeset now discloses the `ZodObject` → `ZodEffects` surface change.
+- Changeset dropped the incorrect `#57` attribution from the partitioning list.
+- Changeset softened "returned nothing for anyone" to the mechanism, since the
+  batch failure on *these two* endpoints is inferred from #56 rather than
+  captured — see Manual verification item 1.
+- Raw-`invalid` assertions strengthened from `toEqual` to `toBe`, so they pin
+  object identity rather than structural equality — which is what "untransformed"
+  actually means.
+- Added `should survive an onDegraded callback that throws` to both endpoints,
+  for parity with the `courses.search` precedent.
+
+Noted and deliberately not acted on: the `onDegraded` tests in `index.test.ts`
+mock `httpClient.fetch`, so they pin the wiring (entity string, `total`
+expression, `sample` identity) but would still pass if the response schemas were
+reverted to plain `z.array(...)`. The end-to-end proof lives in the model tests.
+Same limitation as the `courses.search` precedent.
 
 ## Manual verification (carried to Phase 6.5)
 

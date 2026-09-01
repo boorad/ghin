@@ -139,7 +139,10 @@ describe('Playing Handicap Schemas', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data.playing_handicaps.map((row) => row.golfer_id)).toEqual([1, 3])
-        expect(result.data.invalid).toEqual([rejected])
+        // toBe, not toEqual: the point of the policy is that the row is the
+        // object GHIN sent, not a structurally equal reconstruction of it.
+        expect(result.data.invalid).toHaveLength(1)
+        expect(result.data.invalid[0]).toBe(rejected)
       }
     })
 

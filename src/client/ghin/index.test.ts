@@ -570,6 +570,30 @@ describe('GhinClient', () => {
       expect(onDegraded).not.toHaveBeenCalled()
     })
 
+    it('should survive an onDegraded callback that throws', async () => {
+      const client = new GhinClient({
+        password: 'p',
+        username: 'u',
+        onDegraded: () => {
+          throw new Error('reporter exploded')
+        },
+      })
+      mockFetch.mockResolvedValue(
+        ok({ course_handicaps: [{ golfer_id: 123, course_handicap: 15.2 }], invalid: [{ bad: true }] }),
+      )
+
+      await expect(
+        client.handicaps.getCourseHandicaps({
+          golfer_id: 123,
+          course_id: 2539,
+          tee_set_id: 262908,
+          tee_set_side: 'All18',
+          played_at: '2026-03-17',
+          gender: 'M',
+        }),
+      ).resolves.toBeDefined()
+    })
+
     it('should throw error when fetch fails', async () => {
       mockFetch.mockResolvedValue(err(new Error('Failed')))
 
@@ -691,6 +715,33 @@ describe('GhinClient', () => {
       })
 
       expect(onDegraded).not.toHaveBeenCalled()
+    })
+
+    it('should survive an onDegraded callback that throws', async () => {
+      const client = new GhinClient({
+        password: 'p',
+        username: 'u',
+        onDegraded: () => {
+          throw new Error('reporter exploded')
+        },
+      })
+      mockFetch.mockResolvedValue(
+        ok({
+          playing_handicaps: [{ golfer_id: 123, playing_handicap: 15, course_handicap: 16 }],
+          invalid: [{ bad: true }],
+        }),
+      )
+
+      await expect(
+        client.handicaps.getPlayingHandicaps({
+          golfer_id: 123,
+          course_id: 2539,
+          tee_set_id: 262908,
+          tee_set_side: 'All18',
+          played_at: '2026-03-17',
+          gender: 'M',
+        }),
+      ).resolves.toBeDefined()
     })
 
     it('should throw error when fetch fails', async () => {
