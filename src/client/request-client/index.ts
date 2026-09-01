@@ -7,6 +7,7 @@ import {
   AuthenticationError,
   CacheError,
   ConfigurationError,
+  type GhinError,
   NetworkError,
   RateLimitError,
   ValidationError,
@@ -124,7 +125,7 @@ export class RequestClient {
     options: RequestInit
     schema: ZodSchema
     url: URL
-  }): Promise<Result<T, Error>> {
+  }): Promise<Result<T, GhinError>> {
     try {
       const response = await fetch(url.toString(), options)
 
@@ -201,7 +202,7 @@ export class RequestClient {
     }
   }
 
-  private async refreshSessionToken(): Promise<Result<AccessToken, Error>> {
+  private async refreshSessionToken(): Promise<Result<AccessToken, GhinError>> {
     const url = new URL(FIREBASE_SESSION_URL)
     const body = JSON.stringify(SESSION_DEFAULTS)
 
@@ -235,7 +236,7 @@ export class RequestClient {
     }
   }
 
-  private async getAccessToken(): Promise<Result<string, Error>> {
+  private async getAccessToken(): Promise<Result<string, GhinError>> {
     const isAccessTokenValid = this.isAccessTokenValid(this.accessToken)
 
     if (isAccessTokenValid) {
@@ -262,7 +263,7 @@ export class RequestClient {
     return this.persistRefreshedToken()
   }
 
-  private async persistRefreshedToken(): Promise<Result<string, Error>> {
+  private async persistRefreshedToken(): Promise<Result<string, GhinError>> {
     const refreshResult = await this.refreshAccessToken()
     if (refreshResult.isErr()) {
       return refreshResult
@@ -290,7 +291,7 @@ export class RequestClient {
   // before its JWT `exp` (e.g. the 12-hour session ceiling).
   // The `priorToken` arg lets concurrent callers no-op once one of them has
   // already obtained a new token, avoiding a login storm.
-  private async forceRefreshAccessToken(priorToken: string): Promise<Result<string, Error>> {
+  private async forceRefreshAccessToken(priorToken: string): Promise<Result<string, GhinError>> {
     if (this.accessToken && this.accessToken !== priorToken && this.isAccessTokenValid(this.accessToken)) {
       return ok(this.accessToken)
     }
@@ -299,7 +300,7 @@ export class RequestClient {
     return this.persistRefreshedToken()
   }
 
-  private async apiLogin(): Promise<Result<string, Error>> {
+  private async apiLogin(): Promise<Result<string, GhinError>> {
     const url = toFullApiUrl(this.baseUrl, 'users_login')
     const body = JSON.stringify({
       user: {
@@ -323,11 +324,11 @@ export class RequestClient {
       if (resp && 'token' in resp) {
         return ok(resp.token)
       }
-      return err(new Error('Login response did not contain a token.'))
+      return err(new AuthenticationError('Login response did not contain a token.'))
     })
   }
 
-  private async refreshAccessToken(): Promise<Result<string, Error>> {
+  private async refreshAccessToken(): Promise<Result<string, GhinError>> {
     if (this.config.apiAccess) {
       return this.apiLogin()
     }
@@ -375,7 +376,7 @@ export class RequestClient {
     url: URL
     schema: ZodSchema
     options: RequestInit & { searchParams?: URLSearchParams }
-  }): Promise<Result<RequestReturnType, Error>> {
+  }): Promise<Result<RequestReturnType, GhinError>> {
     const accessTokenResult = await this.lock.runExclusive(async () => this.getAccessToken())
     if (accessTokenResult.isErr()) {
       return err(accessTokenResult.error)
@@ -427,7 +428,7 @@ export class RequestClient {
     entity,
     schema,
     options = {},
-  }: FetchParameters): Promise<Result<RequestReturnType, Error>> {
+  }: FetchParameters): Promise<Result<RequestReturnType, GhinError>> {
     return this.authedRequest<RequestReturnType>({
       url: toFullApiUrl(this.baseUrl, entity),
       schema,
@@ -445,7 +446,7 @@ export class RequestClient {
     options?: RequestInit & {
       searchParams?: URLSearchParams
     }
-  }): Promise<Result<RequestReturnType, Error>> {
+  }): Promise<Result<RequestReturnType, GhinError>> {
     return this.authedRequest<RequestReturnType>({
       url: new URL(`${this.baseUrl.pathname}${path}`, this.baseUrl),
       schema,

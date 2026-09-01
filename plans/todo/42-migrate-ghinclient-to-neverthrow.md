@@ -18,7 +18,7 @@ omits `iterateUndelivered`. Actual count: 27 `Promise` methods + 1 async generat
 
 ## Live tracker
 
-- [ ] Phase 1 — Foundation + `courses` + `facilities` (6 methods)
+- [x] Phase 1 — Foundation + `courses` + `facilities` (6 methods)
 - [ ] Phase 2 — `golfers` + `handicaps` + `scores` (10 methods)
 - [ ] Phase 3 — `gpa` + `webhooks` (11 methods + `iterateUndelivered`)
 - [ ] Phase 4 — README + changeset
@@ -46,6 +46,19 @@ omits `iterateUndelivered`. Actual count: 27 `Promise` methods + 1 async generat
 ## Assumptions
 
 _(anything decided without asking, recorded as it comes up)_
+
+- **Phase 1:** the `throw error instanceof Error ? error : new Error(String(error))`
+  fallback became a shared `toGhinError(error)` helper in `src/errors/index.ts` (a
+  `GhinError` passes through untouched, anything else becomes a `NetworkError` carrying
+  the original message). It lives in `errors` rather than `utils` because
+  `utils/retry.ts` needs it too — `withRetryAsync`'s catch had the same wrap — and
+  `src/index.ts` already re-exports `./errors`, so it is now public. The remaining
+  phases should reuse it instead of hand-rolling the catch.
+- **Phase 1:** narrowing `fetch`/`fetchCustomPath` to `GhinError` required narrowing the
+  whole private chain behind them (`_fetch`, `refreshSessionToken`, `getAccessToken`,
+  `persistRefreshedToken`, `forceRefreshAccessToken`, `apiLogin`, `refreshAccessToken`,
+  `authedRequest`); every `err()` in them already built a `GhinError` subclass, so only
+  the two spots Decision 2 names changed behaviour.
 
 ## Files
 

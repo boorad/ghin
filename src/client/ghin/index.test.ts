@@ -1,6 +1,6 @@
 import { err, ok } from 'neverthrow'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ValidationError } from '../../errors'
+import { NetworkError, ValidationError } from '../../errors'
 import { InMemoryCacheClient } from '../in-memory-cache-client'
 import { GhinClient } from './index'
 import {
@@ -79,7 +79,7 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.courses.getCountries()
 
-      expect(result).toEqual(mockCountries.countries)
+      expect(result._unsafeUnwrap()).toEqual(mockCountries.countries)
       expect(mockFetch).toHaveBeenCalledWith({
         entity: 'course_countries',
         options: expect.objectContaining({
@@ -89,10 +89,20 @@ describe('GhinClient', () => {
       })
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetch.mockResolvedValue(err(new Error('Network error')))
+    // Nothing on this surface rejects any more: the promise resolves to an Err.
+    // Asserting only `isErr()` would still pass if a throw crept back in.
+    it('should resolve to an error result when fetch fails', async () => {
+      const failure = new NetworkError('Network error')
+      mockFetch.mockResolvedValue(err(failure))
 
-      await expect(ghinClient.courses.getCountries()).rejects.toThrow('Network error')
+      await expect(ghinClient.courses.getCountries()).resolves.toBeDefined()
+
+      const result = await ghinClient.courses.getCountries()
+
+      expect(result.isErr()).toBe(true)
+      // The instance, not a copy — statusCode/retryAfter/field are the point.
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Network error')
     })
   })
 
@@ -111,19 +121,27 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.courses.getDetails({ course_id: 12345 })
 
-      expect(result).toEqual(mockDetails)
+      expect(result._unsafeUnwrap()).toEqual(mockDetails)
       expect(mockFetch).toHaveBeenCalled()
     })
 
-    it('should throw validation error with invalid request', async () => {
+    it('should return a validation error with invalid request', async () => {
       // @ts-expect-error - Testing invalid input type
-      await expect(ghinClient.courses.getDetails({ course_id: 'invalid' })).rejects.toThrow(ValidationError)
+      const result = await ghinClient.courses.getDetails({ course_id: 'invalid' })
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetch.mockResolvedValue(err(new Error('Not found')))
+    it('should return an error result when fetch fails', async () => {
+      const failure = new NetworkError('Not found', 404)
+      mockFetch.mockResolvedValue(err(failure))
 
-      await expect(ghinClient.courses.getDetails({ course_id: 12345 })).rejects.toThrow('Not found')
+      const result = await ghinClient.courses.getDetails({ course_id: 12345 })
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Not found')
     })
   })
 
@@ -140,7 +158,7 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.courses.search({ name: 'Test' })
 
-      expect(result).toEqual(mockResponse)
+      expect(result._unsafeUnwrap()).toEqual(mockResponse)
       expect(mockFetch).toHaveBeenCalled()
     })
 
@@ -185,13 +203,20 @@ describe('GhinClient', () => {
       })
       mockFetch.mockResolvedValue(ok({ courses: [{ course_id: 1 }], invalid: [{ bad: true }] }))
 
-      await expect(client.courses.search({ name: 'Test' })).resolves.toBeDefined()
+      const result = await client.courses.search({ name: 'Test' })
+
+      expect(result.isOk()).toBe(true)
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetch.mockResolvedValue(err(new Error('Search failed')))
+    it('should return an error result when fetch fails', async () => {
+      const failure = new NetworkError('Search failed')
+      mockFetch.mockResolvedValue(err(failure))
 
-      await expect(ghinClient.courses.search({ name: 'Test' })).rejects.toThrow('Search failed')
+      const result = await ghinClient.courses.search({ name: 'Test' })
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Search failed')
     })
   })
 
@@ -221,7 +246,7 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.courses.getTeeSetRatingsForScorePosting({ course_id: 2539 })
 
-      expect(result).toEqual(mockResponse)
+      expect(result._unsafeUnwrap()).toEqual(mockResponse)
       expect(mockFetchCustomPath).toHaveBeenCalledWith({
         path: '/Courses/2539/TeeSetRatingsForScorePosting.json',
         options: expect.objectContaining({
@@ -273,28 +298,37 @@ describe('GhinClient', () => {
         ok({ tee_set_ratings: [{ TeeSetRatingId: 605066 }], invalid: [{ bad: true }] }),
       )
 
-      await expect(client.courses.getTeeSetRatingsForScorePosting({ course_id: 7817 })).resolves.toBeDefined()
+      const result = await client.courses.getTeeSetRatingsForScorePosting({ course_id: 7817 })
+
+      expect(result.isOk()).toBe(true)
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetchCustomPath.mockResolvedValue(err(new Error('Not found')))
+    it('should return an error result when fetch fails', async () => {
+      const failure = new NetworkError('Not found', 404)
+      mockFetchCustomPath.mockResolvedValue(err(failure))
 
-      await expect(ghinClient.courses.getTeeSetRatingsForScorePosting({ course_id: 2539 })).rejects.toThrow('Not found')
+      const result = await ghinClient.courses.getTeeSetRatingsForScorePosting({ course_id: 2539 })
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Not found')
     })
 
-    it('should throw validation error with invalid request', async () => {
+    it('should return a validation error with invalid request', async () => {
       // @ts-expect-error - Testing invalid input type
-      await expect(ghinClient.courses.getTeeSetRatingsForScorePosting({ course_id: 'invalid' })).rejects.toThrow(
-        ValidationError,
-      )
+      const result = await ghinClient.courses.getTeeSetRatingsForScorePosting({ course_id: 'invalid' })
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
     })
 
     it('should wrap non-Error throws', async () => {
       mockFetchCustomPath.mockRejectedValue('string error')
 
-      await expect(ghinClient.courses.getTeeSetRatingsForScorePosting({ course_id: 2539 })).rejects.toThrow(
-        'string error',
-      )
+      const result = await ghinClient.courses.getTeeSetRatingsForScorePosting({ course_id: 2539 })
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr().message).toBe('string error')
     })
   })
 
@@ -309,14 +343,22 @@ describe('GhinClient', () => {
         name: 'Test',
       })
 
-      expect(result).toEqual(mockResponse)
+      expect(result._unsafeUnwrap()).toEqual(mockResponse)
       expect(mockFetch).toHaveBeenCalled()
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetch.mockResolvedValue(err(new Error('Search failed')))
+    // Nothing on this surface rejects any more: the promise resolves to an Err.
+    it('should resolve to an error result when fetch fails', async () => {
+      const failure = new NetworkError('Search failed')
+      mockFetch.mockResolvedValue(err(failure))
 
-      await expect(ghinClient.facilities.search({ name: 'Test' })).rejects.toThrow('Search failed')
+      await expect(ghinClient.facilities.search({ name: 'Test' })).resolves.toBeDefined()
+
+      const result = await ghinClient.facilities.search({ name: 'Test' })
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Search failed')
     })
   })
 

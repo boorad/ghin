@@ -31,10 +31,14 @@ const fn = async () => {
       state: "US-GA",
     });
 
+    if (druidHillsFacilities.isErr()) {
+      throw druidHillsFacilities.error;
+    }
+
     console.log(
-      `\nFound ${druidHillsFacilities.length} facilities matching "Druid Hills" in Georgia:`
+      `\nFound ${druidHillsFacilities.value.length} facilities matching "Druid Hills" in Georgia:`
     );
-    console.dir(druidHillsFacilities, { depth: null });
+    console.dir(druidHillsFacilities.value, { depth: null });
   } catch (error) {
     console.error("Error searching for Druid Hills facilities:", error);
   }
@@ -50,10 +54,14 @@ const fn = async () => {
       state: "US-GA",
     });
 
+    if (druidHillsCourses.isErr()) {
+      throw druidHillsCourses.error;
+    }
+
     console.log(
-      `\nFound ${druidHillsCourses.courses.length} courses matching "Druid Hills" in Georgia:`
+      `\nFound ${druidHillsCourses.value.courses.length} courses matching "Druid Hills" in Georgia:`
     );
-    console.dir(druidHillsCourses, { depth: null });
+    console.dir(druidHillsCourses.value, { depth: null });
   } catch (error) {
     console.error("Error searching for Druid Hills courses:", error);
   }
@@ -68,10 +76,14 @@ const fn = async () => {
       state: "US-NC",
     });
 
+    if (pinehurstFacilities.isErr()) {
+      throw pinehurstFacilities.error;
+    }
+
     console.log(
-      `\nFound ${pinehurstFacilities.length} facilities matching "Pinehurst" in North Carolina:`
+      `\nFound ${pinehurstFacilities.value.length} facilities matching "Pinehurst" in North Carolina:`
     );
-    console.dir(pinehurstFacilities, { depth: null });
+    console.dir(pinehurstFacilities.value, { depth: null });
   } catch (error) {
     console.error("Error searching for Pinehurst facilities:", error);
   }
@@ -87,10 +99,14 @@ const fn = async () => {
       state: "US-NC",
     });
 
+    if (pinehurstCourses.isErr()) {
+      throw pinehurstCourses.error;
+    }
+
     console.log(
-      `\nFound ${pinehurstCourses.courses.length} courses matching "Pinehurst" in North Carolina:`
+      `\nFound ${pinehurstCourses.value.courses.length} courses matching "Pinehurst" in North Carolina:`
     );
-    console.dir(pinehurstCourses, { depth: null });
+    console.dir(pinehurstCourses.value, { depth: null });
   } catch (error) {
     console.error("Error searching for Pinehurst courses:", error);
   }

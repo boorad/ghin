@@ -1,6 +1,6 @@
 import type { Result } from 'neverthrow'
 import { err, ok } from 'neverthrow'
-import { NetworkError, RateLimitError } from '../errors'
+import { type GhinError, NetworkError, RateLimitError, toGhinError } from '../errors'
 
 export interface RetryConfig {
   maxAttempts: number
@@ -38,9 +38,9 @@ export async function sleep(ms: number): Promise<void> {
 }
 
 export async function withRetry<T>(
-  operation: () => Promise<Result<T, Error>>,
+  operation: () => Promise<Result<T, GhinError>>,
   config: Partial<RetryConfig> = {},
-): Promise<Result<T, Error>> {
+): Promise<Result<T, GhinError>> {
   const finalConfig = { ...DEFAULT_RETRY_CONFIG, ...config }
 
   for (let attempt = 1; attempt <= finalConfig.maxAttempts; attempt++) {
@@ -71,19 +71,19 @@ export async function withRetry<T>(
   }
 
   // This should never be reached, but TypeScript requires it
-  return err(new Error('Retry exhausted'))
+  return err(new NetworkError('Retry exhausted'))
 }
 
 export async function withRetryAsync<T>(
   operation: () => Promise<T>,
   config: Partial<RetryConfig> = {},
-): Promise<Result<T, Error>> {
+): Promise<Result<T, GhinError>> {
   return withRetry(async () => {
     try {
       const result = await operation()
       return ok(result)
     } catch (error) {
-      return err(error instanceof Error ? error : new Error(String(error)))
+      return err(toGhinError(error))
     }
   }, config)
 }

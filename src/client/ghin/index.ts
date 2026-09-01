@@ -1,5 +1,6 @@
+import { type Result, err, ok } from 'neverthrow'
 import { z } from 'zod'
-import { ConfigurationError, ValidationError } from '../../errors'
+import { ConfigurationError, type GhinError, ValidationError, toGhinError } from '../../errors'
 import { type ClientConfig, number, reportDegradation, schemaClientConfig } from '../../models'
 import { InMemoryCacheClient } from '../in-memory-cache-client'
 import { CLIENT_SOURCE, RequestClient } from '../request-client'
@@ -94,17 +95,17 @@ export class GhinClient {
   private httpClient: RequestClient
 
   courses: {
-    getCountries: () => Promise<CourseCountry[]>
-    getDetails: (request: CourseDetailsRequest) => Promise<CourseDetailsResponse>
-    search: (request: CourseSearchRequest) => Promise<CourseSearchResponse>
-    getTeeSetRating: (request: TeeSetRatingRequest) => Promise<TeeSetRatingResponse>
+    getCountries: () => Promise<Result<CourseCountry[], GhinError>>
+    getDetails: (request: CourseDetailsRequest) => Promise<Result<CourseDetailsResponse, GhinError>>
+    search: (request: CourseSearchRequest) => Promise<Result<CourseSearchResponse, GhinError>>
+    getTeeSetRating: (request: TeeSetRatingRequest) => Promise<Result<TeeSetRatingResponse, GhinError>>
     getTeeSetRatingsForScorePosting: (
       request: TeeSetRatingForScorePostingRequest,
-    ) => Promise<TeeSetRatingsForScorePostingResponse>
+    ) => Promise<Result<TeeSetRatingsForScorePostingResponse, GhinError>>
   }
 
   facilities: {
-    search: (request: FacilitySearchRequest) => Promise<FacilitySearchResponse>
+    search: (request: FacilitySearchRequest) => Promise<Result<FacilitySearchResponse, GhinError>>
   }
 
   golfers: {
@@ -213,7 +214,7 @@ export class GhinClient {
 
   // ── Courses ──────────────────────────────────────────────────────────
 
-  private async coursesGetCountries(): Promise<CourseCountry[]> {
+  private async coursesGetCountries(): Promise<Result<CourseCountry[], GhinError>> {
     try {
       const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
       const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
@@ -226,19 +227,21 @@ export class GhinClient {
         schema: schemaCourseCountriesResponse,
       })
 
-      if (result.isErr()) {
-        throw result.error
-      }
-
-      return result.value.countries
+      return result.map((response) => response.countries)
     } catch (error) {
-      throw error instanceof Error ? error : new Error(String(error))
+      return err(toGhinError(error))
     }
   }
 
-  private async courseGetDetails(request: CourseDetailsRequest): Promise<CourseDetailsResponse> {
+  private async courseGetDetails(request: CourseDetailsRequest): Promise<Result<CourseDetailsResponse, GhinError>> {
     try {
-      const validRequest = schemaCourseDetailsRequest.parse(request)
+      const parsedRequest = schemaCourseDetailsRequest.safeParse(request)
+
+      if (!parsedRequest.success) {
+        return err(new ValidationError(`Invalid course details request: ${parsedRequest.error.message}`))
+      }
+
+      const validRequest = parsedRequest.data
       const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
 
       for (const [key, value] of Object.entries(validRequest)) {
@@ -256,7 +259,7 @@ export class GhinClient {
       })
 
       if (result.isErr()) {
-        throw result.error
+        return err(result.error)
       }
 
       const { invalidTeeSets, ...details } = result.value
@@ -267,18 +270,21 @@ export class GhinClient {
         details.TeeSets.length + invalidTeeSets.length,
       )
 
-      return { ...details, invalidTeeSets }
+      return ok({ ...details, invalidTeeSets })
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        throw new ValidationError(`Invalid course details request: ${error.message}`)
-      }
-      throw error instanceof Error ? error : new Error(String(error))
+      return err(toGhinError(error))
     }
   }
 
-  private async courseGetTeeSetRating(request: TeeSetRatingRequest): Promise<TeeSetRatingResponse> {
+  private async courseGetTeeSetRating(request: TeeSetRatingRequest): Promise<Result<TeeSetRatingResponse, GhinError>> {
     try {
-      const validRequest = schemaTeeSetRatingRequest.parse(request)
+      const parsedRequest = schemaTeeSetRatingRequest.safeParse(request)
+
+      if (!parsedRequest.success) {
+        return err(new ValidationError(`Invalid tee set rating request: ${parsedRequest.error.message}`))
+      }
+
+      const validRequest = parsedRequest.data
       const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
 
       if (validRequest.include_altered_tees !== undefined) {
@@ -297,24 +303,25 @@ export class GhinClient {
         schema: schemaTeeSetRatingResponse,
       })
 
-      if (result.isErr()) {
-        throw result.error
-      }
-
-      return result.value
+      return result
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        throw new ValidationError(`Invalid tee set rating request: ${error.message}`)
-      }
-      throw error instanceof Error ? error : new Error(String(error))
+      return err(toGhinError(error))
     }
   }
 
   private async courseGetTeeSetRatingsForScorePosting(
     request: TeeSetRatingForScorePostingRequest,
-  ): Promise<TeeSetRatingsForScorePostingResponse> {
+  ): Promise<Result<TeeSetRatingsForScorePostingResponse, GhinError>> {
     try {
-      const validRequest = schemaTeeSetRatingForScorePostingRequest.parse(request)
+      const parsedRequest = schemaTeeSetRatingForScorePostingRequest.safeParse(request)
+
+      if (!parsedRequest.success) {
+        return err(
+          new ValidationError(`Invalid tee set rating for score posting request: ${parsedRequest.error.message}`),
+        )
+      }
+
+      const validRequest = parsedRequest.data
       const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
 
       const path = `/Courses/${validRequest.course_id}/TeeSetRatingsForScorePosting.json`
@@ -330,7 +337,7 @@ export class GhinClient {
       })
 
       if (result.isErr()) {
-        throw result.error
+        return err(result.error)
       }
 
       reportDegradation(
@@ -340,18 +347,21 @@ export class GhinClient {
         result.value.tee_set_ratings.length + result.value.invalid.length,
       )
 
-      return result.value
+      return ok(result.value)
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        throw new ValidationError(`Invalid tee set rating for score posting request: ${error.message}`)
-      }
-      throw error instanceof Error ? error : new Error(String(error))
+      return err(toGhinError(error))
     }
   }
 
-  private async courseSearch(request: CourseSearchRequest): Promise<CourseSearchResponse> {
+  private async courseSearch(request: CourseSearchRequest): Promise<Result<CourseSearchResponse, GhinError>> {
     try {
-      const validRequest = schemaCourseSearchRequest.parse(request)
+      const parsedRequest = schemaCourseSearchRequest.safeParse(request)
+
+      if (!parsedRequest.success) {
+        return err(new ValidationError(`Invalid course search request: ${parsedRequest.error.message}`))
+      }
+
+      const validRequest = parsedRequest.data
       const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
 
       for (const [key, value] of Object.entries(validRequest)) {
@@ -369,7 +379,7 @@ export class GhinClient {
       })
 
       if (result.isErr()) {
-        throw result.error
+        return err(result.error)
       }
 
       reportDegradation(
@@ -379,20 +389,23 @@ export class GhinClient {
         result.value.courses.length + result.value.invalid.length,
       )
 
-      return result.value
+      return ok(result.value)
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        throw new ValidationError(`Invalid course search request: ${error.message}`)
-      }
-      throw error instanceof Error ? error : new Error(String(error))
+      return err(toGhinError(error))
     }
   }
 
   // ── Facilities ───────────────────────────────────────────────────────
 
-  private async facilitySearch(request: FacilitySearchRequest): Promise<FacilitySearchResponse> {
+  private async facilitySearch(request: FacilitySearchRequest): Promise<Result<FacilitySearchResponse, GhinError>> {
     try {
-      const validRequest = schemaFacilitySearchRequest.parse(request)
+      const parsedRequest = schemaFacilitySearchRequest.safeParse(request)
+
+      if (!parsedRequest.success) {
+        return err(new ValidationError(`Invalid facility search request: ${parsedRequest.error.message}`))
+      }
+
+      const validRequest = parsedRequest.data
       const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
 
       for (const [key, value] of Object.entries(validRequest)) {
@@ -409,16 +422,9 @@ export class GhinClient {
         schema: schemaFacilitySearchResponse,
       })
 
-      if (result.isErr()) {
-        throw result.error
-      }
-
-      return result.value
+      return result
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        throw new ValidationError(`Invalid facility search request: ${error.message}`)
-      }
-      throw error instanceof Error ? error : new Error(String(error))
+      return err(toGhinError(error))
     }
   }
 
