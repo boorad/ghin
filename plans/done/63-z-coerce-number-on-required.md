@@ -71,8 +71,9 @@ Two concrete consequences:
 
 ## Manual verification
 
-**Carried — owner: brad.** None of these are provable by unit tests; the branch is committed and the PR is
-held until they are checked.
+**Probed against `api-uat.ghin.com` on 2026-09-01** with the 13 Druid staging golfers
+(`13373246`–`13373258`) and course `146`. Results below; only item 2 remains, because it needs a
+score post, which cannot be undone.
 
 Carried from recon; unit tests cannot prove these:
 
@@ -91,3 +92,41 @@ Carried from recon; unit tests cannot prove these:
 8. Downstream consumer: any `typeof x === 'number'` on `handicap_index` / `differential` now sees
    `null` where it saw `0`.
 9. `bun run build && grep -n "handicap_index" dist/index.d.ts` — confirm no emitted type widened.
+
+### Results
+
+1. **`getScores` nulls — CLEAR.** 84 scores across all 13 golfers. Every `course_rating`,
+   `slope_rating`, `differential` and `unadjusted_differential` is a real JSON number — none null,
+   absent or quoted. The set includes `UnderReview/T`, `UnderReview/H` and `Temporary/C` scores,
+   which is the exact scenario #63 named as the plausible null source, so the review's Major
+   finding (the unpartitioned `getScores` blast radius) is answered with data rather than deferred.
+   `getScores` runs end-to-end through the new strict schemas for both an established golfer and
+   the no-index golfer.
+2. **Score-post response — OPEN.** Needs a real post; the read-back above is the stored score, not
+   the immediate `scores.post` payload that `post-response.ts` validates. Held for the owner.
+3. **`handicap_index` on the wire — assumption corrected.** `/search_golfer.json`, the endpoint
+   behind `handicaps.getOne`, returns **404 on UAT** for all 13 golfers and every parameter
+   variant tried (`ghin`, `golfer_id`, `ghin_number`, none), while `scores` succeeds on the same
+   token. So the field could not be observed there at all. On `golfers.search`, which does work,
+   `handicap_index` is the **string `"NH"`** for golfer `13373258`, not a `null`. The Phase 2
+   change stays — it is correct and now a no-op given the Phase 1 helper fix — but the changeset
+   claim that a `null` was verified there was wrong and has been corrected.
+4. **`getScores` summary fields — CLEAR.** `average`, `highest_score`, `lowest_score` and
+   `total_count` are numbers for all 13 golfers. Caveat: every staging golfer has at least two
+   scores, so the zero-scores case is still unobserved.
+5. **Quoted floats — CLEAR.** No rating or differential arrives quoted anywhere in the probed
+   payloads. `handicap_index` does arrive as a string, but that field uses the `handicap` helper,
+   which takes strings by design.
+6. **Sandbox vs production — OPEN.** Only the UAT credentials are active in `.env`; production is
+   Spicy's and unreachable from here.
+7. **Downstream consumer — OPEN.** Owner's call; nothing in this repo can check Spicy's
+   `typeof x === 'number'` guards.
+8. **Emitted types — CLEAR.** The reviewer diffed `dist/index.d.ts` against a fresh `origin/main`
+   build: no output type changed.
+
+### Follow-up worth its own issue
+
+`/search_golfer.json` 404s on UAT for every golfer and parameter combination, so
+`handicaps.getOne` cannot succeed there. This is the same shape of finding as the dead
+`getPlayingHandicaps` in #62. It may still exist on production, so it is recorded rather than
+acted on.
