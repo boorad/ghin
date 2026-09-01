@@ -23,7 +23,7 @@ Two concrete consequences:
 
 - [x] Phase 1 — `handicap` preserves `null` and `''` as `null` (validation.ts + validation.test.ts)
 - [x] Phase 2 — `handicaps/response.ts:20` → `handicap.nullable()` with sibling-style comment + test
-- [ ] Phase 3 — add `strictFloat` / `strictNumber` and apply at audited response fields + tests
+- [x] Phase 3 — add `strictFloat` / `strictNumber` and apply at audited response fields + tests
 - [ ] Phase 4 — changeset (`minor`: new export + previously-`0` parses now reject)
 - [ ] Review findings applied
 - [ ] Manual verification (see below)
@@ -48,6 +48,16 @@ Two concrete consequences:
   coercing `number`.
 - `scores/response.ts` (`average`, `highest_score`, `lowest_score`) is left on coercing `float`/`number`
   — no salvage there, and `null` on an empty score history is plausible.
+- **Phase 3** — `strictFloat`/`strictNumber` are `z.preprocess(null | '' → undefined, float | number)`,
+  so a null fails with the same `Expected number, received nan` issue a missing key already produces.
+  `strictNumber` is built on `number` (so `.int()` still applies) rather than on `strictFloat`.
+- `schemaScore` (`scores/score.ts`) switched even though `schemaScoresResponse` wraps it in a plain
+  `z.array`, not `partitionRows` — one null differential now rejects the whole `getScores` response.
+  Documented in the schema comment; no captured payload carries a null there, and the right follow-up
+  if one appears is `partitionRows` in `scores/response.ts`, not a nullable rating.
+- Score-post `id`/`golfer_id`/`adjusted_gross_score`/`differential` switched to strict against the
+  `post-response.ts` leniency paragraph, argued in the comment: a fabricated `0` score for golfer `0`
+  is worse than the rejected parse, since it is wrong rather than lost.
 
 ## Manual verification
 

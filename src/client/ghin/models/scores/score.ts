@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { boolean, date, float, gender, monthDay, number, string } from '../../../../models'
+import { boolean, date, float, gender, monthDay, number, strictFloat, string } from '../../../../models'
 import { schemaScoringAdjustment } from './adjustment'
 import { schemaHoleDetail } from './hole-detail'
 import { schemaStatistics } from './statistics'
@@ -48,6 +48,12 @@ const schemaScoreStatusWithTransform = schemaRawScoreStatus.transform(
   (value) => scoreStatusesMap[value as keyof typeof scoreStatusesMap],
 )
 
+// The rating, slope and both differentials are `strictFloat` (#63): plain `float`
+// coerced an explicit `null` to a fabricated 0 that a consumer would compute on.
+// Blast radius is the whole `getScores` response — `schemaScoresResponse` wraps
+// this in a plain `z.array`, not `partitionRows`, so one null score rejects the
+// lot. No captured payload carries a null there; if one turns up, the fix is
+// `partitionRows` in `scores/response.ts`, not a nullable rating.
 const schemaScore = z.object({
   adjusted_gross_score: number,
   adjustments: z.array(schemaScoringAdjustment),
@@ -56,8 +62,8 @@ const schemaScore = z.object({
   back9_slope_rating: float.nullable(),
   course_id: z.union([string, number]).nullable().optional(),
   course_name: string.nullable().optional(),
-  course_rating: float,
-  differential: float,
+  course_rating: strictFloat,
+  differential: strictFloat,
   edited: boolean,
   exceptional: boolean,
   facility_name: string.nullable().optional(),
@@ -89,10 +95,10 @@ const schemaScore = z.object({
   score_type: schemaScoreTypeWithTransform,
   season_end_date_at: monthDay,
   season_start_date_at: monthDay,
-  slope_rating: float,
+  slope_rating: strictFloat,
   statistics: schemaStatistics.nullable().optional(),
   status: schemaScoreStatusWithTransform,
-  unadjusted_differential: float,
+  unadjusted_differential: strictFloat,
   used: boolean,
 })
 

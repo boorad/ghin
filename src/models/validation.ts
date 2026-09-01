@@ -151,6 +151,15 @@ export const handicap = z
   })
 
 export const number = float.int()
+
+// ponytail: `float` is `z.coerce.number()` and `Number(null) === Number('') === 0`, so a required
+// `float` accepts an explicit null as a fabricated 0 that passes a `typeof x === 'number'` guard
+// (issue #63). `strictFloat` / `strictNumber` reject null and '' outright — they fail the same way
+// a missing key does, not as 0 — while still coercing genuine numeric strings, for fields a
+// consumer computes on. They are `ZodEffects`, so use `float` / `number` where a ZodNumber method
+// (`.int` / `.min` / `.max` / `.positive`) is needed, or where a null is salvageable.
+export const strictFloat = z.preprocess((value) => (value === null || value === '' ? undefined : value), float)
+export const strictNumber = z.preprocess((value) => (value === null || value === '' ? undefined : value), number)
 export const string = emptyString.min(1)
 export const teeSetSide = z.enum(['All18', 'F9', 'B9'])
 

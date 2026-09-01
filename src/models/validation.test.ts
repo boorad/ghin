@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { boolean, date, float, handicap, monthDay, number, shortDate, string } from './validation'
+import {
+  boolean,
+  date,
+  float,
+  handicap,
+  monthDay,
+  number,
+  shortDate,
+  strictFloat,
+  strictNumber,
+  string,
+} from './validation'
 
 describe('Validation', () => {
   describe('string', () => {
@@ -45,11 +56,56 @@ describe('Validation', () => {
       expect(float.safeParse('abc').success).toBe(false)
     })
 
-    // Known issue #63 hazard, documented rather than fixed here: `z.coerce.number()`
-    // coerces before the type check, so an explicit `null` becomes a fabricated `0`.
-    // A `strictFloat` helper in a later phase is the fix for required fields.
+    // Known issue #63 hazard, kept on purpose: `z.coerce.number()` coerces before
+    // the type check, so an explicit `null` becomes a fabricated `0`. `strictFloat`
+    // is the fix for required fields; `float` stays coercing for the call sites
+    // that chain ZodNumber methods on it or can salvage a null.
     it('coerces null to 0 (issue #63 hazard)', () => {
       expect(float.parse(null)).toBe(0)
+    })
+  })
+
+  describe('strictFloat', () => {
+    // The #63 fix: null and '' must read as "missing", never as 0.
+    it('should reject null, empty string and undefined', () => {
+      expect(strictFloat.safeParse(null).success).toBe(false)
+      expect(strictFloat.safeParse('').success).toBe(false)
+      expect(strictFloat.safeParse(undefined).success).toBe(false)
+    })
+
+    it('should still coerce numeric strings', () => {
+      expect(strictFloat.parse('73.2')).toBe(73.2)
+      expect(strictFloat.parse('0')).toBe(0)
+    })
+
+    it('should pass real numbers through', () => {
+      expect(strictFloat.parse(73.2)).toBe(73.2)
+      expect(strictFloat.parse(0)).toBe(0)
+    })
+
+    it('should reject non-numeric strings', () => {
+      expect(strictFloat.safeParse('abc').success).toBe(false)
+    })
+  })
+
+  describe('strictNumber', () => {
+    it('should reject null, empty string and undefined', () => {
+      expect(strictNumber.safeParse(null).success).toBe(false)
+      expect(strictNumber.safeParse('').success).toBe(false)
+      expect(strictNumber.safeParse(undefined).success).toBe(false)
+    })
+
+    it('should still coerce integer strings', () => {
+      expect(strictNumber.parse('123')).toBe(123)
+    })
+
+    it('should pass real integers through', () => {
+      expect(strictNumber.parse(123)).toBe(123)
+    })
+
+    it('should reject a non-integer', () => {
+      expect(strictNumber.safeParse(1.5).success).toBe(false)
+      expect(strictNumber.safeParse('1.5').success).toBe(false)
     })
   })
 

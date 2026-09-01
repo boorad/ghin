@@ -271,5 +271,35 @@ describe('schemaScorePostResponse', () => {
 
       expect(schemaInner.safeParse(rest).success).toBe(false)
     })
+
+    // Issue #63: `number` is `z.coerce.number()` and `Number(null) === 0`, so an
+    // explicit null on these four used to parse as score 0 for golfer 0 with a 0
+    // differential. They are the one place this schema rejects rather than bends.
+    it.each(['id', 'golfer_id', 'adjusted_gross_score', 'differential'] as const)(
+      'rejects an explicit null %s rather than fabricating 0',
+      (field) => {
+        const result = schemaInner.safeParse({ ...baseResponse, [field]: null })
+
+        expect(result.success).toBe(false)
+      },
+    )
+
+    it('does not turn a null differential into 0', () => {
+      const result = schemaInner.safeParse({ ...baseResponse, differential: null })
+
+      expect(result.success).toBe(false)
+      if (result.success) {
+        expect(result.data.differential).not.toBe(0)
+      }
+    })
+
+    it('still coerces a quoted id', () => {
+      const result = schemaInner.safeParse({ ...baseResponse, id: '987654321' })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.id).toBe(987654321)
+      }
+    })
   })
 })

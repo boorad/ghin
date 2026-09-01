@@ -89,6 +89,12 @@ describe('schemaScore', () => {
     expect(parsed.facility_name).toBeNull()
   })
 
+  // Issue #63: plain `float` coerced an explicit null differential to 0, a number
+  // a consumer would then compute on as if it were real.
+  it('rejects an explicit null differential rather than coercing it to 0', () => {
+    expect(schemaScore.safeParse({ ...baseScore, differential: null }).success).toBe(false)
+  })
+
   it.each([
     ['A', 'AWAY'],
     ['C', 'COMPETITION'],

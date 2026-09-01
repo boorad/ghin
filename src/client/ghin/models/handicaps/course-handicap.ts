@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { boolean, float, gender, handicap, number, partitionRows, string } from '../../../../models'
+import { boolean, gender, handicap, number, partitionRows, strictFloat, string } from '../../../../models'
 import { schemaTeeSetSide } from './request'
 
 // `tee_set_side` must be `'All 18'` with a space. The shared `teeSetSide`
@@ -46,19 +46,18 @@ const schemaCourseHandicapHole = z
 type CourseHandicapHole = z.infer<typeof schemaCourseHandicapHole>
 
 // `course_handicap` is `null` for a golfer with no established index, alongside
-// `course_handicap_display: 'NH'`. `handicap` must be wrapped in `.nullable()`:
-// bare, its inner union tries `float` (`z.coerce.number()`) first and
-// `Number(null) === 0`, which would hand back a fabricated scratch Course
-// Handicap for a golfer who has none — a wrong number, not a missing one.
+// `course_handicap_display: 'NH'`. Before #63 a bare `handicap` tried `float`
+// (`z.coerce.number()`) first and `Number(null) === 0`, which handed back a
+// fabricated scratch Course Handicap for a golfer who has none — a wrong number,
+// not a missing one. `handicap` now maps null to null at the source; the
+// `.nullable()` wrapper is kept so the intent is explicit at the field.
 //
-// Course Rating and Slope Rating stay required `float`, matching
-// `schemaCourseDetailsTeeSetRatings`. Be clear about what that does and does not
-// buy: required-ness rejects a *missing* key, but `float` is `z.coerce.number()`
-// and `Number(null) === 0`, so an explicit `null` still parses to a fabricated
-// scratch rating that passes a `typeof x === 'number'` guard. That is the
-// repo-wide hazard tracked in #63, deliberately not solved here — solving it
-// locally would leave this one schema disagreeing with every other required
-// numeric in the codebase.
+// Course Rating and Slope Rating are required `strictFloat`, matching
+// `schemaCourseDetailsTeeSetRatings`. Required-ness alone only rejected a
+// *missing* key: `float` is `z.coerce.number()` and `Number(null) === 0`, so an
+// explicit `null` parsed to a fabricated scratch rating that passed a
+// `typeof x === 'number'` guard (#63). `strictFloat` rejects the null too; the
+// row sits behind `partitionRows`, so it costs one tee set and fires `onDegraded`.
 //
 // `tee_set_side` is a plain string rather than `schemaTeeSetSide` — the enum is
 // right for the request, but pinning it on the response would drop an entire tee
@@ -66,8 +65,8 @@ type CourseHandicapHole = z.infer<typeof schemaCourseHandicapHole>
 const schemaCourseHandicapRating = z
   .object({
     tee_set_side: string,
-    course_rating: float,
-    slope_rating: float,
+    course_rating: strictFloat,
+    slope_rating: strictFloat,
     par: number.nullish(),
     course_handicap: handicap.nullable(),
     course_handicap_display: string.nullish(),

@@ -59,6 +59,30 @@ describe('Course Handicap Schemas', () => {
       }
     })
 
+    // Issue #63: `float` is `z.coerce.number()` and `Number(null) === 0`, so a
+    // null course_rating used to parse as a scratch rating and feed the Course
+    // Handicap formula a fabricated 0. It now costs that tee set, not the others.
+    it('should reject a tee set whose course_rating is null instead of coercing it to 0', () => {
+      const [first, second] = courseHandicapsGetFixture.tee_sets
+      const nullRated = {
+        ...second,
+        ratings: second?.ratings.map((rating) => ({ ...rating, course_rating: null })),
+      }
+      const result = schemaCourseHandicapsGetResponse.safeParse({ tee_sets: [first, nullRated] })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.tee_sets.map((teeSet) => teeSet.tee_set_id)).toEqual([first?.tee_set_id])
+        expect(result.data.invalid).toHaveLength(1)
+        expect(result.data.invalid[0]).toBe(nullRated)
+        for (const teeSet of result.data.tee_sets) {
+          for (const rating of teeSet.ratings) {
+            expect(rating.course_rating).not.toBe(0)
+          }
+        }
+      }
+    })
+
     it('should report an empty invalid list when every tee set parses', () => {
       const result = schemaCourseHandicapsGetResponse.safeParse(courseHandicapsGetFixture)
 
