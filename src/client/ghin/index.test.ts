@@ -498,19 +498,35 @@ describe('GhinClient', () => {
   })
 
   describe('handicaps.getOne', () => {
-    it('should fetch and return golfer handicap', async () => {
+    // #68: this used to hit `/search_golfer.json`, which 404s on UAT for every
+    // golfer. It is now backed by `/golfers/search.json`, so the assertion that
+    // matters is which entity the request client is asked for.
+    it('should fetch the golfer record from golfers/search and return it', async () => {
       const mockResponse = {
-        golfer: {
-          ghin: 1234567,
-          handicap_index: 12.5,
-        },
+        golfers: [
+          {
+            ghin: 1234567,
+            last_name: 'Doe',
+            handicap_index: '12.5',
+            hi_display: '12.5',
+            status: 'Active',
+          },
+        ],
+        invalid: [],
       }
       mockFetch.mockResolvedValue(ok(mockResponse))
 
       const result = await ghinClient.handicaps.getOne(1234567)
 
-      expect(result).toEqual(mockResponse.golfer)
-      expect(mockFetch).toHaveBeenCalled()
+      expect(result).toEqual(mockResponse.golfers[0])
+      expect(result?.handicap_index).toBe('12.5')
+      expect(mockFetch).toHaveBeenCalledWith(expect.objectContaining({ entity: 'golfers_search' }))
+    })
+
+    it('should return undefined when no golfer matches', async () => {
+      mockFetch.mockResolvedValue(ok({ golfers: [], invalid: [] }))
+
+      await expect(ghinClient.handicaps.getOne(1234567)).resolves.toBeUndefined()
     })
 
     it('should throw validation error with invalid ghin', async () => {

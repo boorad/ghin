@@ -26,7 +26,6 @@ import {
   type GpaRequestAccessRequest,
   type GpaSuccessResponse,
   type GpaUpdateStatusRequest,
-  type HandicapResponse,
   type IterateUndeliveredRequest,
   type ScorePost18h9and9Request,
   type ScorePostAdjustedRequest,
@@ -59,7 +58,6 @@ import {
   schemaFacilitySearchRequest,
   schemaFacilitySearchResponse,
   schemaGolferCourseHandicapRequest,
-  schemaGolferHandicapResponse,
   schemaGolfersGlobalSearchRequest,
   schemaGolfersSearchRequest,
   schemaGolfersSearchResponse,
@@ -124,7 +122,7 @@ export class GhinClient {
   }
 
   handicaps: {
-    getOne: (ghinNumber: number) => Promise<HandicapResponse['golfer']>
+    getOne: (ghinNumber: number) => Promise<GolfersSearchResponse['golfers'][number] | undefined>
     getCoursePlayerHandicaps: (requests: GolferCourseHandicapRequest[]) => Promise<CoursePlayerHandicapsResponse>
     getCourseHandicaps: (request: CourseHandicapGetRequest) => Promise<CourseHandicapsGetResponse>
   }
@@ -549,36 +547,20 @@ export class GhinClient {
 
   // ── Handicaps ────────────────────────────────────────────────────────
 
-  private async handicapsGetOne(ghin: number): Promise<HandicapResponse['golfer']> {
-    try {
-      const ghinNumber = number.parse(ghin)
-
-      const searchParams = new URLSearchParams([
-        ['source', CLIENT_SOURCE],
-        ['ghin', ghinNumber.toString()],
-      ])
-
-      const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
-        searchParams,
-      }
-
-      const result = await this.httpClient.fetch<HandicapResponse>({
-        entity: 'golfer',
-        options,
-        schema: schemaGolferHandicapResponse,
-      })
-
-      if (result.isErr()) {
-        throw result.error
-      }
-
-      return result.value.golfer
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        throw new ValidationError(`Invalid GHIN number: ${error.message}`)
-      }
-      throw error instanceof Error ? error : new Error(String(error))
-    }
+  // Backed by `GET /golfers/search.json`, not the `/search_golfer.json` this used
+  // to call: that path 404s on every staging golfer and every parameter variant
+  // (#68), so this method has never returned a value. `/golfers/search.json` is
+  // where the handicap index actually lives — `handicap_index`, `hi_display`,
+  // `low_hi*`, `hard_cap` and `soft_cap` are all on the golfer record.
+  //
+  // It therefore returns the whole golfer record, exactly as `golfers.getOne`
+  // does, rather than a hand-picked "handicap fields only" projection. A
+  // projection would be a key list to maintain against an API that adds fields
+  // without warning, and `schemaGolfer` is `.passthrough()` (#70) — narrowing
+  // here would silently drop the very keys that passthrough exists to preserve.
+  // The endpoint has no `clubs`, so the old response's `clubs` array is gone.
+  private async handicapsGetOne(ghinNumber: number): Promise<GolfersSearchResponse['golfers'][number] | undefined> {
+    return this.golfersGetOne(ghinNumber)
   }
 
   // The single entry point for `POST /playing_handicaps.json`; the duplicate

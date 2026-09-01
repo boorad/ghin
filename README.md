@@ -63,10 +63,12 @@ const ghin = new GhinClient({
 })
 
 // Get a golfer's handicap
-const ghinNumber = '1234567'
-const { handicap_index } = await ghin.handicaps.getOne(ghinNumber)
+const ghinNumber = 1234567
+const golfer = await ghin.handicaps.getOne(ghinNumber)
 
-console.log(`Golfer ${ghinNumber} has a handicap of ${handicap_index}`)
+// `undefined` when no golfer matches, and `handicap_index` is `null` for a
+// golfer with no established index (GHIN sends `"NH"` on the wire)
+console.log(`Golfer ${ghinNumber} has a handicap of ${golfer?.handicap_index}`)
 ```
 
 ## TODOs
