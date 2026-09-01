@@ -27,3 +27,7 @@ None asked — no throwaway structural fork.
   it risks breaking posting.
 - Changeset is `patch` (correctness fix, matches repo convention), with an
   explicit consumer-impact note that `'COMBINED'` is no longer emitted.
+- **Kept `patch` despite the breaking union change** (review flagged it as
+  arguably `minor`). Repo precedent for this 0.x package ships type-breaking
+  fixes as `patch` — e.g. `estimated-handicap-display` (#58/#61) made 11
+  required fields nullable under `patch`. Followed that convention.
