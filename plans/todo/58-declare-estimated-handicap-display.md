@@ -21,7 +21,7 @@ Observed values (real UAT posts, `api-uat.ghin.com`, 2026-08-28, golfer 13373248
 
 ## Live tracker
 
-- [ ] **Phase 1** — Declare `estimated_handicap_display` + model-level tests
+- [x] **Phase 1** — Declare `estimated_handicap_display` + model-level tests
       (new `src/client/ghin/models/scores/post-response.test.ts`)
 - [ ] **Phase 2** — Apply the leniency policy to the rest of
       `schemaScorePostResponseInner`
