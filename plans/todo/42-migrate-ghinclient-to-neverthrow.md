@@ -21,7 +21,7 @@ omits `iterateUndelivered`. Actual count: 27 `Promise` methods + 1 async generat
 - [x] Phase 1 — Foundation + `courses` + `facilities` (6 methods)
 - [x] Phase 2 — `golfers` + `handicaps` + `scores` (10 methods)
 - [x] Phase 3 — `gpa` + `webhooks` (11 methods + `iterateUndelivered`)
-- [ ] Phase 4 — README + changeset
+- [x] Phase 4 — README + changeset
 
 ## Decisions (answered by the user, 2026-09-01)
 
