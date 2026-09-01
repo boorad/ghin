@@ -86,7 +86,7 @@ describe('RequestClient', () => {
       } as unknown as ZodSchema
 
       const result = await requestClient.fetch({
-        entity: 'golfer',
+        entity: 'golfers_search',
         schema,
         options: {
           searchParams: new URLSearchParams([['ghin', '1234567']]),
@@ -136,7 +136,7 @@ describe('RequestClient', () => {
       } as unknown as ZodSchema
 
       const result = await requestClient.fetch({
-        entity: 'golfer',
+        entity: 'golfers_search',
         schema,
       })
 
@@ -181,7 +181,7 @@ describe('RequestClient', () => {
       const schema = { safeParse: vi.fn() } as unknown as ZodSchema
 
       const result = await requestClient.fetch({
-        entity: 'golfer',
+        entity: 'golfers_search',
         schema,
       })
 
@@ -229,7 +229,7 @@ describe('RequestClient', () => {
       } as unknown as ZodSchema
 
       const result = await requestClient.fetch({
-        entity: 'golfer',
+        entity: 'golfers_search',
         schema,
       })
 
@@ -286,7 +286,7 @@ describe('RequestClient', () => {
       const schema = { safeParse: vi.fn() } as unknown as ZodSchema
 
       const result = await requestClient.fetch({
-        entity: 'golfer',
+        entity: 'golfers_search',
         schema,
       })
 
@@ -350,7 +350,7 @@ describe('RequestClient', () => {
       } as unknown as ZodSchema
 
       const result = await requestClient.fetch({
-        entity: 'golfer',
+        entity: 'golfers_search',
         schema,
       })
 
@@ -408,7 +408,7 @@ describe('RequestClient', () => {
       } as unknown as ZodSchema
 
       const result = await requestClient.fetch({
-        entity: 'golfer',
+        entity: 'golfers_search',
         schema,
       })
 
@@ -475,8 +475,8 @@ describe('RequestClient', () => {
       } as unknown as ZodSchema
 
       const [resultA, resultB] = await Promise.all([
-        requestClient.fetch({ entity: 'golfer', schema }),
-        requestClient.fetch({ entity: 'golfer', schema }),
+        requestClient.fetch({ entity: 'golfers_search', schema }),
+        requestClient.fetch({ entity: 'golfers_search', schema }),
       ])
 
       expect(resultA.isOk()).toBe(true)
@@ -522,7 +522,7 @@ describe('RequestClient', () => {
       const schema = { safeParse: vi.fn() } as unknown as ZodSchema
 
       const result = await requestClient.fetch({
-        entity: 'golfer',
+        entity: 'golfers_search',
         schema,
       })
 
@@ -568,7 +568,7 @@ describe('RequestClient', () => {
       const schema = { safeParse: vi.fn() } as unknown as ZodSchema
 
       const result = await requestClient.fetch({
-        entity: 'golfer',
+        entity: 'golfers_search',
         schema,
       })
 
@@ -605,7 +605,7 @@ describe('RequestClient', () => {
       const schema = { safeParse: vi.fn() } as unknown as ZodSchema
 
       const result = await requestClient.fetch({
-        entity: 'golfer',
+        entity: 'golfers_search',
         schema,
       })
 
@@ -651,7 +651,7 @@ describe('RequestClient', () => {
       const schema = { safeParse: vi.fn() } as unknown as ZodSchema
 
       const result = await requestClient.fetch({
-        entity: 'golfer',
+        entity: 'golfers_search',
         schema,
       })
 
@@ -698,7 +698,7 @@ describe('RequestClient', () => {
       } as unknown as ZodSchema
 
       const result = await apiClient.fetch({
-        entity: 'golfer',
+        entity: 'golfers_search',
         schema,
       })
 
@@ -741,7 +741,7 @@ describe('RequestClient', () => {
       } as unknown as ZodSchema
 
       const result = await requestClient.fetch({
-        entity: 'golfer',
+        entity: 'golfers_search',
         schema,
       })
 

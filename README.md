@@ -62,11 +62,16 @@ const ghin = new GhinClient({
   username: process.env.GHIN_USERNAME,
 })
 
-// Get a golfer's handicap
-const ghinNumber = '1234567'
-const { handicap_index } = await ghin.handicaps.getOne(ghinNumber)
+// Get a golfer's handicap. Active golfers only: this searches with
+// `status: 'Active'` and cannot be opted out of, so an inactive or lapsed
+// member resolves `undefined` even though they have a readable index — use
+// `ghin.golfers.search({ golfer_id, status: 'Inactive' })` for those.
+const ghinNumber = 1234567
+const golfer = await ghin.handicaps.getOne(ghinNumber)
 
-console.log(`Golfer ${ghinNumber} has a handicap of ${handicap_index}`)
+// `undefined` when no active golfer matches, and `handicap_index` is `null`
+// for a golfer with no established index (GHIN sends `"NH"` on the wire)
+console.log(`Golfer ${ghinNumber} has a handicap of ${golfer?.handicap_index}`)
 ```
 
 ## TODOs

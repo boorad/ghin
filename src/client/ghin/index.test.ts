@@ -197,19 +197,25 @@ describe('GhinClient', () => {
 
   describe('courses.getTeeSetRatingsForScorePosting', () => {
     it('should fetch and return tee set ratings for score posting', async () => {
+      // What the schema hands back: GHIN sends a bare array of PascalCase rows
+      // (see `models/course/__fixtures__`), and the response schema partitions it
+      // into `tee_set_ratings` / `invalid`.
       const mockResponse = {
         tee_set_ratings: [
           {
-            tee_set_id: 262908,
-            tee_name: "Men's Black",
-            gender: 'Male',
-            course_rating: 72.5,
-            slope_rating: 130,
-            par: 72,
-            holes_number: 18,
-            tee_set_side: 'All18',
+            TeeSetRatingId: 605066,
+            TeeSetStatus: 'Active',
+            DisplayName: 'Red',
+            Gender: 'Male',
+            TeeSetRatingName: 'Red',
+            RatingType: 'Total',
+            CourseRating: 67.3,
+            SlopeRating: 124,
+            BogeyRating: 90.3,
+            TotalPar: 71,
           },
         ],
+        invalid: [],
       }
       mockFetchCustomPath.mockResolvedValue(ok(mockResponse))
 
@@ -223,6 +229,51 @@ describe('GhinClient', () => {
         }),
         schema: expect.anything(),
       })
+    })
+
+    // A course that quietly returns 44 of its 45 rating rows is indistinguishable
+    // from a course with 44 — exactly how the #73-class payload change hides.
+    it('should report dropped rows through onDegraded', async () => {
+      const onDegraded = vi.fn()
+      const client = new GhinClient({ password: 'p', username: 'u', onDegraded })
+      const rejected = { TeeSetRatingId: 605067, CourseRating: null }
+      mockFetchCustomPath.mockResolvedValue(
+        ok({ tee_set_ratings: [{ TeeSetRatingId: 605066, RatingType: 'Total' }], invalid: [rejected] }),
+      )
+
+      await client.courses.getTeeSetRatingsForScorePosting({ course_id: 7817 })
+
+      expect(onDegraded).toHaveBeenCalledWith({
+        entity: 'tee_set_ratings_for_score_posting',
+        dropped: 1,
+        total: 2,
+        sample: [rejected],
+      })
+    })
+
+    it('should not call onDegraded when nothing was dropped', async () => {
+      const onDegraded = vi.fn()
+      const client = new GhinClient({ password: 'p', username: 'u', onDegraded })
+      mockFetchCustomPath.mockResolvedValue(ok({ tee_set_ratings: [{ TeeSetRatingId: 605066 }], invalid: [] }))
+
+      await client.courses.getTeeSetRatingsForScorePosting({ course_id: 7817 })
+
+      expect(onDegraded).not.toHaveBeenCalled()
+    })
+
+    it('should survive an onDegraded callback that throws', async () => {
+      const client = new GhinClient({
+        password: 'p',
+        username: 'u',
+        onDegraded: () => {
+          throw new Error('reporter exploded')
+        },
+      })
+      mockFetchCustomPath.mockResolvedValue(
+        ok({ tee_set_ratings: [{ TeeSetRatingId: 605066 }], invalid: [{ bad: true }] }),
+      )
+
+      await expect(client.courses.getTeeSetRatingsForScorePosting({ course_id: 7817 })).resolves.toBeDefined()
     })
 
     it('should throw error when fetch fails', async () => {
@@ -447,19 +498,39 @@ describe('GhinClient', () => {
   })
 
   describe('handicaps.getOne', () => {
-    it('should fetch and return golfer handicap', async () => {
+    // #68: this used to hit `/search_golfer.json`, which 404s on UAT for every
+    // golfer. It is now backed by `/golfers/search.json`, so the assertion that
+    // matters is which entity the request client is asked for.
+    it('should fetch the golfer record from golfers/search and return it', async () => {
+      // `mockFetch` stands in for the request client, so it returns already-*parsed* data and
+      // `schemaGolfer` never runs here. `handicap_index` is therefore the number the schema
+      // emits (`handicap.nullish()`), not the `"12.5"` string GHIN puts on the wire — the
+      // display twin `hi_display` is the string.
       const mockResponse = {
-        golfer: {
-          ghin: 1234567,
-          handicap_index: 12.5,
-        },
+        golfers: [
+          {
+            ghin: 1234567,
+            last_name: 'Doe',
+            handicap_index: 12.5,
+            hi_display: '12.5',
+            status: 'Active',
+          },
+        ],
+        invalid: [],
       }
       mockFetch.mockResolvedValue(ok(mockResponse))
 
       const result = await ghinClient.handicaps.getOne(1234567)
 
-      expect(result).toEqual(mockResponse.golfer)
-      expect(mockFetch).toHaveBeenCalled()
+      expect(result).toEqual(mockResponse.golfers[0])
+      expect(result?.handicap_index).toBe(12.5)
+      expect(mockFetch).toHaveBeenCalledWith(expect.objectContaining({ entity: 'golfers_search' }))
+    })
+
+    it('should return undefined when no golfer matches', async () => {
+      mockFetch.mockResolvedValue(ok({ golfers: [], invalid: [] }))
+
+      await expect(ghinClient.handicaps.getOne(1234567)).resolves.toBeUndefined()
     })
 
     it('should throw validation error with invalid ghin', async () => {

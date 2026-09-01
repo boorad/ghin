@@ -15,11 +15,11 @@
  */
 import {
   schemaHoleDetail,
+  schemaScore,
   schemaScoresResponse,
   schemaScoringAdjustment,
   schemaStatistics,
 } from '../client/ghin/models/scores'
-import { schemaScore } from '../client/ghin/models/scores/score'
 import { GhinClient } from '../index'
 
 declare global {
