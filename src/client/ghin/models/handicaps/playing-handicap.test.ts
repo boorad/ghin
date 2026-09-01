@@ -49,9 +49,28 @@ describe('Playing Handicap Schemas', () => {
       expect(schemaPlayingHandicapEntry.safeParse({ ...entry, handicap_index: 'not a handicap' }).success).toBe(false)
     })
 
-    // `float`/`number` were `z.coerce.number()` underneath and `Number(null) === 0`,
-    // so a golfer with no handicap used to parse as a scratch handicap.
-    it('should keep null playing_handicap and course_handicap null instead of coercing them to scratch', () => {
+    it('should parse plain numeric or numeric-string playing_handicap and course_handicap', () => {
+      expect(
+        schemaPlayingHandicapEntry.safeParse({ golfer_id: 1, playing_handicap: 15, course_handicap: 14 }),
+      ).toMatchObject({
+        success: true,
+        data: { playing_handicap: 15, course_handicap: 14 },
+      })
+      expect(
+        schemaPlayingHandicapEntry.safeParse({ golfer_id: 1, playing_handicap: '15', course_handicap: '14.2' }),
+      ).toMatchObject({
+        success: true,
+        data: { playing_handicap: 15, course_handicap: 14.2 },
+      })
+    })
+
+    // Documents today's behaviour, not desired behaviour. `number`/`float` are
+    // `z.coerce.number()` underneath and `Number(null) === 0`, so an explicit
+    // null becomes a *fabricated* scratch handicap for a golfer who has none.
+    // Issue #63 owns the repo-wide decision here — it proposes rejecting null so
+    // it fails loudly — and this test is the landing spot that flips when #63
+    // lands.
+    it('should coerce null playing_handicap and course_handicap to 0 (#63 null-coercion hazard)', () => {
       const result = schemaPlayingHandicapEntry.safeParse({
         golfer_id: 1,
         playing_handicap: null,
@@ -60,22 +79,8 @@ describe('Playing Handicap Schemas', () => {
 
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.playing_handicap).toBeNull()
-        expect(result.data.course_handicap).toBeNull()
-      }
-    })
-
-    it('should parse suffixed playing_handicap and course_handicap values', () => {
-      const result = schemaPlayingHandicapEntry.safeParse({
-        golfer_id: 1,
-        playing_handicap: '15.0M',
-        course_handicap: '14.2M',
-      })
-
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data.playing_handicap).toBe(15)
-        expect(result.data.course_handicap).toBe(14.2)
+        expect(result.data.playing_handicap).toBe(0)
+        expect(result.data.course_handicap).toBe(0)
       }
     })
 

@@ -33,7 +33,7 @@ deliberately left as-is — see Decision 2.
 ## Live tracker
 
 - [x] Phase 1 — Leniency: `handicap` on `handicap_index`, `course_handicap`, `playing_handicap` in both schemas; co-located model tests
-- [ ] Phase 1b — Revert the sibling fields to `float`/`number` per Decision 2's reversal; document `null` → `0` for #63
+- [x] Phase 1b — Revert the sibling fields to `float`/`number` per Decision 2's reversal; document `null` → `0` for #63
 - [ ] Phase 2 — Partitioning: `partitionRows` on both list responses, `reportDegradation` wired at both client call sites, tests
 
 ## Decisions

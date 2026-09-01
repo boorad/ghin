@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { gender, handicap, number, string, teeSetSide } from '../../../../models'
+import { float, gender, handicap, number, string, teeSetSide } from '../../../../models'
 
 const schemaCourseHandicapGetRequest = z.object({
   golfer_id: number,
@@ -12,18 +12,18 @@ const schemaCourseHandicapGetRequest = z.object({
 
 type CourseHandicapGetRequest = z.infer<typeof schemaCourseHandicapGetRequest>
 
-// Every numeric handicap here goes through the `handicap` helper. A WHS status
-// suffix is a real value, not malformed data: GHIN returned `"19.1M"` in
-// production and `float` (`z.coerce.number()`) turned it into NaN, which dropped
-// the golfer from `golfers.search` (#56). This response is a plain array, so the
-// same suffix here fails the whole batch — a foursome with one `M`/`WD` player
-// returns nothing for anyone. `course_handicap` stays required but is now
-// `.nullable()`: `float` coerced an explicit `null` to `0`, silently reporting a
-// scratch handicap for a golfer who has none.
+// `handicap_index` goes through the `handicap` helper. A WHS status suffix is a
+// real value, not malformed data: GHIN returned `"19.1M"` in production and
+// `float` (`z.coerce.number()`) turned it into NaN, which dropped the golfer
+// from `golfers.search` (#56). This response is a plain array, so the same
+// suffix here fails the whole batch — a foursome with one `M`/`WD` player
+// returns nothing for anyone. `course_handicap` deliberately stays `float`: it
+// carries the `z.coerce.number()` `null` -> `0` hazard, which is #63's
+// repo-wide call to make, not this issue's.
 const schemaCourseHandicapEntry = z
   .object({
     golfer_id: number,
-    course_handicap: handicap.nullable(),
+    course_handicap: float,
     handicap_index: handicap.nullish(),
   })
   .passthrough()

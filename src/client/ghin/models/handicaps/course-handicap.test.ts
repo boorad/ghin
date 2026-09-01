@@ -49,23 +49,28 @@ describe('Course Handicap Schemas', () => {
       expect(schemaCourseHandicapEntry.safeParse({ ...entry, handicap_index: 'not a handicap' }).success).toBe(false)
     })
 
-    // `float` was `z.coerce.number()` and `Number(null) === 0`, so a golfer with
-    // no course handicap used to parse as a scratch handicap.
-    it('should keep a null course_handicap null instead of coercing it to scratch', () => {
+    it('should parse a plain numeric or numeric-string course_handicap', () => {
+      expect(schemaCourseHandicapEntry.safeParse({ golfer_id: 1, course_handicap: 14 })).toMatchObject({
+        success: true,
+        data: { course_handicap: 14 },
+      })
+      expect(schemaCourseHandicapEntry.safeParse({ golfer_id: 1, course_handicap: '14.2' })).toMatchObject({
+        success: true,
+        data: { course_handicap: 14.2 },
+      })
+    })
+
+    // Documents today's behaviour, not desired behaviour. `float` is
+    // `z.coerce.number()` and `Number(null) === 0`, so an explicit null becomes
+    // a *fabricated* scratch handicap for a golfer who has none. Issue #63 owns
+    // the repo-wide decision here — it proposes rejecting null so it fails
+    // loudly — and this test is the landing spot that flips when #63 lands.
+    it('should coerce a null course_handicap to 0 (#63 null-coercion hazard)', () => {
       const result = schemaCourseHandicapEntry.safeParse({ golfer_id: 1, course_handicap: null })
 
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.course_handicap).toBeNull()
-      }
-    })
-
-    it('should parse a suffixed course_handicap', () => {
-      const result = schemaCourseHandicapEntry.safeParse({ golfer_id: 1, course_handicap: '14.2M' })
-
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data.course_handicap).toBe(14.2)
+        expect(result.data.course_handicap).toBe(0)
       }
     })
 
