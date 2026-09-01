@@ -502,6 +502,7 @@ describe('GhinClient', () => {
     it('should fetch and return course handicaps', async () => {
       const mockResponse = {
         course_handicaps: [{ golfer_id: 123, course_handicap: 15.2 }],
+        invalid: [],
       }
       mockFetch.mockResolvedValue(ok(mockResponse))
 
@@ -522,6 +523,51 @@ describe('GhinClient', () => {
         }),
         schema: expect.anything(),
       })
+    })
+
+    // Degradation must never be silent: a foursome that quietly comes back with
+    // 3 of 4 handicaps is indistinguishable from a threesome, which is exactly
+    // how a GHIN payload change hides until a user reports it.
+    it('should report dropped rows through onDegraded', async () => {
+      const onDegraded = vi.fn()
+      const client = new GhinClient({ password: 'p', username: 'u', onDegraded })
+      const rejected = { course_handicap: 14 }
+      mockFetch.mockResolvedValue(
+        ok({ course_handicaps: [{ golfer_id: 123, course_handicap: 15.2 }], invalid: [rejected] }),
+      )
+
+      await client.handicaps.getCourseHandicaps({
+        golfer_id: 123,
+        course_id: 2539,
+        tee_set_id: 262908,
+        tee_set_side: 'All18',
+        played_at: '2026-03-17',
+        gender: 'M',
+      })
+
+      expect(onDegraded).toHaveBeenCalledWith({
+        entity: 'course_handicaps_get',
+        dropped: 1,
+        total: 2,
+        sample: [rejected],
+      })
+    })
+
+    it('should not call onDegraded when nothing was dropped', async () => {
+      const onDegraded = vi.fn()
+      const client = new GhinClient({ password: 'p', username: 'u', onDegraded })
+      mockFetch.mockResolvedValue(ok({ course_handicaps: [{ golfer_id: 123, course_handicap: 15.2 }], invalid: [] }))
+
+      await client.handicaps.getCourseHandicaps({
+        golfer_id: 123,
+        course_id: 2539,
+        tee_set_id: 262908,
+        tee_set_side: 'All18',
+        played_at: '2026-03-17',
+        gender: 'M',
+      })
+
+      expect(onDegraded).not.toHaveBeenCalled()
     })
 
     it('should throw error when fetch fails', async () => {
@@ -573,6 +619,7 @@ describe('GhinClient', () => {
     it('should fetch and return playing handicaps', async () => {
       const mockResponse = {
         playing_handicaps: [{ golfer_id: 123, playing_handicap: 14, course_handicap: 15.2 }],
+        invalid: [],
       }
       mockFetch.mockResolvedValue(ok(mockResponse))
 
@@ -594,6 +641,56 @@ describe('GhinClient', () => {
         }),
         schema: expect.anything(),
       })
+    })
+
+    // Degradation must never be silent: a foursome that quietly comes back with
+    // 3 of 4 handicaps is indistinguishable from a threesome, which is exactly
+    // how a GHIN payload change hides until a user reports it.
+    it('should report dropped rows through onDegraded', async () => {
+      const onDegraded = vi.fn()
+      const client = new GhinClient({ password: 'p', username: 'u', onDegraded })
+      const rejected = { playing_handicap: 14, course_handicap: 15.2 }
+      mockFetch.mockResolvedValue(
+        ok({
+          playing_handicaps: [{ golfer_id: 123, playing_handicap: 14, course_handicap: 15.2 }],
+          invalid: [rejected],
+        }),
+      )
+
+      await client.handicaps.getPlayingHandicaps({
+        golfer_id: 123,
+        course_id: 2539,
+        tee_set_id: 262908,
+        tee_set_side: 'All18',
+        played_at: '2026-03-17',
+        gender: 'M',
+      })
+
+      expect(onDegraded).toHaveBeenCalledWith({
+        entity: 'playing_handicaps_post',
+        dropped: 1,
+        total: 2,
+        sample: [rejected],
+      })
+    })
+
+    it('should not call onDegraded when nothing was dropped', async () => {
+      const onDegraded = vi.fn()
+      const client = new GhinClient({ password: 'p', username: 'u', onDegraded })
+      mockFetch.mockResolvedValue(
+        ok({ playing_handicaps: [{ golfer_id: 123, playing_handicap: 14, course_handicap: 15.2 }], invalid: [] }),
+      )
+
+      await client.handicaps.getPlayingHandicaps({
+        golfer_id: 123,
+        course_id: 2539,
+        tee_set_id: 262908,
+        tee_set_side: 'All18',
+        played_at: '2026-03-17',
+        gender: 'M',
+      })
+
+      expect(onDegraded).not.toHaveBeenCalled()
     })
 
     it('should throw error when fetch fails', async () => {

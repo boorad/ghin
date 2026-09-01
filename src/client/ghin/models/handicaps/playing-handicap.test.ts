@@ -118,6 +118,40 @@ describe('Playing Handicap Schemas', () => {
       if (result.success) {
         expect(result.data.playing_handicaps).toHaveLength(3)
         expect(result.data.playing_handicaps[1]?.handicap_index).toBe(19.1)
+        // A suffixed index is a valid value now, not a degraded row.
+        expect(result.data.invalid).toEqual([])
+      }
+    })
+
+    // Rejects come back untouched rather than as Zod issues so callers can log
+    // exactly what GHIN sent — that log is the early warning that GHIN changed
+    // a payload again.
+    it('should keep the good entries and return the bad ones raw in invalid', () => {
+      const rejected = { playing_handicap: 15, course_handicap: 14 }
+      const result = schemaPlayingHandicapsResponse.safeParse({
+        playing_handicaps: [
+          { golfer_id: 1, playing_handicap: 13, course_handicap: 12 },
+          rejected,
+          { golfer_id: 3, playing_handicap: 17, course_handicap: 16 },
+        ],
+      })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.playing_handicaps.map((row) => row.golfer_id)).toEqual([1, 3])
+        expect(result.data.invalid).toEqual([rejected])
+      }
+    })
+
+    it('should report an empty invalid list when every entry parses', () => {
+      const result = schemaPlayingHandicapsResponse.safeParse({
+        playing_handicaps: [{ golfer_id: 1, playing_handicap: 13, course_handicap: 12 }],
+      })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.playing_handicaps).toHaveLength(1)
+        expect(result.data.invalid).toEqual([])
       }
     })
   })

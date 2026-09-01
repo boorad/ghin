@@ -647,6 +647,13 @@ export class GhinClient {
         throw result.error
       }
 
+      reportDegradation(
+        this.onDegraded,
+        'course_handicaps_get',
+        result.value.invalid,
+        result.value.course_handicaps.length + result.value.invalid.length,
+      )
+
       return result.value
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -674,6 +681,13 @@ export class GhinClient {
       if (result.isErr()) {
         throw result.error
       }
+
+      reportDegradation(
+        this.onDegraded,
+        'playing_handicaps_post',
+        result.value.invalid,
+        result.value.playing_handicaps.length + result.value.invalid.length,
+      )
 
       return result.value
     } catch (error) {

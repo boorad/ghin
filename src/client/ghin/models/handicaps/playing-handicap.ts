@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { float, gender, handicap, number, string, teeSetSide } from '../../../../models'
+import { float, gender, handicap, number, partitionRows, string, teeSetSide } from '../../../../models'
 
 const schemaPlayingHandicapRequest = z.object({
   golfer_id: number,
@@ -31,9 +31,18 @@ const schemaPlayingHandicapEntry = z
 
 type PlayingHandicapEntry = z.infer<typeof schemaPlayingHandicapEntry>
 
-const schemaPlayingHandicapsResponse = z.object({
-  playing_handicaps: z.array(schemaPlayingHandicapEntry),
-})
+// Rows are parsed individually: one entry GHIN sends malformed used to reject
+// every golfer beside it, so a foursome came back empty because of one bad row.
+// Rejects come back raw in `invalid` so the caller can log what GHIN actually
+// sent rather than discovering it during an outage.
+const schemaPlayingHandicapsResponse = z
+  .object({
+    playing_handicaps: z.array(z.unknown()),
+  })
+  .transform(({ playing_handicaps }) => {
+    const { valid, invalid } = partitionRows(schemaPlayingHandicapEntry, playing_handicaps)
+    return { playing_handicaps: valid, invalid }
+  })
 
 type PlayingHandicapsResponse = z.infer<typeof schemaPlayingHandicapsResponse>
 
