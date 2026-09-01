@@ -24,7 +24,7 @@ Two concrete consequences:
 - [x] Phase 1 — `handicap` preserves `null` and `''` as `null` (validation.ts + validation.test.ts)
 - [x] Phase 2 — `handicaps/response.ts:20` → `handicap.nullable()` with sibling-style comment + test
 - [x] Phase 3 — add `strictFloat` / `strictNumber` and apply at audited response fields + tests
-- [ ] Phase 4 — changeset (`minor`: new export + previously-`0` parses now reject)
+- [x] Phase 4 — changeset (`minor`: new export + previously-`0` parses now reject)
 - [ ] Review findings applied
 - [ ] Manual verification (see below)
 
