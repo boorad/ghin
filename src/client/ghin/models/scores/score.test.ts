@@ -259,6 +259,11 @@ describe('schemaScoresResponse', () => {
 
     expect(parsed.scores).toHaveLength(1)
     expect(parsed.invalid).toEqual([])
+    // `average` and `total_count` are omitted above on purpose: this pins the
+    // `.default(0)`-through-`ZodDefault`-through-transform path, which would break silently
+    // if the defaults were applied after the transform or stripped by it.
+    expect(parsed.average).toBe(0)
+    expect(parsed.total_count).toBe(0)
   })
 
   // Regression guard: a transform that destructured only `scores` would silently
@@ -278,6 +283,13 @@ describe('schemaScoresResponse', () => {
     expect(parsed.lowest_score).toBe(78)
     expect(parsed.total_count).toBe(2)
     expect(parsed).toHaveProperty('some_new_key', 'kept')
+    // Type-level guard: this indexed read only compiles while the `.passthrough()` index signature
+    // survives the transform, which a bare spread would drop from the inferred type (runtime alone
+    // would not catch that). The key goes through a variable to satisfy both TS4111 and biome's
+    // useLiteralKeys, per the convention noted above.
+    const passthroughKey = 'some_new_key'
+    const passthroughValue: unknown = parsed[passthroughKey]
+    expect(passthroughValue).toBe('kept')
     expect(parsed.invalid).toHaveLength(1)
   })
 })

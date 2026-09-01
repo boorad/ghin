@@ -20,6 +20,8 @@ const schemaFloatOrDash = z
 // golfer who played one round fewer.
 const schemaScoresResponse = z
   .object({
+    // `average`/`highest_score`/`lowest_score`/`total_count` are GHIN-computed over the rows it sent, so
+    // after a partition they can describe rounds no longer in `scores` — report as-sent, don't recompute.
     average: schemaFloatOrDash.default(0),
     highest_score: schemaNumberOrDash,
     lowest_score: schemaNumberOrDash,
@@ -30,10 +32,16 @@ const schemaScoresResponse = z
   .passthrough()
   // `...envelope` carries both the declared siblings and the passthrough keys through the
   // transform — destructuring only `scores` would drop everything #64 went out to preserve.
-  .transform(({ scores, ...envelope }) => {
-    const { valid, invalid } = partitionRows(schemaScore, scores)
-    return { ...envelope, scores: valid, invalid }
-  })
+  // The explicit return type is load-bearing: the rest element keeps `.passthrough()`'s
+  // `[k: string]: unknown` index signature, but spreading it into a fresh object literal drops it
+  // from the inferred type, so without this annotation undeclared keys survive at runtime yet
+  // become unreachable to typed consumers. Don't "simplify" it away.
+  .transform(
+    ({ scores, ...envelope }): typeof envelope & { scores: z.infer<typeof schemaScore>[]; invalid: unknown[] } => {
+      const { valid, invalid } = partitionRows(schemaScore, scores)
+      return { ...envelope, scores: valid, invalid }
+    },
+  )
 
 type ScoresResponse = z.infer<typeof schemaScoresResponse>
 
