@@ -102,8 +102,13 @@ Carried from recon; unit tests cannot prove these:
    finding (the unpartitioned `getScores` blast radius) is answered with data rather than deferred.
    `getScores` runs end-to-end through the new strict schemas for both an established golfer and
    the no-index golfer.
-2. **Score-post response — OPEN.** Needs a real post; the read-back above is the stored score, not
-   the immediate `scores.post` payload that `post-response.ts` validates. Held for the owner.
+2. **Score-post response — CLEAR.** Posted one adjusted score (94, 18 holes) to staging golfer
+   `13373258` at course `2539`, women's Blue tees, on 2026-09-01; score id `1138055394`, permanent.
+   The raw response carries `id: 1138055394`, `golfer_id: 13373258`, `adjusted_gross_score: 94`,
+   `differential: 13.4` — all real numbers, none null — and the whole payload parses through the
+   new strict `schemaScorePostResponse`. GHIN returned `status: "Validated"`, so a `Temporary` /
+   `UnderReview` post was not reproduced directly; the read-back in item 1 covers those, since it
+   includes `UnderReview` and `Temporary` scores with real differentials.
 3. **`handicap_index` on the wire — assumption corrected.** `/search_golfer.json`, the endpoint
    behind `handicaps.getOne`, returns **404 on UAT** for all 13 golfers and every parameter
    variant tried (`ghin`, `golfer_id`, `ghin_number`, none), while `scores` succeeds on the same
@@ -130,3 +135,12 @@ Carried from recon; unit tests cannot prove these:
 `handicaps.getOne` cannot succeed there. This is the same shape of finding as the dead
 `getPlayingHandicaps` in #62. It may still exist on production, so it is recorded rather than
 acted on.
+
+### Noted while posting, not acted on
+
+The score-post response for a golfer with no established index carries `handicap_index: 999`,
+`handicap_index_display: "NH"`, `net_score: 999` and `course_handicap: "NH"` — GHIN's own magic
+sentinel rather than a `null`. This is the same *class* of hazard #63 addresses (a number that
+passes a `typeof x === 'number'` guard but is not a real handicap), but a different cause: the
+library is faithfully reporting what GHIN sent, not fabricating it through coercion. Worth its own
+issue if consumers should see `null` there.
