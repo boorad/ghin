@@ -76,3 +76,32 @@ Both asked and answered before implementation:
 - `schemaScore` (`scores/score.ts`) is **not** `.passthrough()` — any field GHIN
   adds to a score-list row is silently stripped.
 - A wider passthrough audit needs a live payload capture; none exists in the repo.
+
+## Carried — manual verification (owner: Brad)
+
+Unit tests cannot establish these; the implementation is deliberately tolerant
+of every one of them, so none blocks correctness — they are confirmatory, and
+items 2 and 4 would change the changeset prose if they come back differently.
+
+1. Confirm the wire JSON type of `estimated_handicap_display` on a real post
+   (log the raw body inside `RequestClient._fetch` before validation, or `curl`
+   — a `15.4` number and a `"15.4"` string print identically once parsed).
+   Neutralized by the string|number union either way.
+2. Confirm `"NH"` still occurs for a golfer with <54 holes. If it is now
+   *absent* instead, `.nullish()` is doing real work and the changeset should
+   say so.
+3. Confirm a plus golfer returns `"+1.2"` and not `-1.2` / `1.2`. Nothing in
+   this repo corroborates the plus form.
+4. Sandbox vs production: observed values are from `api-uat.ghin.com`, Spicy
+   runs against production. A UAT-only *shape* (number vs string) matters even
+   though a UAT-only field would be harmless.
+5. All three post endpoints share this schema — verify the field is present and
+   identically typed on `postHoleByHole`, `postAdjusted` and `post18h9and9`.
+   The 9-and-9 path has historically diverged (#41).
+6. **Mutation warning**: each of these writes a real score onto a real golfer
+   with no delete method. Use UAT/sandbox and a designated test golfer only.
+7. Downstream: after publishing, drop Spicy's hand-written interface in favour
+   of `ScorePostResponse`, and check its runtime canary's definition of
+   "missing" matches the schema's — `undefined`, `null` and `'NH'` are three
+   different things and `'NH'` is not missing.
+8. DTS check — done: `bun run build && grep -c estimated dist/index.d.ts` → 8.
