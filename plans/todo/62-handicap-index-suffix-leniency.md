@@ -30,11 +30,55 @@ partition both list responses so a single malformed row degrades rather than
 failing the batch. The sibling `course_handicap` / `playing_handicap` fields are
 deliberately left as-is — see Decision 2.
 
-## Live tracker
+## Scope change 2026-09-01 — verified against staging, premise was wrong
 
-- [x] Phase 1 — Leniency: `handicap` on `handicap_index`, `course_handicap`, `playing_handicap` in both schemas; co-located model tests
-- [x] Phase 1b — Revert the sibling fields to `float`/`number` per Decision 2's reversal; document `null` → `0` for #63
-- [x] Phase 2 — Partitioning: `partitionRows` on both list responses, `reportDegradation` wired at both client call sites, tests
+Everything above this line was written from the schemas. Probing `api-uat.ghin.com`
+with the Druid Golf test golfers (13373246/47/48 established, 13373258 = `NH`)
+disproved the central claim. Issue #62 has been rewritten to match; fixtures
+captured verbatim in `src/client/ghin/models/handicaps/__fixtures__/index.ts`.
+
+What staging actually shows:
+
+1. **`handicaps.getCourseHandicaps` is 100% broken.** `GET /course_handicaps.json`
+   returns `{ tee_sets: [...] }` with the handicap nested at
+   `tee_sets[].ratings[].course_handicap`. It has no `course_handicaps` key and no
+   `handicap_index` anywhere. Every call throws `ValidationError`.
+2. **`handicaps.getPlayingHandicaps` is 100% broken.** It sends a single
+   `golfer_id`; the API requires `golfers[]` and answers `400` with
+   `{"errors":{"golfers":["is required"]}}`. Same URL and same response shape as
+   `getCoursePlayerHandicaps`.
+3. **The real foursome bug is in `getCoursePlayerHandicaps`.** Reproduced: three
+   established golfers succeed; the same three plus the `NH` golfer throw
+   `ValidationError` and lose all four. Cause is `shots_off: "-"` →
+   `Number("-")` = `NaN`, not `handicap_index`. `shots_off` is also a *string*
+   on the wire, and `playing_handicap` is `null` for an NH golfer.
+4. **`tee_set_side` must be `'All 18'` with a space** on these endpoints.
+   `teeSetSide` (`src/models/validation.ts:151`) says `'All18'`, while
+   `schemaTeeSetSide` (`handicaps/request.ts:5`) has it right. `teeSetSide` is
+   shared with score posting, so it must NOT be changed globally — the handicap
+   request schemas should point at the correct enum instead.
+
+Consequence for the work already committed: Phases 1 and 2 hardened
+`schemaCourseHandicapEntry` / `schemaPlayingHandicapEntry` and partitioned two
+list responses that the API never returns. That work is inert and those schemas
+are replaced below. The `handicap_index` → `handicap` helper swap is kept where
+it survives, as correct hardening that simply was not the reported cause.
+
+**Risk accepted:** all observations are from UAT. If production returns a
+structurally different shape for `/course_handicaps.json`, these schemas are
+wrong again. Judged unlikely — the difference here is structural, not a
+data-dependent field — but it is the one thing worth re-checking against
+production before a consumer depends on it.
+
+## Live tracker
+- [x] Phase 1 — Leniency: `handicap` on `handicap_index` in both entry schemas (kept; inert but correct)
+- [x] Phase 1b — Sibling fields reverted to `float`/`number`, deferred to #63
+
+- [x] Phase 2 — Partitioning on the two list responses (superseded by Phase 5, kept in history)
+- [x] Phase 3 — Fixtures captured from staging into `handicaps/__fixtures__/`
+- [ ] Phase 4 — Fix the foursome bug: `playing_handicap` / `shots_off` leniency in `course-player-handicap.ts`
+- [ ] Phase 5 — Fix `getCourseHandicaps`: real `tee_sets` response schema + `'All 18'` enum
+- [ ] Phase 6 — Fix `getPlayingHandicaps`: `golfers[]` request + percent-record response
 
 ## Decisions
 
