@@ -31,7 +31,7 @@ malformed row degrades rather than failing the batch.
 
 ## Live tracker
 
-- [ ] Phase 1 — Leniency: `handicap` on `handicap_index`, `course_handicap`, `playing_handicap` in both schemas; co-located model tests
+- [x] Phase 1 — Leniency: `handicap` on `handicap_index`, `course_handicap`, `playing_handicap` in both schemas; co-located model tests
 - [ ] Phase 2 — Partitioning: `partitionRows` on both list responses, `reportDegradation` wired at both client call sites, tests
 
 ## Decisions
