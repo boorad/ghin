@@ -284,12 +284,15 @@ describe('schemaScorePostResponse', () => {
       },
     )
 
-    it('does not turn a null differential into 0', () => {
+    // The failure shape is the claim: a null differential fails exactly the way a
+    // missing key does (`invalid_type`, received `nan`), not as a fabricated 0.
+    it('fails a null differential the same way as a missing key', () => {
       const result = schemaInner.safeParse({ ...baseResponse, differential: null })
 
       expect(result.success).toBe(false)
-      if (result.success) {
-        expect(result.data.differential).not.toBe(0)
+      if (!result.success) {
+        const issue = result.error.issues.find((candidate) => candidate.path[0] === 'differential')
+        expect(issue).toMatchObject({ code: 'invalid_type', received: 'nan' })
       }
     })
 

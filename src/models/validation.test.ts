@@ -67,10 +67,23 @@ describe('Validation', () => {
 
   describe('strictFloat', () => {
     // The #63 fix: null and '' must read as "missing", never as 0.
-    it('should reject null, empty string and undefined', () => {
+    it('should reject null, empty string, whitespace-only string and undefined', () => {
       expect(strictFloat.safeParse(null).success).toBe(false)
       expect(strictFloat.safeParse('').success).toBe(false)
+      expect(strictFloat.safeParse('  ').success).toBe(false)
       expect(strictFloat.safeParse(undefined).success).toBe(false)
+    })
+
+    // Pin the claimed failure mode: null fails exactly the way a missing key does
+    // (the preprocess yields `undefined`, which `z.coerce.number()` turns into NaN),
+    // not as a fabricated 0.
+    it('should fail null with the same invalid_type/nan issue as a missing key', () => {
+      const result = strictFloat.safeParse(null)
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.issues[0]).toMatchObject({ code: 'invalid_type', received: 'nan' })
+      }
     })
 
     it('should still coerce numeric strings', () => {
@@ -89,9 +102,10 @@ describe('Validation', () => {
   })
 
   describe('strictNumber', () => {
-    it('should reject null, empty string and undefined', () => {
+    it('should reject null, empty string, whitespace-only string and undefined', () => {
       expect(strictNumber.safeParse(null).success).toBe(false)
       expect(strictNumber.safeParse('').success).toBe(false)
+      expect(strictNumber.safeParse('  ').success).toBe(false)
       expect(strictNumber.safeParse(undefined).success).toBe(false)
     })
 
@@ -146,6 +160,7 @@ describe('Validation', () => {
     it('should preserve null and the empty-string sentinel as null, not 0', () => {
       expect(handicap.parse(null)).toBe(null)
       expect(handicap.parse('')).toBe(null)
+      expect(handicap.parse('  ')).toBe(null)
       expect(handicap.nullable().parse(null)).toBe(null)
       expect(handicap.nullish().parse(undefined)).toBe(undefined)
     })

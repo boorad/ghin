@@ -114,12 +114,13 @@ export const gender = z.enum(['M', 'F'])
  */
 const HANDICAP_WITH_SUFFIX = /^([+-]?\d+(?:\.\d+)?)[A-Za-z]+$/
 
-// `z.null()` and `''` are ordered ahead of `float` on purpose: `float` is
-// `z.coerce.number()` and `Number(null) === Number('') === 0`, so with `float`
-// first a no-handicap golfer parsed as scratch (issue #63). Unions take the
-// first branch that succeeds, so the null-ish inputs must win before coercion.
+// `z.null()` and the blank-string branch are ordered ahead of `float` on purpose:
+// `float` is `z.coerce.number()` and `Number(null) === Number('') === Number('  ') === 0`,
+// so with `float` first a no-handicap golfer parsed as scratch (issue #63). Unions
+// take the first branch that succeeds, so the null-ish inputs must win before
+// coercion. The blank branch trims, so whitespace-only reaches the refine as `''`.
 export const handicap = z
-  .union([z.null(), z.literal(''), float, z.string()])
+  .union([z.null(), z.string().trim().length(0), float, z.string()])
   .refine((value) => {
     if (value === null || value === '' || typeof value === 'number') {
       return true
@@ -154,12 +155,15 @@ export const number = float.int()
 
 // ponytail: `float` is `z.coerce.number()` and `Number(null) === Number('') === 0`, so a required
 // `float` accepts an explicit null as a fabricated 0 that passes a `typeof x === 'number'` guard
-// (issue #63). `strictFloat` / `strictNumber` reject null and '' outright — they fail the same way
-// a missing key does, not as 0 — while still coercing genuine numeric strings, for fields a
-// consumer computes on. They are `ZodEffects`, so use `float` / `number` where a ZodNumber method
+// (issue #63). `strictFloat` / `strictNumber` reject null and blank strings (including
+// whitespace-only, which `Number` also coerces to 0) outright — they fail the same way a missing
+// key does, not as 0 — while still coercing genuine numeric strings, for fields a consumer
+// computes on. They are `ZodEffects`, so use `float` / `number` where a ZodNumber method
 // (`.int` / `.min` / `.max` / `.positive`) is needed, or where a null is salvageable.
-export const strictFloat = z.preprocess((value) => (value === null || value === '' ? undefined : value), float)
-export const strictNumber = z.preprocess((value) => (value === null || value === '' ? undefined : value), number)
+const blankToUndefined = (value: unknown) =>
+  value === null || (typeof value === 'string' && value.trim() === '') ? undefined : value
+export const strictFloat = z.preprocess(blankToUndefined, float)
+export const strictNumber = z.preprocess(blankToUndefined, number)
 export const string = emptyString.min(1)
 export const teeSetSide = z.enum(['All18', 'F9', 'B9'])
 
