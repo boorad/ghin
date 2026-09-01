@@ -197,19 +197,25 @@ describe('GhinClient', () => {
 
   describe('courses.getTeeSetRatingsForScorePosting', () => {
     it('should fetch and return tee set ratings for score posting', async () => {
+      // What the schema hands back: GHIN sends a bare array of PascalCase rows
+      // (see `models/course/__fixtures__`), and the response schema partitions it
+      // into `tee_set_ratings` / `invalid`.
       const mockResponse = {
         tee_set_ratings: [
           {
-            tee_set_id: 262908,
-            tee_name: "Men's Black",
-            gender: 'Male',
-            course_rating: 72.5,
-            slope_rating: 130,
-            par: 72,
-            holes_number: 18,
-            tee_set_side: 'All18',
+            TeeSetRatingId: 605066,
+            TeeSetStatus: 'Active',
+            DisplayName: 'Red',
+            Gender: 'Male',
+            TeeSetRatingName: 'Red',
+            RatingType: 'Total',
+            CourseRating: 67.3,
+            SlopeRating: 124,
+            BogeyRating: 90.3,
+            TotalPar: 71,
           },
         ],
+        invalid: [],
       }
       mockFetchCustomPath.mockResolvedValue(ok(mockResponse))
 
@@ -223,6 +229,51 @@ describe('GhinClient', () => {
         }),
         schema: expect.anything(),
       })
+    })
+
+    // A course that quietly returns 44 of its 45 rating rows is indistinguishable
+    // from a course with 44 — exactly how the #73-class payload change hides.
+    it('should report dropped rows through onDegraded', async () => {
+      const onDegraded = vi.fn()
+      const client = new GhinClient({ password: 'p', username: 'u', onDegraded })
+      const rejected = { TeeSetRatingId: 605067, CourseRating: null }
+      mockFetchCustomPath.mockResolvedValue(
+        ok({ tee_set_ratings: [{ TeeSetRatingId: 605066, RatingType: 'Total' }], invalid: [rejected] }),
+      )
+
+      await client.courses.getTeeSetRatingsForScorePosting({ course_id: 7817 })
+
+      expect(onDegraded).toHaveBeenCalledWith({
+        entity: 'tee_set_ratings_for_score_posting',
+        dropped: 1,
+        total: 2,
+        sample: [rejected],
+      })
+    })
+
+    it('should not call onDegraded when nothing was dropped', async () => {
+      const onDegraded = vi.fn()
+      const client = new GhinClient({ password: 'p', username: 'u', onDegraded })
+      mockFetchCustomPath.mockResolvedValue(ok({ tee_set_ratings: [{ TeeSetRatingId: 605066 }], invalid: [] }))
+
+      await client.courses.getTeeSetRatingsForScorePosting({ course_id: 7817 })
+
+      expect(onDegraded).not.toHaveBeenCalled()
+    })
+
+    it('should survive an onDegraded callback that throws', async () => {
+      const client = new GhinClient({
+        password: 'p',
+        username: 'u',
+        onDegraded: () => {
+          throw new Error('reporter exploded')
+        },
+      })
+      mockFetchCustomPath.mockResolvedValue(
+        ok({ tee_set_ratings: [{ TeeSetRatingId: 605066 }], invalid: [{ bad: true }] }),
+      )
+
+      await expect(client.courses.getTeeSetRatingsForScorePosting({ course_id: 7817 })).resolves.toBeDefined()
     })
 
     it('should throw error when fetch fails', async () => {

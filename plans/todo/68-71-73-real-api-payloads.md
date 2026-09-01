@@ -24,7 +24,7 @@ the same golfer record and carries the handicap index.
 
 ## Live tracker
 
-- [ ] Phase 1 — #73: rewrite `TeeSetRatingsForScorePosting` against the captured payload
+- [x] Phase 1 — #73: rewrite `TeeSetRatingsForScorePosting` against the captured payload
 - [ ] Phase 2 — #71a: declare the 11 score-row keys and the 8 statistics counters
 - [ ] Phase 3 — #71b: re-export `./score` from the scores barrel
 - [ ] Phase 4 — #68: repoint `handicaps.getOne` at `/golfers/search.json`

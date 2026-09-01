@@ -335,6 +335,13 @@ export class GhinClient {
         throw result.error
       }
 
+      reportDegradation(
+        this.onDegraded,
+        'tee_set_ratings_for_score_posting',
+        result.value.invalid,
+        result.value.tee_set_ratings.length + result.value.invalid.length,
+      )
+
       return result.value
     } catch (error) {
       if (error instanceof z.ZodError) {
