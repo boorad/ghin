@@ -31,7 +31,7 @@ const schemaStatistics = z
     two_putt_percent: float,
     up_and_downs_total: number,
   })
-  // GHIN adds and drops statistics keys without warning; passthrough keeps undeclared ones reachable (#64).
+  // GHIN adds statistics keys without warning; passthrough keeps undeclared ones reachable (#64).
   .passthrough()
 
 type Statistics = z.infer<typeof schemaStatistics>

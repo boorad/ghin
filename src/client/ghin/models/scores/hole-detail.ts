@@ -17,7 +17,7 @@ const schemaHoleDetail = z
     stroke_allocation: number,
     x_hole: boolean,
   })
-  // GHIN adds and drops hole-detail keys without warning; passthrough keeps undeclared ones reachable (#64).
+  // GHIN adds hole-detail keys without warning; passthrough keeps undeclared ones reachable (#64).
   .passthrough()
 
 type HoleDetail = z.infer<typeof schemaHoleDetail>

@@ -132,7 +132,7 @@ describe('schemaScore', () => {
       hole_details: [{ ...baseHoleDetail, some_new_key: 'kept' }],
     })
 
-    expect(parsed.hole_details?.[0]).toHaveProperty('some_new_key', 'kept')
+    expect(parsed.hole_details[0]).toHaveProperty('some_new_key', 'kept')
   })
 
   it('passes through undeclared keys inside adjustments (#64)', () => {
@@ -141,7 +141,7 @@ describe('schemaScore', () => {
       adjustments: [{ ...baseAdjustment, some_new_key: 'kept' }],
     })
 
-    expect(parsed.adjustments?.[0]).toHaveProperty('some_new_key', 'kept')
+    expect(parsed.adjustments[0]).toHaveProperty('some_new_key', 'kept')
   })
 
   it('passes through undeclared keys inside statistics (#64)', () => {

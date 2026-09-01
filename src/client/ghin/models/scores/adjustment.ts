@@ -7,7 +7,7 @@ const schemaScoringAdjustment = z
     type: string,
     value: float,
   })
-  // GHIN adds and drops adjustment keys without warning; passthrough keeps undeclared ones reachable (#64).
+  // GHIN adds adjustment keys without warning; passthrough keeps undeclared ones reachable (#64).
   .passthrough()
 
 type ScoringAdjustment = z.infer<typeof schemaScoringAdjustment>

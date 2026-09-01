@@ -96,9 +96,12 @@ const schemaScorePostResponseInner = z
   })
   .passthrough()
 
-const schemaScorePostResponse = z.object({
-  score: schemaScorePostResponseInner,
-})
+const schemaScorePostResponse = z
+  .object({
+    score: schemaScorePostResponseInner,
+  })
+  // GHIN adds envelope keys without warning; passthrough keeps undeclared ones reachable (#64).
+  .passthrough()
 
 type ScorePostResponse = z.infer<typeof schemaScorePostResponseInner>
 
