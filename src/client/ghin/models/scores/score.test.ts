@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest'
+import type { Score, ScoreStatus, ScoreType } from '.'
+import {
+  rawScoreTypes as barrelRawScoreTypes,
+  schemaRawScoreStatus as barrelSchemaRawScoreStatus,
+  schemaScore as barrelSchemaScore,
+} from '.'
+import type { Score as RootScore, ScoreStatus as RootScoreStatus, ScoreType as RootScoreType } from '../../../../index'
+import {
+  rawScoreTypes as rootRawScoreTypes,
+  schemaRawScoreStatus as rootSchemaRawScoreStatus,
+  schemaScore as rootSchemaScore,
+} from '../../../../index'
 import { schemaScoresResponse } from './response'
-import { schemaScore } from './score'
+import { rawScoreTypes, schemaScore } from './score'
 
 /**
  * A complete, valid raw score row (the shape the GHIN `getScores` endpoint
@@ -493,5 +505,41 @@ describe('schemaScoresResponse', () => {
     const passthroughValue: unknown = parsed[passthroughKey]
     expect(passthroughValue).toBe('kept')
     expect(parsed.invalid).toHaveLength(1)
+  })
+})
+
+// #71: `scores/index.ts` never re-exported `./score`, so `Score`, `ScoreType`, `ScoreStatus`,
+// `schemaScore`, `rawScoreTypes` and `schemaRawScoreStatus` were missing from the package's
+// export list while their siblings (`HoleDetail`, `Statistics`, `ScoringAdjustment`) were present
+// — consumers could only reach the score row type structurally, as `ScoresResponse['scores'][number]`.
+// Dropping the barrel line again fails these value assertions; dropping a type fails `tsc` on the
+// annotations below, which is why they are annotated rather than inferred.
+describe('score export surface (#71)', () => {
+  it('re-exports the score model from the scores barrel', () => {
+    expect(barrelSchemaScore).toBe(schemaScore)
+    expect(barrelRawScoreTypes).toBe(rawScoreTypes)
+    expect(barrelSchemaRawScoreStatus.options).toEqual(['Validated', 'UnderReview', 'Temporary'])
+
+    const scoreType: ScoreType = 'COMPETITION'
+    const scoreStatus: ScoreStatus = 'VALIDATED'
+    const score: Score = barrelSchemaScore.parse(baseScore)
+
+    expect(scoreType).toBe('COMPETITION')
+    expect(scoreStatus).toBe('VALIDATED')
+    expect(score.id).toBe(1)
+  })
+
+  it('re-exports the score model from the package root', () => {
+    expect(rootSchemaScore).toBe(schemaScore)
+    expect(rootRawScoreTypes).toBe(rawScoreTypes)
+    expect(rootSchemaRawScoreStatus.options).toEqual(['Validated', 'UnderReview', 'Temporary'])
+
+    const scoreType: RootScoreType = 'COMBINED'
+    const scoreStatus: RootScoreStatus = 'UNDER_REVIEW'
+    const score: RootScore = rootSchemaScore.parse(baseScore)
+
+    expect(scoreType).toBe('COMBINED')
+    expect(scoreStatus).toBe('UNDER_REVIEW')
+    expect(score.id).toBe(1)
   })
 })
