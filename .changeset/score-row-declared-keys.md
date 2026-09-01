@@ -1,0 +1,20 @@
+---
+'@spicygolf/ghin': minor
+---
+
+Declare the eleven score-row keys and eight `statistics` counters GHIN actually sends on `golfers.getScores`, captured live from `api-uat.ghin.com`.
+
+#64 gave the score tree `.passthrough()`, so these keys already *arrived* — but typed `unknown`, absent from `Score`, and unreachable to a typed consumer without a cast. `src/playground/score-keys.ts` then captured what GHIN really sends: 85 score rows across all 13 UAT golfers (including `NH` golfer 13373258), 396 hole details and 26 statistics blocks. These are the keys that diff found.
+
+On the score row: `handicap_index`, `handicap_index_display`, `to_par_display_value`, `net_score`, `course_handicap`, `posted_on_home_course`, `scaled_up_differential`, `adjusted_scaled_up_differential`, `short_course`, `validation_message` and `validation_message_display`. On `statistics`: `birdies_or_better_total`, `bogeys_total`, `double_bogeys_total`, `pars_total`, `triple_bogeys_or_worse_total`, `one_putt_or_better_total`, `two_putt_total` and `three_putt_or_worse_total`.
+
+Four decisions are worth stating, because each one is a place a plausible-looking "cleanup" would produce a confidently wrong number:
+
+- **`course_handicap` is a `string`, and stays one.** GHIN sends `"-7"` and `"NH"`. Running it through the `handicap` helper would coerce a plus handicap `"+2"` to a positive `2`, while this library represents plus handicaps as *negative* numbers (`playing_handicap: -4` beside `playing_handicap_display: '+4'`) — a sign-flipped Course Handicap, which is the failure mode 0.15.1 (#63) and 0.16.0 (#67) exist to prevent.
+- **`handicap_index` goes through the `handicap` helper, so the `999` no-handicap sentinel maps to `null`.** A golfer with no established index no longer hands a consumer a `999` that passes a `typeof x === 'number'` guard. `net_score` gets the same treatment: `getScores` sends `net_score: 999` on scores predating an index, and 999 is not a reachable net score. The matching display field is the literal string `"NH"` and is kept verbatim.
+- **`to_par_display_value` keeps its sign convention verbatim (`"+12"`), and GHIN's `"-"` empty sentinel becomes `null`** — the same convention the response envelope already applies to `average` / `highest_score` / `lowest_score`.
+- **The `*_total` counters arrive as JSON strings (`"3"`) while their `*_percent` siblings arrive as numbers.** They are coerced to numbers, matching `putts_total` and `up_and_downs_total`, which were already declared that way.
+
+`challenge_available` and `country_code` are deliberately **left undeclared**. Both arrive on all 85 rows and are `null` on every one, so their real type is unknowable from this capture; `.passthrough()` still carries them, and declaring them `z.unknown()` would only add a useless `unknown` to `Score`. Same reasoning as `eligible_sides` on the course-handicap response.
+
+**The risk this takes on:** declaring a key means a value that violates the declaration now *fails the row*, where `.passthrough()` previously carried anything through untouched. These types are written from UAT — which is what the current consumer runs against, so it is authoritative rather than a proxy — but a PROD-only *shape* would bite. A PROD `course_handicap: -7` sent as a number against this UAT-derived string declaration drops that score into `invalid`. The blast radius is one round, not the history: `schemaScoresResponse` partitions rows with `partitionRows` (#74), and `golfers.getScores` reports the drop through `onDegraded`. The three keys present on all 85 rows — `handicap_index`, `handicap_index_display`, `to_par_display_value` — are required, so a row that arrives without one costs that row; every key the capture ever showed as null is `.nullish()`, never a bare `.nullable()`, because GHIN drops keys rather than nulling them (#46, #51, #55, #56, #57). The eight new `statistics` counters are required for the same reason the 27 already there are, which means a statistics block missing one costs its score row — loosening that whole object is tracked separately. Re-run `src/playground/score-keys.ts` against PROD when access lands.

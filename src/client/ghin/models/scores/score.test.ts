@@ -9,10 +9,16 @@ import { schemaScore } from './score'
  */
 const baseScore = {
   adjusted_gross_score: 85,
+  adjusted_scaled_up_differential: null,
   adjustments: [],
   back9_adjusted: null,
   back9_course_rating: null,
   back9_slope_rating: null,
+  // `challenge_available` / `country_code` are undeclared on purpose (#71): null on all 85
+  // captured rows, so `.passthrough()` carries them rather than a useless `unknown` in `Score`.
+  challenge_available: null,
+  country_code: null,
+  course_handicap: null,
   course_rating: 72.5,
   differential: 10.5,
   edited: false,
@@ -22,11 +28,14 @@ const baseScore = {
   front9_slope_rating: null,
   gender: 'M',
   golfer_id: 1234567,
+  handicap_index: -5.5,
+  handicap_index_display: '+5.5',
   hole_details: [],
   id: 1,
   is_manual: false,
   is_recent: true,
   message_club_authorized: null,
+  net_score: null,
   net_score_differential: null,
   number_of_holes: 18,
   number_of_played_holes: 18,
@@ -37,16 +46,20 @@ const baseScore = {
   penalty_type: null,
   played_at: '2026-03-17',
   posted_at: '2026-03-18',
+  posted_on_home_course: null,
   revision: false,
+  scaled_up_differential: null,
   score_day_order: 1,
   score_type_display_full: 'Home',
   score_type_display_short: 'H',
   score_type: 'H',
   season_end_date_at: '12/31',
   season_start_date_at: '01/01',
+  short_course: null,
   slope_rating: 130,
   statistics: null,
   status: 'Validated',
+  to_par_display_value: '+12',
   unadjusted_differential: 10.5,
   used: true,
 }
@@ -78,8 +91,13 @@ const baseAdjustment = {
 /** A complete, valid raw statistics object, as nested under a score's `statistics`. */
 const baseStatistics = {
   birdies_or_better_percent: 5,
+  // The `*_total` counters arrive as JSON strings while their `*_percent` siblings are numbers —
+  // GHIN's inconsistency, reproduced verbatim here (#71).
+  birdies_or_better_total: '1',
   bogeys_percent: 40,
+  bogeys_total: '7',
   double_bogeys_percent: 10,
+  double_bogeys_total: '2',
   fairway_hits_percent: 50,
   gir_percent: 25,
   last_stats_update_date: '2026-03-18',
@@ -94,15 +112,20 @@ const baseStatistics = {
   missed_short_approach_shot_accuracy_percent: 10,
   missed_short_percent: 10,
   one_putt_or_better_percent: 20,
+  one_putt_or_better_total: '3',
   par3s_average: 3.5,
   par4s_average: 4.5,
   par5s_average: 5.5,
   pars_percent: 45,
+  pars_total: '8',
   putts_total: 33,
   three_putt_or_worse_percent: 5,
+  three_putt_or_worse_total: '1',
   triple_bogeys_or_worse_percent: 0,
+  triple_bogeys_or_worse_total: '0',
   two_putt_or_better_percent: 95,
   two_putt_percent: 75,
+  two_putt_total: '12',
   up_and_downs_total: 4,
 }
 
@@ -218,6 +241,145 @@ describe('schemaScore', () => {
     expect(parsed.number_of_holes).toBe(9)
   })
 
+  // --- the 11 keys the 2026-09-01 UAT capture found GHIN sends (#71) ---------------------------
+
+  it('parses the newly declared score-row keys at their captured types (#71)', () => {
+    const parsed = schemaScore.parse(baseScore)
+
+    expect(parsed.handicap_index).toBe(-5.5)
+    expect(parsed.handicap_index_display).toBe('+5.5')
+    expect(parsed.to_par_display_value).toBe('+12')
+  })
+
+  // The real row from UAT golfer 13373258, who has no established index. 999 is GHIN's numeric
+  // no-handicap sentinel and must not reach a consumer as an index; the display twin says so in
+  // words and is a string GHIN expects to be rendered as-is.
+  it('maps the 999 no-handicap sentinel to null and keeps handicap_index_display verbatim', () => {
+    const parsed = schemaScore.parse({ ...baseScore, handicap_index: 999, handicap_index_display: 'NH' })
+
+    expect(parsed.handicap_index).toBeNull()
+    expect(parsed.handicap_index_display).toBe('NH')
+  })
+
+  // The whole point of this declaration: Course Handicap is a *string* on the wire. Asserting the
+  // string explicitly is the guard — a future "cleanup" to `handicap`/`number` would flip the sign
+  // of a plus handicap, since this repo represents those as negative numbers.
+  it.each([['-7'], ['NH'], ['+2']])('keeps course_handicap %s as a string', (raw) => {
+    const parsed = schemaScore.parse({ ...baseScore, course_handicap: raw })
+
+    expect(parsed.course_handicap).toBe(raw)
+    expect(typeof parsed.course_handicap).toBe('string')
+  })
+
+  it('normalizes the "-" empty sentinel on to_par_display_value to null', () => {
+    const parsed = schemaScore.parse({ ...baseScore, to_par_display_value: '-' })
+    expect(parsed.to_par_display_value).toBeNull()
+  })
+
+  // `validation_message*` exist on `UnderReview` rows only (2 of the 85 captured), so a declaration
+  // that required them would reject every ordinary score.
+  it('parses a Validated row with no validation_message keys at all', () => {
+    const parsed = schemaScore.parse(baseScore)
+
+    expect(parsed.validation_message).toBeUndefined()
+    expect(parsed.validation_message_display).toBeUndefined()
+  })
+
+  it('parses an UnderReview row carrying validation_message and validation_message_display', () => {
+    const parsed = schemaScore.parse({
+      ...baseScore,
+      status: 'UnderReview',
+      validation_message: 'This is possibly a duplicate score.',
+      validation_message_display: 'Possible duplicate',
+    })
+
+    expect(parsed.status).toBe('UNDER_REVIEW')
+    expect(parsed.validation_message).toBe('This is possibly a duplicate score.')
+    expect(parsed.validation_message_display).toBe('Possible duplicate')
+  })
+
+  // `""` is GHIN's ordinary "no message" value; the bare `string` helper is `.min(1)` and would
+  // have cost the whole row over it.
+  it('accepts an empty validation_message and normalizes it to null', () => {
+    const parsed = schemaScore.parse({ ...baseScore, validation_message: '', validation_message_display: '' })
+
+    expect(parsed.validation_message).toBeNull()
+    expect(parsed.validation_message_display).toBeNull()
+  })
+
+  // Issues #63 / #69 in the new keys: `float` and the `boolean` helper both turn an explicit null
+  // into a real-looking value (0 and false), and "GHIN didn't say" is not "no" or "zero".
+  it('keeps an explicit null null on every nullable new key rather than fabricating 0 / false', () => {
+    const parsed = schemaScore.parse({
+      ...baseScore,
+      adjusted_scaled_up_differential: null,
+      net_score: null,
+      posted_on_home_course: null,
+      scaled_up_differential: null,
+      short_course: null,
+    })
+
+    expect(parsed.net_score).toBeNull()
+    expect(parsed.scaled_up_differential).toBeNull()
+    expect(parsed.adjusted_scaled_up_differential).toBeNull()
+    expect(parsed.posted_on_home_course).toBeNull()
+    expect(parsed.short_course).toBeNull()
+  })
+
+  it('parses the nullable new keys at their captured values', () => {
+    const parsed = schemaScore.parse({
+      ...baseScore,
+      net_score: 91,
+      scaled_up_differential: 5.1,
+      adjusted_scaled_up_differential: -2.9,
+      posted_on_home_course: false,
+      short_course: false,
+    })
+
+    expect(parsed.net_score).toBe(91)
+    expect(parsed.scaled_up_differential).toBe(5.1)
+    expect(parsed.adjusted_scaled_up_differential).toBe(-2.9)
+    expect(parsed.posted_on_home_course).toBe(false)
+    expect(parsed.short_course).toBe(false)
+  })
+
+  // `net_score: 999` is the same no-handicap sentinel, sent on scores predating the golfer's
+  // index (`validation.ts:126`). A 999 net score is unreachable in golf, so it is not a score.
+  it('maps a 999 net_score to null', () => {
+    const parsed = schemaScore.parse({ ...baseScore, net_score: 999 })
+    expect(parsed.net_score).toBeNull()
+  })
+
+  // Guards the deliberate omission: both keys are null on all 85 captured rows, so their real type
+  // is unknowable and declaring them `z.unknown()` would only add a useless `unknown` to `Score`.
+  // They must still arrive — via `.passthrough()`, not via the declared shape.
+  it('leaves challenge_available and country_code undeclared but still passes them through (#71)', () => {
+    const parsed = schemaScore.parse(baseScore)
+
+    expect(Object.keys(schemaScore.shape)).not.toContain('challenge_available')
+    expect(Object.keys(schemaScore.shape)).not.toContain('country_code')
+    expect(parsed).toHaveProperty('challenge_available', null)
+    expect(parsed).toHaveProperty('country_code', null)
+  })
+
+  // The `*_total` counters are JSON strings on the wire while their `*_percent` siblings are
+  // numbers; they coerce, exactly as the already-declared `putts_total` / `up_and_downs_total` do.
+  it('coerces the string statistics counters to numbers and leaves the existing totals alone', () => {
+    const parsed = schemaScore.parse({ ...baseScore, statistics: baseStatistics })
+
+    expect(parsed.statistics?.birdies_or_better_total).toBe(1)
+    expect(parsed.statistics?.bogeys_total).toBe(7)
+    expect(parsed.statistics?.double_bogeys_total).toBe(2)
+    expect(parsed.statistics?.pars_total).toBe(8)
+    expect(parsed.statistics?.triple_bogeys_or_worse_total).toBe(0)
+    expect(parsed.statistics?.one_putt_or_better_total).toBe(3)
+    expect(parsed.statistics?.two_putt_total).toBe(12)
+    expect(parsed.statistics?.three_putt_or_worse_total).toBe(1)
+    expect(parsed.statistics?.putts_total).toBe(33)
+    expect(parsed.statistics?.up_and_downs_total).toBe(4)
+    expect(parsed.statistics?.birdies_or_better_percent).toBe(5)
+  })
+
   // The real wire-C row from UAT golfer 13373254 (#66): an 18-hole score that is the exact sum of
   // that golfer's two nine-hole rounds (48 + 46 = 94, ratings 34.6 + 35.6 = 70.2). It displays as
   // N because it is *derived from* nines, not because it is a nine-hole round — which is why
@@ -270,6 +432,23 @@ describe('schemaScoresResponse', () => {
     expect(parsed.scores[0]?.id).toBe(1)
     // Rejects come back raw and untransformed — `score_type` is still the wire letter,
     // not the mapped enum, so a log of `invalid` shows exactly what GHIN sent.
+    expect(parsed.invalid).toEqual([poison])
+  })
+
+  // The risk this declaration takes on: a value that violates it now fails its row, where
+  // `.passthrough()` used to carry anything. The named case is a PROD `course_handicap` sent as a
+  // number against this UAT-derived string declaration — it must cost that one score, not the
+  // whole history (#74).
+  it('drops a row whose course_handicap arrives as a number and keeps the rest (#71)', () => {
+    const poison = { ...baseScore, id: 2, course_handicap: -7 }
+    const parsed = schemaScoresResponse.parse({
+      highest_score: 95,
+      lowest_score: 78,
+      scores: [baseScore, poison],
+    })
+
+    expect(parsed.scores).toHaveLength(1)
+    expect(parsed.scores[0]?.id).toBe(1)
     expect(parsed.invalid).toEqual([poison])
   })
 
