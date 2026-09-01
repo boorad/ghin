@@ -22,7 +22,7 @@ Two concrete consequences:
 ## Live tracker
 
 - [x] Phase 1 — `handicap` preserves `null` and `''` as `null` (validation.ts + validation.test.ts)
-- [ ] Phase 2 — `handicaps/response.ts:20` → `handicap.nullable()` with sibling-style comment + test
+- [x] Phase 2 — `handicaps/response.ts:20` → `handicap.nullable()` with sibling-style comment + test
 - [ ] Phase 3 — add `strictFloat` / `strictNumber` and apply at audited response fields + tests
 - [ ] Phase 4 — changeset (`minor`: new export + previously-`0` parses now reject)
 - [ ] Review findings applied
