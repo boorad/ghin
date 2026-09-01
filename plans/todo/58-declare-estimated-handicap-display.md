@@ -65,6 +65,14 @@ Both asked and answered before implementation:
   so the `"19.1M"` value #56 fixed would produce `NaN` and fail here — and
   neither response uses `partitionRows`, so one bad golfer kills the whole batch
   with no `onDegraded`. Higher severity than #58.
+- `id`, `golfer_id`, `adjusted_gross_score` and `differential` on the score post
+  response are `number`/`float`, i.e. `z.coerce.number()`, and `Number(null)` is
+  `0` — so an explicit `null` on any of them silently becomes `0` rather than
+  failing. A `Temporary` or `UnderReview` score with `differential: null` would
+  hand the consumer a scratch-round differential to average into a handicap.
+  Pre-existing, not introduced by #58. Same root cause as the
+  `course-handicap.ts` / `playing-handicap.ts` entry above: `z.coerce.number()`
+  in a required position.
 - `schemaScore` (`scores/score.ts`) is **not** `.passthrough()` — any field GHIN
   adds to a score-list row is silently stripped.
 - A wider passthrough audit needs a live payload capture; none exists in the repo.

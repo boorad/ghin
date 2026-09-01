@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { float, number, string } from '../../../../models'
+import { emptyStringToNull, float, number } from '../../../../models'
 import { schemaRawScoreStatus } from './score'
 
 // By the time this parses, the score is already posted at GHIN. This response is
@@ -16,6 +16,22 @@ import { schemaRawScoreStatus } from './score'
 // rather than nulling them (#46, #51, #55, #56, and LegacyCRPTeeId in #57), so
 // every one of them is `.nullish()` and never a bare `.nullable()`.
 //
+// That leaves `adjusted_gross_score` required while `number_of_holes` and
+// `number_of_played_holes` are not, which reads inconsistent — an AGS of 44 and
+// one of 88 are different scores, and nothing else in the response tells them
+// apart. The asymmetry is deliberate: the hole counts are echoes of the request
+// the caller just made, so it already knows whether it posted 9 or 18 and an
+// absent count costs it nothing, while the AGS is a number GHIN computed and
+// the caller cannot reconstruct.
+//
+// The descriptive strings use `emptyStringToNull`, not the `string` helper:
+// `string` is `z.string().trim().min(1)`, so a `""` — GHIN's ordinary "no
+// message" sentinel, above all on `validation_message` — would reject the whole
+// response. `course.ts` and `tee-set-rating.ts` keep the stricter bare
+// `string.nullish()` because their rows sit behind `partitionRows`, where a bad
+// value costs one row and surfaces through `onDegraded`. This response has no
+// such salvage, so an empty string is normalized to `null` instead.
+//
 // The 0.15.1 carve-out in `tee-set-rating.ts` — "a zero there is a fabricated
 // rating that passes a `typeof x === 'number'` guard and yields a wrong Course
 // Handicap" — does not bind `course_rating` / `slope_rating` here. On this
@@ -26,22 +42,22 @@ const schemaScorePostResponseInner = z
     id: number,
     golfer_id: number,
     status: schemaRawScoreStatus,
-    validation_message: string.nullish(),
+    validation_message: emptyStringToNull.nullish(),
     adjusted_gross_score: number,
     number_of_holes: number.nullish(),
     number_of_played_holes: number.nullish(),
     differential: float,
     scaled_up_differential: float.nullish(),
     adjusted_scaled_up_differential: float.nullish(),
-    course_id: string.nullish(),
-    course_name: string.nullish(),
-    facility_name: string.nullish(),
-    played_at: string.nullish(),
-    tee_name: string.nullish(),
-    tee_set_id: string.nullish(),
+    course_id: emptyStringToNull.nullish(),
+    course_name: emptyStringToNull.nullish(),
+    facility_name: emptyStringToNull.nullish(),
+    played_at: emptyStringToNull.nullish(),
+    tee_name: emptyStringToNull.nullish(),
+    tee_set_id: emptyStringToNull.nullish(),
     course_rating: float.nullish(),
     slope_rating: float.nullish(),
-    score_type: string.nullish(),
+    score_type: emptyStringToNull.nullish(),
     // GHIN returns this on every successful score post — Spicy Golf renders it
     // as the pending Handicap Index® — but it was undeclared until now, so it
     // reached consumers only through `.passthrough()`, untyped and untested.
@@ -52,7 +68,24 @@ const schemaScorePostResponseInner = z
     // the score is already posted at GHIN, `schemaScorePostResponse` is parsed
     // as a single object with no `partitionRows` salvage, and this library
     // exposes no score-delete method. Lenient every time.
-    estimated_handicap_display: z.union([z.string(), z.number()]).transform(String).nullish(),
+    //
+    // The number branch formats to one decimal because a Handicap Index always
+    // displays as `15.0`, never `15`, and this is a `_display` field consumers
+    // render as-is. Strings only get trimmed — `z.string()` does not trim on its
+    // own, unlike every other string here — so `"NH"` and `"+1.2"` survive
+    // verbatim and no sign convention is invented on either branch.
+    //
+    // ponytail: `.catch(undefined)` is the only one in `src/`, and deliberate.
+    // Before this field was declared, `.passthrough()` let any value of it
+    // through untouched; declaring it turned `true`, `{}` and `[]` into
+    // whole-response rejections. Nothing computes on this string, so degrading
+    // an unexpected shape to absent is always cheaper than failing the parse of
+    // a score that is already posted and cannot be deleted.
+    estimated_handicap_display: z
+      .union([z.string(), z.number()])
+      .transform((value) => (typeof value === 'number' ? value.toFixed(1) : value.trim()))
+      .nullish()
+      .catch(undefined),
   })
   .passthrough()
 

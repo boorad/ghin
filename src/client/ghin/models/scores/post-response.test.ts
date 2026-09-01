@@ -87,6 +87,58 @@ describe('schemaScorePostResponse', () => {
         expect(result.data.estimated_handicap_display).toBe('+1.2')
       }
     })
+
+    // A Handicap Index always displays to one decimal, and this is the string
+    // Spicy Golf renders — `String(15)` would put `15` on screen.
+    it('formats a whole number to one decimal', () => {
+      const result = schemaInner.safeParse({ ...baseResponse, estimated_handicap_display: 15 })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.estimated_handicap_display).toBe('15.0')
+      }
+    })
+
+    it('rounds a number carrying extra precision to one decimal', () => {
+      const result = schemaInner.safeParse({ ...baseResponse, estimated_handicap_display: 15.44 })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.estimated_handicap_display).toBe('15.4')
+      }
+    })
+
+    // `z.string()` does not trim, unlike the `string` helper every other string
+    // on this response goes through.
+    it('trims a padded string', () => {
+      const result = schemaInner.safeParse({ ...baseResponse, estimated_handicap_display: ' 15.4 ' })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.estimated_handicap_display).toBe('15.4')
+      }
+    })
+
+    // Declaring the field must not create a rejection path that `.passthrough()`
+    // did not have. Nothing computes on this string, so an unexpected shape
+    // degrades to absent rather than taking down an already-posted score.
+    it('degrades an unexpected shape to undefined instead of rejecting', () => {
+      const result = schemaInner.safeParse({ ...baseResponse, estimated_handicap_display: {} })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.estimated_handicap_display).toBeUndefined()
+      }
+    })
+
+    it('degrades a boolean to undefined instead of rejecting', () => {
+      const result = schemaInner.safeParse({ ...baseResponse, estimated_handicap_display: true })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.estimated_handicap_display).toBeUndefined()
+      }
+    })
   })
 
   describe('leniency', () => {
@@ -182,6 +234,27 @@ describe('schemaScorePostResponse', () => {
       const { slope_rating: _omitted, ...rest } = baseResponse
 
       expect(schemaInner.safeParse(rest).success).toBe(true)
+    })
+
+    // The `string` helper is `z.string().trim().min(1)`, so `""` used to reject
+    // the whole response. GHIN sends it as a plain "no message" sentinel, and
+    // `validation_message` is where it shows up most.
+    it('parses when validation_message is an empty string', () => {
+      const result = schemaInner.safeParse({ ...baseResponse, validation_message: '' })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.validation_message).toBeNull()
+      }
+    })
+
+    it('parses when course_name is an empty string', () => {
+      const result = schemaInner.safeParse({ ...baseResponse, course_name: '' })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.course_name).toBeNull()
+      }
     })
 
     // The other side of the policy: leniency stops at the numbers a consumer
