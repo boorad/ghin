@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { schemaScoresResponse } from './response'
 import { schemaScore } from './score'
 
 /**
@@ -50,6 +51,61 @@ const baseScore = {
   used: true,
 }
 
+/** A complete, valid raw hole-detail row, as nested under a score's `hole_details`. */
+const baseHoleDetail = {
+  adjusted_gross_score: 5,
+  approach_shot_accuracy: null,
+  drive_accuracy: null,
+  fairway_hit: true,
+  gir_flag: null,
+  hole_number: 1,
+  id: 10,
+  most_likely_score: null,
+  par: 4,
+  putts: 2,
+  raw_score: 5,
+  stroke_allocation: 7,
+  x_hole: false,
+}
+
+/** A complete, valid raw scoring-adjustment row, as nested under a score's `adjustments`. */
+const baseAdjustment = {
+  display: 'ESR',
+  type: 'exceptional_score_reduction',
+  value: -1,
+}
+
+/** A complete, valid raw statistics object, as nested under a score's `statistics`. */
+const baseStatistics = {
+  birdies_or_better_percent: 5,
+  bogeys_percent: 40,
+  double_bogeys_percent: 10,
+  fairway_hits_percent: 50,
+  gir_percent: 25,
+  last_stats_update_date: '2026-03-18',
+  last_stats_update_type: 'manual',
+  missed_general_approach_shot_accuracy_percent: 10,
+  missed_left_approach_shot_accuracy_percent: 10,
+  missed_left_percent: 10,
+  missed_long_approach_shot_accuracy_percent: 10,
+  missed_long_percent: 10,
+  missed_right_approach_shot_accuracy_percent: 10,
+  missed_right_percent: 10,
+  missed_short_approach_shot_accuracy_percent: 10,
+  missed_short_percent: 10,
+  one_putt_or_better_percent: 20,
+  par3s_average: 3.5,
+  par4s_average: 4.5,
+  par5s_average: 5.5,
+  pars_percent: 45,
+  putts_total: 33,
+  three_putt_or_worse_percent: 5,
+  triple_bogeys_or_worse_percent: 0,
+  two_putt_or_better_percent: 95,
+  two_putt_percent: 75,
+  up_and_downs_total: 4,
+}
+
 describe('schemaScore', () => {
   it('passes through course_id, course_name and facility_name when present', () => {
     const parsed = schemaScore.parse({
@@ -62,6 +118,39 @@ describe('schemaScore', () => {
     expect(parsed.course_id).toBe('2539')
     expect(parsed.course_name).toBe('Test Course')
     expect(parsed.facility_name).toBe('Test Facility')
+  })
+
+  it('passes through undeclared keys (#64)', () => {
+    const parsed = schemaScore.parse({ ...baseScore, some_future_ghin_key: 'kept' })
+    // toHaveProperty avoids the TS4111 / biome useLiteralKeys conflict on index-signature access
+    expect(parsed).toHaveProperty('some_future_ghin_key', 'kept')
+  })
+
+  it('passes through undeclared keys inside hole_details (#64)', () => {
+    const parsed = schemaScore.parse({
+      ...baseScore,
+      hole_details: [{ ...baseHoleDetail, some_new_key: 'kept' }],
+    })
+
+    expect(parsed.hole_details[0]).toHaveProperty('some_new_key', 'kept')
+  })
+
+  it('passes through undeclared keys inside adjustments (#64)', () => {
+    const parsed = schemaScore.parse({
+      ...baseScore,
+      adjustments: [{ ...baseAdjustment, some_new_key: 'kept' }],
+    })
+
+    expect(parsed.adjustments[0]).toHaveProperty('some_new_key', 'kept')
+  })
+
+  it('passes through undeclared keys inside statistics (#64)', () => {
+    const parsed = schemaScore.parse({
+      ...baseScore,
+      statistics: { ...baseStatistics, some_new_key: 'kept' },
+    })
+
+    expect(parsed.statistics).toHaveProperty('some_new_key', 'kept')
   })
 
   it('accepts a numeric course_id', () => {
@@ -106,5 +195,21 @@ describe('schemaScore', () => {
   ])('transforms score_type %s to %s', (raw, meaning) => {
     const parsed = schemaScore.parse({ ...baseScore, score_type: raw })
     expect(parsed.score_type).toBe(meaning)
+  })
+})
+
+describe('schemaScoresResponse', () => {
+  it('passes through undeclared sibling keys on the envelope (#64)', () => {
+    const parsed = schemaScoresResponse.parse({
+      average: 10.5,
+      highest_score: 95,
+      lowest_score: 78,
+      scores: [baseScore],
+      total_count: 1,
+      some_new_key: 'kept',
+    })
+
+    expect(parsed).toHaveProperty('some_new_key', 'kept')
+    expect(parsed.scores).toHaveLength(1)
   })
 })
