@@ -25,7 +25,7 @@ Two concrete consequences:
 - [x] Phase 2 — `handicaps/response.ts:20` → `handicap.nullable()` with sibling-style comment + test
 - [x] Phase 3 — add `strictFloat` / `strictNumber` and apply at audited response fields + tests
 - [x] Phase 4 — changeset (`minor`: new export + previously-`0` parses now reject)
-- [ ] Review findings applied
+- [x] Review findings applied
 - [ ] Manual verification (see below)
 
 ## Decisions
@@ -59,7 +59,20 @@ Two concrete consequences:
   `post-response.ts` leniency paragraph, argued in the comment: a fabricated `0` score for golfer `0`
   is worse than the rejected parse, since it is wrong rather than lost.
 
+- **Review #2 — `getScores` blast radius.** The reviewer offered (a) add `partitionRows` + `onDegraded` to
+  `scores/response.ts` in this PR, or (b) keep `schemaScore` strict and gate the release on the UAT checks
+  below. Took (b): partitioning `getScores` changes its published response shape (new `invalid` key) and is
+  its own issue, while score differentials are the motivating example in #63. The changeset now says
+  plainly that `getScores` and `courses.getTeeSetRating` fail the whole call.
+- **Review #7** — the `ponytail:` prefix on the strict-helper comment stays: the deferred blanket fix to
+  `float`/`number` is real debt the ledger should track.
+- Whitespace-only strings are treated as blank (`null` in `handicap`, rejected by `strictFloat`/`strictNumber`),
+  matching `emptyString = z.string().trim()`.
+
 ## Manual verification
+
+**Carried — owner: brad.** None of these are provable by unit tests; the branch is committed and the PR is
+held until they are checked.
 
 Carried from recon; unit tests cannot prove these:
 
