@@ -502,12 +502,16 @@ describe('GhinClient', () => {
     // golfer. It is now backed by `/golfers/search.json`, so the assertion that
     // matters is which entity the request client is asked for.
     it('should fetch the golfer record from golfers/search and return it', async () => {
+      // `mockFetch` stands in for the request client, so it returns already-*parsed* data and
+      // `schemaGolfer` never runs here. `handicap_index` is therefore the number the schema
+      // emits (`handicap.nullish()`), not the `"12.5"` string GHIN puts on the wire — the
+      // display twin `hi_display` is the string.
       const mockResponse = {
         golfers: [
           {
             ghin: 1234567,
             last_name: 'Doe',
-            handicap_index: '12.5',
+            handicap_index: 12.5,
             hi_display: '12.5',
             status: 'Active',
           },
@@ -519,7 +523,7 @@ describe('GhinClient', () => {
       const result = await ghinClient.handicaps.getOne(1234567)
 
       expect(result).toEqual(mockResponse.golfers[0])
-      expect(result?.handicap_index).toBe('12.5')
+      expect(result?.handicap_index).toBe(12.5)
       expect(mockFetch).toHaveBeenCalledWith(expect.objectContaining({ entity: 'golfers_search' }))
     })
 

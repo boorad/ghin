@@ -15,7 +15,7 @@ const { tee_set_ratings, invalid } = await client.courses.getTeeSetRatingsForSco
 const eighteen = tee_set_ratings.filter((rating) => rating.RatingType === 'Total')
 ```
 
-Rows are PascalCase and carry `TeeSetRatingId`, `TeeSetRatingName`, `RatingType`, `CourseRating`, `SlopeRating`, `BogeyRating`, `DisplayName`, `Gender`, `TeeSetStatus`, `StrokeAllocation`, `TotalPar`, `IsShorter`, `EligibleSides` and `Holes`.
+Rows are PascalCase and carry `TeeSetRatingId`, `TeeSetRatingName`, `RatingType`, `CourseRating`, `SlopeRating`, `BogeyRating`, `DisplayName`, `Gender`, `TeeSetStatus`, `StrokeAllocation`, `TotalPar`, `IsShorter`, `EligibleSides` and `Holes`. Each entry in `Holes` is PascalCase too — `Number`, `HoleId`, `Length`, `Par` and `Allocation`, of which only `Number` is required — and the schema for one is newly exported as `schemaTeeSetRatingForScorePostingHole`, alongside `schemaTeeSetRatingForScorePostingEntry`.
 
 **`RatingType` is the field consumers must filter on.** GHIN sends one row per tee set *per rating side* — `Total`, `Front` and `Back` — so course 7817 answers with 45 rows for 15 tee sets, and `TeeSetRatingId` is shared by all three rows of a tee set rather than identifying a row. A `Front` row's `CourseRating: 33.2` is a nine-hole rating that is indistinguishable from an eighteen-hole one without reading `RatingType`. There is no `tee_set_side` anywhere in the payload.
 

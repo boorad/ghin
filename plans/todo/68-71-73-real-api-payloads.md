@@ -28,8 +28,8 @@ the same golfer record and carries the handicap index.
 - [x] Phase 2 — #71a: declare the 11 score-row keys and the 8 statistics counters
 - [x] Phase 3 — #71b: re-export `./score` from the scores barrel
 - [x] Phase 4 — #68: repoint `handicaps.getOne` at `/golfers/search.json`
-- [ ] Phase 5 — whole-branch tests
-- [ ] Phase 6 — review + fixes
+- [x] Phase 5 — whole-branch tests
+- [x] Phase 6 — review + fixes
 
 ## Decisions (asked)
 

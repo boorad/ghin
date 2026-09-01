@@ -392,6 +392,97 @@ describe('schemaScore', () => {
     expect(parsed.statistics?.birdies_or_better_percent).toBe(5)
   })
 
+  // --- declaring a key must not be stricter than the `.passthrough()` it replaced (#71) --------
+  //
+  // Every case below parsed fine before these keys were declared, because `.passthrough()` carried
+  // anything through untouched. Declaring them is only safe if it stays that way, so these are the
+  // regression guard: a required key costs the whole score row the day GHIN drops it (#46, #51,
+  // #55, #56, #57), and "present on all 85 UAT rows" is evidence, not a contract.
+
+  it.each([['handicap_index'], ['handicap_index_display'], ['to_par_display_value']])(
+    'parses a score row with no %s key at all (#71)',
+    (key) => {
+      const { [key]: _dropped, ...row } = baseScore as Record<string, unknown>
+      const parsed = schemaScore.parse(row)
+
+      expect(parsed[key as keyof typeof parsed]).toBeUndefined()
+      expect(parsed.id).toBe(1)
+    },
+  )
+
+  // `""` is an ordinary GHIN display value, and the bare `string` helper is `.min(1)` — it would
+  // have cost the whole row over an empty display string. Same treatment as `validation_message`.
+  it('accepts an empty handicap_index_display and normalizes it to null', () => {
+    const parsed = schemaScore.parse({ ...baseScore, handicap_index_display: '' })
+
+    expect(parsed.handicap_index_display).toBeNull()
+  })
+
+  it('keeps an explicit null on handicap_index / handicap_index_display / to_par_display_value', () => {
+    const parsed = schemaScore.parse({
+      ...baseScore,
+      handicap_index: null,
+      handicap_index_display: null,
+      to_par_display_value: null,
+    })
+
+    expect(parsed.handicap_index).toBeNull()
+    expect(parsed.handicap_index_display).toBeNull()
+    expect(parsed.to_par_display_value).toBeNull()
+  })
+
+  it('normalizes an empty to_par_display_value to null', () => {
+    const parsed = schemaScore.parse({ ...baseScore, to_par_display_value: '' })
+
+    expect(parsed.to_par_display_value).toBeNull()
+  })
+
+  // `statistics` is one nested object standing between GHIN and a whole score row, so a dropped
+  // counter must not cost the round it was attached to.
+  it.each([
+    ['birdies_or_better_total'],
+    ['bogeys_total'],
+    ['double_bogeys_total'],
+    ['pars_total'],
+    ['triple_bogeys_or_worse_total'],
+    ['one_putt_or_better_total'],
+    ['two_putt_total'],
+    ['three_putt_or_worse_total'],
+  ])('parses a statistics block with no %s key and keeps its score row (#71)', (key) => {
+    const { [key]: _dropped, ...statistics } = baseStatistics as Record<string, unknown>
+    const parsed = schemaScore.parse({ ...baseScore, statistics })
+
+    expect(parsed.statistics?.[key as keyof NonNullable<typeof parsed.statistics>]).toBeUndefined()
+    expect(parsed.id).toBe(1)
+  })
+
+  // The #63 hazard in counter form: `number` is `z.coerce.number()` and `Number(null) === 0`, so a
+  // plain declaration would hand a consumer a fabricated zero count to sum. `strictNumber` keeps
+  // the null a null, while still coercing the genuine `"3"` GHIN sends.
+  it('keeps a null statistics counter null rather than fabricating 0, and still coerces "3"', () => {
+    const parsed = schemaScore.parse({
+      ...baseScore,
+      statistics: { ...baseStatistics, pars_total: null, birdies_or_better_total: '3' },
+    })
+
+    expect(parsed.statistics?.pars_total).toBeNull()
+    expect(parsed.statistics?.birdies_or_better_total).toBe(3)
+  })
+
+  // The whole-row consequence, asserted end to end rather than inferred: a statistics block short
+  // one of the eight new counters must land in `scores`, not `invalid`.
+  it('does not partition a score row away over a statistics block missing a new counter (#71)', () => {
+    const { pars_total: _dropped, ...statistics } = baseStatistics
+    const parsed = schemaScoresResponse.parse({
+      highest_score: 95,
+      lowest_score: 78,
+      scores: [{ ...baseScore, statistics }],
+    })
+
+    expect(parsed.scores).toHaveLength(1)
+    expect(parsed.invalid).toEqual([])
+  })
+
   // The real wire-C row from UAT golfer 13373254 (#66): an 18-hole score that is the exact sum of
   // that golfer's two nine-hole rounds (48 + 46 = 94, ratings 34.6 + 35.6 = 70.2). It displays as
   // N because it is *derived from* nines, not because it is a nine-hole round — which is why

@@ -559,6 +559,18 @@ export class GhinClient {
   // without warning, and `schemaGolfer` is `.passthrough()` (#70) — narrowing
   // here would silently drop the very keys that passthrough exists to preserve.
   // The endpoint has no `clubs`, so the old response's `clubs` array is gone.
+  //
+  // ACTIVE GOLFERS ONLY. This delegates to `golfersGetOne`, which searches with
+  // `status: 'Active'` (the same default `golfersSearch` applies), and there is
+  // no parameter here to opt out of it. A lapsed or inactive member has a real,
+  // readable Handicap Index and this method still resolves `undefined` for them
+  // — no error, and indistinguishable from "no such GHIN number". Callers who
+  // need those golfers should use `golfers.search({ golfer_id, status })` with
+  // `'Inactive'` or `'All'`. Parameterizing this is a separate design decision.
+  //
+  // The lookup is a golfer search underneath, so a row that fails `schemaGolfer`
+  // is reported to `onDegraded` under entity `golfers_search`, not a handicaps
+  // entity — an `undefined` from a dropped row reads as a search in that log.
   private async handicapsGetOne(ghinNumber: number): Promise<GolfersSearchResponse['golfers'][number] | undefined> {
     return this.golfersGetOne(ghinNumber)
   }

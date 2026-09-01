@@ -128,8 +128,16 @@ const schemaScore = z
     // so a golfer with no established index (UAT golfer 13373258) never hands a consumer a
     // 999.0 index that passes a `typeof x === 'number'` guard. The display twin is the literal
     // string `"NH"` on those same rows and is kept verbatim — it is rendered, never parsed.
-    handicap_index: handicap,
-    handicap_index_display: string,
+    //
+    // Both are `.nullish()`, never bare/required, even though all 85 captured rows carry them:
+    // "present across a UAT capture" is evidence, not a contract, and this branch exists because
+    // the documented contract was wrong. A required key costs the whole score row the day GHIN
+    // drops it (#46, #51, #55, #56, #57), and a score is not unusable without its index — that is
+    // the same bar `course/tee-set-rating-for-score-posting.ts` applies. `handicap_index_display`
+    // is `emptyStringToNull` rather than `string` for the same reason `validation_message` below
+    // is: the bare `string` helper is `.min(1)` and would cost the row over GHIN's ordinary `""`.
+    handicap_index: handicap.nullish(),
+    handicap_index_display: emptyStringToNull.nullish(),
     hole_details: z.array(schemaHoleDetail),
     id: number,
     is_manual: boolean,
@@ -170,9 +178,11 @@ const schemaScore = z
     status: schemaScoreStatusWithTransform,
     // `"-"` is GHIN's empty sentinel on this field — the same convention `schemaNumberOrDash`
     // handles on the envelope in `response.ts` — and is normalized to null so no consumer renders
-    // a bare dash as a score. Everything else survives verbatim (`"+12"`): it is a display string
-    // with a sign convention of its own, not a number.
-    to_par_display_value: emptyStringToNull.transform((value) => (value === '-' ? null : value)),
+    // a bare dash as a score. `""` normalizes to null too, via `emptyStringToNull`. Everything
+    // else survives verbatim (`"+12"`): it is a display string with a sign convention of its own,
+    // not a number. `.nullish()` for the same reason as `handicap_index` above — a missing key
+    // must not cost the whole score row (#46, #51, #55, #56, #57).
+    to_par_display_value: emptyStringToNull.transform((value) => (value === '-' ? null : value)).nullish(),
     unadjusted_differential: strictFloat,
     used: boolean,
     // Only sent on `UnderReview` rows (2 of the 85 captured), and `""` is GHIN's ordinary
