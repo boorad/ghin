@@ -165,6 +165,23 @@ describe('Validation', () => {
       expect(handicap.nullish().parse(undefined)).toBe(undefined)
     })
 
+    // GHIN's numeric no-handicap sentinel: `hi_value`/`low_hi_value` on
+    // `golfers.search` and `handicap_index`/`net_score` on scores come back as
+    // 999 where the display field says "NH" (confirmed on api-uat.ghin.com).
+    // 999 is far past the WHS maximum index of 54.0, so it cannot be real.
+    it('should map the 999 no-handicap sentinel to null', () => {
+      expect(handicap.parse(999)).toBe(null)
+      expect(handicap.parse('999')).toBe(null)
+      expect(handicap.parse('999M')).toBe(null)
+      expect(handicap.nullish().parse(999)).toBe(null)
+    })
+
+    it('should leave values near the sentinel untouched', () => {
+      expect(handicap.parse(99.9)).toBe(99.9)
+      expect(handicap.parse(54)).toBe(54)
+      expect(handicap.parse(999.1)).toBe(999.1)
+    })
+
     it('should handle edge cases', () => {
       expect(handicap.safeParse('12').success).toBe(true) // Integer
       expect(handicap.safeParse('12.50').success).toBe(true) // Two decimal places

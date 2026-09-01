@@ -144,3 +144,39 @@ sentinel rather than a `null`. This is the same *class* of hazard #63 addresses 
 passes a `typeof x === 'number'` guard but is not a real handicap), but a different cause: the
 library is faithfully reporting what GHIN sent, not fabricating it through coercion. Worth its own
 issue if consumers should see `null` there.
+
+### The 999 sentinel
+
+Follow-through on "Noted while posting, not acted on" above, after the 2026-09-01 UAT probe found
+`999` in three more places than the score-post response: `golfers.search` returns `hi_value: 999`
+and `low_hi_value: 999` for staging golfer `13373258` (`hi_display: "NH"`) and `low_hi_value: 999`
+for established golfer `13373246`, who has no recorded low index; `getScores` returns
+`handicap_index: 999` and `net_score: 999` on scores predating an index. `search.ts` declares
+`handicap_index` / `hi_value` / `low_hi_value` / `low_hi` as `handicap.nullish()`, so `999` was
+reaching consumers as the number `999` — the exact #63 hazard, a number that passes a
+`typeof x === 'number'` guard but is not a real handicap.
+
+Fix is one check in the `handicap` transform (`src/models/validation.ts`), placed *after* the
+suffix parsing so every branch that can yield a number funnels through it: the bare `999`, the
+numeric string `'999'` that `float` coerces, and a suffixed `'999M'` alike. The justification is
+that the WHS maximum Handicap Index is 54.0, so `999` cannot be a real index, course handicap,
+playing handicap or shots-off value.
+
+- **`'999M'` → `null`.** A suffix is a WHS *status* marker (`M` = modified by the Handicap
+  Committee), not part of the value, so `'999M'` is the sentinel wearing a status flag and gets the
+  same treatment as bare `999`. Asserted in `validation.test.ts` rather than left implicit, since
+  it is the one non-obvious case.
+- **`999.1` and `99.9` are untouched** — the check is strict equality, not a threshold. A
+  threshold (`> 54`) was rejected: it would silently swallow genuinely malformed data that the
+  refine should surface, and GHIN's sentinel is a specific magic number, not a range.
+- **`float` / `number` / `strictFloat` / `strictNumber` deliberately unchanged.** `999` is a
+  legitimate value for a non-handicap numeric (a gross score, an id), so the sentinel belongs only
+  in `handicap`.
+- **No new fields declared on `scores/post-response.ts` or `scores/score.ts`.** Those payloads
+  carry `handicap_index: 999` and `net_score: 999` too, but declaring them adds published surface
+  and is a separate decision — deliberately left open. `net_score` in particular is not a handicap
+  and would need its own reasoning before the sentinel applies to it.
+
+Tests: `handicap` sentinel + near-sentinel regression cases in `src/models/validation.test.ts`, and
+a golfer row with `hi_value: 999` / `low_hi_value: 999` parsing to `null` in
+`src/client/ghin/models/golfers/search.test.ts`. Whole suite green (416 tests).

@@ -114,6 +114,27 @@ export const gender = z.enum(['M', 'F'])
  */
 const HANDICAP_WITH_SUFFIX = /^([+-]?\d+(?:\.\d+)?)[A-Za-z]+$/
 
+/**
+ * GHIN's numeric "no handicap" sentinel. The WHS maximum Handicap Index is 54.0,
+ * so `999` cannot be a real index, course handicap, playing handicap or shots-off
+ * value — it is unambiguously a marker, the numeric twin of the `"NH"` string GHIN
+ * sends in the matching display field.
+ *
+ * Confirmed against `api-uat.ghin.com` on 2026-09-01: `golfers.search` returns
+ * `hi_value: 999` and `low_hi_value: 999` for staging golfer 13373258 (whose
+ * `hi_display` is `"NH"`), and `low_hi_value: 999` for established golfer 13373246,
+ * who simply has no recorded low index; `getScores` returns `handicap_index: 999`
+ * and `net_score: 999` on scores predating an index; the `scores.post` response
+ * returns `handicap_index: 999` and `net_score: 999` alongside
+ * `handicap_index_display: "NH"`.
+ *
+ * This is the same class of hazard as issue #63 — a number that passes a
+ * `typeof x === 'number'` guard but is not a real handicap — so it is mapped to
+ * `null` here. It deliberately does not live in `float` / `number` / `strictFloat` /
+ * `strictNumber`: `999` is a legitimate value for a non-handicap numeric.
+ */
+const NO_HANDICAP_SENTINEL = 999
+
 // `z.null()` and the blank-string branch are ordered ahead of `float` on purpose:
 // `float` is `z.coerce.number()` and `Number(null) === Number('') === Number('  ') === 0`,
 // so with `float` first a no-handicap golfer parsed as scratch (issue #63). Unions
@@ -140,15 +161,21 @@ export const handicap = z
       return null
     }
 
+    let parsed: number | null
     if (typeof value === 'string') {
       const match = value.match(HANDICAP_WITH_SUFFIX)
       // Sign handling is unchanged from the plain-number path: `float` is
       // `z.coerce.number()`, so a leading `+` on a plus handicap already parsed
       // to a positive number and callers apply their own plus convention.
-      return match?.[1] ? Number(match[1]) : null
+      parsed = match?.[1] ? Number(match[1]) : null
+    } else {
+      parsed = value
     }
 
-    return value
+    // Checked once, after the suffix parsing, so every branch that can yield a
+    // number is covered — the bare `999`, the numeric string `'999'` that `float`
+    // coerces, and a suffixed `'999M'` alike.
+    return parsed === NO_HANDICAP_SENTINEL ? null : parsed
   })
 
 export const number = float.int()

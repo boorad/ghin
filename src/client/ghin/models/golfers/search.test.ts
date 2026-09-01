@@ -17,6 +17,26 @@ describe('Golfer Search Schema', () => {
       }
     })
 
+    // GHIN sends 999 where the display field says "NH" — observed on
+    // api-uat.ghin.com for a golfer with no index, and for an established
+    // golfer with no recorded low index. It must not reach consumers as 999.
+    it('should map the 999 no-handicap sentinel to null', () => {
+      const result = schemaGolfer.safeParse({
+        ...minimalGolfer,
+        handicap_index: 'NH',
+        hi_display: 'NH',
+        hi_value: 999,
+        low_hi_value: 999,
+      })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.handicap_index).toBe(null)
+        expect(result.data.hi_value).toBe(null)
+        expect(result.data.low_hi_value).toBe(null)
+      }
+    })
+
     it('should reject a golfer with no ghin', () => {
       expect(schemaGolfer.safeParse({ last_name: 'Doe' }).success).toBe(false)
     })
