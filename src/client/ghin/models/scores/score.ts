@@ -12,13 +12,14 @@ const rawScoreTypes = ['A', 'C', 'E', 'H', 'N', 'P', 'T'] as const
 const schemaRawScoreTypes = z.enum(rawScoreTypes)
 type RawScoreType = z.infer<typeof schemaRawScoreTypes>
 
-const scoreTypes = ['AWAY', 'COMBINED', 'EXCEPTIONAL', 'HOME', '9_HOLE_ROUNDS', 'PENALTY', 'TOURNAMENT'] as const
+const scoreTypes = ['AWAY', 'COMPETITION', 'EXCEPTIONAL', 'HOME', '9_HOLE_ROUNDS', 'PENALTY', 'TOURNAMENT'] as const
 const schemaScoreType = z.enum(scoreTypes)
 type ScoreType = z.infer<typeof schemaScoreType>
 
 const scoreTypesMap: Record<RawScoreType, ScoreType> = {
   A: 'AWAY',
-  C: 'COMBINED',
+  // C is COMPETITION under the 2020 USGA WHS; T (TOURNAMENT) is legacy but the API still emits it, so keep accepting it.
+  C: 'COMPETITION',
   E: 'EXCEPTIONAL',
   H: 'HOME',
   N: '9_HOLE_ROUNDS',
