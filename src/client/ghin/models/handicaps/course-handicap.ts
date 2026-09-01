@@ -51,10 +51,14 @@ type CourseHandicapHole = z.infer<typeof schemaCourseHandicapHole>
 // `Number(null) === 0`, which would hand back a fabricated scratch Course
 // Handicap for a golfer who has none — a wrong number, not a missing one.
 //
-// Course Rating and Slope Rating stay required, matching
-// `schemaCourseDetailsTeeSetRatings`: a zero there passes a
-// `typeof x === 'number'` guard and reaches the Course Handicap formula as if it
-// were a real rating.
+// Course Rating and Slope Rating stay required `float`, matching
+// `schemaCourseDetailsTeeSetRatings`. Be clear about what that does and does not
+// buy: required-ness rejects a *missing* key, but `float` is `z.coerce.number()`
+// and `Number(null) === 0`, so an explicit `null` still parses to a fabricated
+// scratch rating that passes a `typeof x === 'number'` guard. That is the
+// repo-wide hazard tracked in #63, deliberately not solved here — solving it
+// locally would leave this one schema disagreeing with every other required
+// numeric in the codebase.
 //
 // `tee_set_side` is a plain string rather than `schemaTeeSetSide` — the enum is
 // right for the request, but pinning it on the response would drop an entire tee
@@ -81,20 +85,25 @@ type CourseHandicapRating = z.infer<typeof schemaCourseHandicapRating>
 // indistinguishable from a tee GHIN rates only partially; the whole tee set
 // fails into `invalid` instead, which reports.
 //
-// `is_shorter` and `eligible_sides` are `null` in both staging captures and get
-// `.nullish()`, never a bare `.nullable()` — GHIN drops keys entirely rather
-// than nulling them (#46, #51, #55, #56, #57).
+// `is_shorter` is `null` in both staging captures and gets `.nullish()`, never a
+// bare `.nullable()` — GHIN drops keys entirely rather than nulling them (#46,
+// #51, #55, #56, #57).
 const schemaCourseHandicapTeeSet = z
   .object({
     tee_set_id: number,
     name: string,
     gender: gender.nullish(),
     holes_number: number.nullish(),
-    // Nullish because the Course Handicap doesn't depend on the hole list: a
-    // dropped `holes` key must not cost the caller the number they asked for.
+    // Nullish so a dropped `holes` key doesn't cost the caller the Course
+    // Handicap they asked for. A hole list that is present but malformed still
+    // fails the whole tee set into `invalid` — deliberate: a silently short hole
+    // list is indistinguishable from a genuinely short one, and unlike a missing
+    // key it reports.
     holes: z.array(schemaCourseHandicapHole).nullish(),
     is_shorter: boolean.nullish(),
-    eligible_sides: z.unknown().nullish(),
+    // `eligible_sides` is `null` in every staging capture and is left undeclared
+    // on purpose: `.passthrough()` carries it through untouched, and declaring it
+    // `z.unknown()` would only add a useless `unknown` to the inferred type.
     ratings: z.array(schemaCourseHandicapRating),
   })
   .passthrough()

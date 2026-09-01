@@ -71,7 +71,7 @@ data-dependent field — but it is the one thing worth re-checking against
 production before a consumer depends on it.
 
 ## Live tracker
-- [x] Phase 1 — Leniency: `handicap` on `handicap_index` in both entry schemas (kept; inert but correct)
+- [x] Phase 1 — Leniency on `handicap_index` (later deleted outright — the field does not exist on these endpoints)
 - [x] Phase 1b — Sibling fields reverted to `float`/`number`, deferred to #63
 
 - [x] Phase 2 — Partitioning on the two list responses (superseded by Phase 5, kept in history)
@@ -101,42 +101,25 @@ Both asked and answered before implementation:
    fixing the field that prompted the issue *and* bringing the schema in line
    with the leniency policy. It is also the only mechanism this repo has for
    noticing the next GHIN payload change on these two endpoints.
-2. **The sibling fields are left alone, deferred to #63.** Initially decided the
-   other way (widen `course_handicap`/`playing_handicap` to `number | null` via
-   the helper), then reversed once #63 was brought into scope. #63 is the
-   repo-wide issue for exactly this hazard — `z.coerce.number()` turning an
-   explicit `null` into `0` — and it proposes the *opposite* remedy: reject
-   `null` so it fails loudly, rather than accept it and surface it. Resolving one
-   instance here in the other direction would pre-decide #63's repo-wide rule
-   from inside an unrelated PR, and would cost a breaking type widening to do it.
+2. **The sibling fields are left alone, deferred to #63** — *reversed on 2026-09-01
+   by live evidence; recorded here because the reasoning changed, not just the
+   answer.* The original decision kept `course_handicap` / `playing_handicap` as
+   `float` / `number` on the grounds that no evidence showed GHIN sending `null`
+   there, and that widening them would pre-decide #63's repo-wide rule.
 
-   Phase 2's partitioning already softens the case for acting now: once rows are
-   partitioned, a genuinely malformed entry degrades and fires `onDegraded`
-   instead of failing the batch, which is the loud-not-silent outcome #63 wants.
-   So these two fields keep `float` / `number`, and a test documents today's
-   `null` → `0` behaviour as the landing spot for #63.
+   Staging settled it: GHIN sends `course_handicap: null` (with
+   `course_handicap_display: 'NH'`) and `playing_handicap: null` for any golfer
+   with no established index. That is routine, not exceptional. So both are now
+   `handicap.nullable()` and the emitted type widens to `number | null`.
 
-   Note for #63, found while implementing this: the `handicap` helper itself has
-   the bug. `handicap` is `z.union([float, z.string(), z.null()])` and Zod unions
-   take the first success, so `float` (`z.coerce.number()`) swallows `null` as
-   `0` and the `z.null()` branch is unreachable. Any **bare** `handicap` is
-   therefore affected — `src/client/ghin/models/handicaps/response.ts:16` is a
-   live instance. `handicap.nullish()` is safe because the wrapper short-circuits
-   `null` before the inner union. Also for #63: `handicap_index: ''` yields `0`
-   for the same reason (`Number('') === 0`), a live instance shared with
-   `golfers.search`.
+   This does **not** pre-empt #63. #63 is about `z.coerce.number()` silently
+   *corrupting* a value — turning an explicit `null` into a fabricated `0` on a
+   field that is genuinely required. These two fields are different: the `null`
+   is a real, documented value meaning "this golfer has no handicap". Declaring
+   them nullable models the API; it does not decide what to do about required
+   numerics elsewhere. `course_rating` / `slope_rating` in the new tee-set schema
+   are left as required `float` precisely so that call stays with #63.
 
-3. **The twenty percentage buckets on `schemaCoursePlayerHandicapsResponse` stay
-   required** (Phase 7). Considered making them `.nullish()` so a dropped bucket
-   could not fail the response, and rejected it: row-level leniency is for data
-   variance in a golfer's values, and it is only safe because the dropped row is
-   reported through `onDegraded`. A missing bucket is the endpoint changing
-   shape, and `GhinDegradation` has no way to report it — there is no raw row to
-   put in `sample`. Nullish buckets would therefore trade a loud
-   `ValidationError` for a silent `undefined` at every call site, plus `?.` on
-   every consumer's bucket access, which is exactly the silence
-   `src/models/degradation.ts` exists to prevent. All twenty buckets are present
-   in every staging capture.
 
 ## Assumptions
 
@@ -190,22 +173,33 @@ expression, `sample` identity) but would still pass if the response schemas were
 reverted to plain `z.array(...)`. The end-to-end proof lives in the model tests.
 Same limitation as the `courses.search` precedent.
 
-## Manual verification (carried to Phase 6.5)
+## Manual verification
 
-1. Confirm GHIN's course/playing handicap endpoints actually return the suffix in
-   `handicap_index` the same way `golfers.search` does — the batch failure is
-   inferred by analogy to #56, not directly observed on these endpoints. Log the
-   raw body inside `RequestClient._fetch` before `schema.safeParse`.
-2. Same capture: what do `course_handicap` / `playing_handicap` contain for a
-   golfer with no established index — `"NH"`, `null`, a suffixed string, or a
-   plain number? This is the live evidence #63 needs, and it decides whether
-   these two fields are actually exposed to the `null` → `0` hazard in practice.
-3. The foursome case end to end against UAT: POST `playing_handicaps` with 4
-   golfers where exactly one has a suffixed index. Confirm nothing comes back on
-   `0.15.4` and all four come back after the fix.
-4. Sandbox vs production: suffixed indexes are a production-data phenomenon and
-   UAT test golfers may never carry an `M`/`WD` status. A clean UAT run does not
-   clear item 1.
-5. Downstream, after publish: anyone catching the `ValidationError` these
-   endpoints used to throw on a bad row will find that throw no longer happens —
-   the row comes back in `invalid` and `onDegraded` fires instead.
+Items 1-3 of the original list are **closed** — they were answered directly by
+probing `api-uat.ghin.com` on 2026-09-01 rather than left for a human, and the
+captured payloads are committed in `handicaps/__fixtures__/index.ts`. The
+`handicap_index` suffix question is void: that field does not exist on either
+endpoint.
+
+Verified live, after the fix:
+
+- `getCoursePlayerHandicaps` with three established golfers **plus** the `NH`
+  golfer returns all four; the `NH` golfer comes back `playing_handicap: null`,
+  `shots_off: null`, `playing_handicap_display: 'NH'`. Before the fix it threw.
+- `getCourseHandicaps` returns 15 tee sets with `invalid: []` for both an
+  established golfer (`course_handicap: 11`) and the `NH` golfer
+  (`course_handicap: null`). Before the fix it threw on every call.
+- `getPlayingHandicaps` is gone from the client surface.
+
+Still open, for a human:
+
+1. **Production re-check.** Every observation here is from UAT. The shape
+   difference found is structural rather than data-dependent, so production is
+   very unlikely to differ — but nothing in this branch has touched
+   `api2.ghin.com`, and the `tee_sets` schema is now load-bearing for
+   `getCourseHandicaps`. Worth one call against production before a consumer
+   depends on it.
+2. **A golfer with an `M` / `WD` status.** The staging roster has an `NH` golfer
+   but none carrying a committee-modified or withdrawn index, so the
+   suffixed-value path (`"19.1M"`) is still covered only by unit tests against
+   the `handicap` helper, not by a captured payload.

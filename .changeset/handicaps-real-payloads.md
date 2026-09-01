@@ -2,7 +2,7 @@
 '@spicygolf/ghin': minor
 ---
 
-Fix `handicaps.getCourseHandicaps` and `handicaps.getCoursePlayerHandicaps`, neither of which worked for a group containing a golfer with no established index; partition the course-handicap tee sets so one bad row no longer costs the whole batch; and remove `handicaps.getPlayingHandicaps`, which could never succeed.
+Fix `handicaps.getCourseHandicaps`, which failed on every call, and `handicaps.getCoursePlayerHandicaps`, which lost a whole group to any golfer with no established index; partition both responses so one bad row no longer costs the rest; and remove `handicaps.getPlayingHandicaps`, which could never succeed.
 
 **`handicaps.getPlayingHandicaps` is removed, along with `schemaPlayingHandicapRequest`, `schemaPlayingHandicapEntry`, `schemaPlayingHandicapsResponse` and the `PlayingHandicapRequest`, `PlayingHandicapEntry` and `PlayingHandicapsResponse` types.** The method never functioned. It sent a single `golfer_id` to `POST /playing_handicaps.json`, which requires a `golfers` array, so every call it ever made returned `400 {"errors":{"golfers":["is required"]}}` — verified against `api-uat.ghin.com`. Its `{ playing_handicaps: [...] }` response schema described a payload that endpoint does not return; the real response is a percent → `golfer_id` → handicap record.
 
@@ -17,7 +17,7 @@ await client.handicaps.getCoursePlayerHandicaps([
 
 Repairing `getPlayingHandicaps` would have produced a byte-for-byte duplicate of it, so the dead method was deleted instead. Nothing can have depended on it, because it always threw.
 
-`schemaCourseHandicapsGetResponse` was a plain `z.array(...)`, so validation was all-or-nothing: a single row GHIN sent malformed threw `ValidationError` and took every other tee set with it, and `onDegraded` could never fire because there was no partition to report a drop from. It now uses `partitionRows`, matching `courses.search`, `courses.getDetails`, and `golfers.search` (#51, #53). The good rows come back in `tee_sets`, and the response carries an additive `invalid` key holding the rejected rows **raw and untransformed** — a Zod issue list tells you the shape you expected, not the shape GHIN sent.
+The rewritten `schemaCourseHandicapsGetResponse` partitions its rows with `partitionRows`, matching `courses.search`, `courses.getDetails`, and `golfers.search` (#51, #53). This is forward-looking hardening rather than a fix to an observed failure — the old schema never parsed this endpoint at all, so there was no batch to lose. A live course returns fifteen tee sets, and one malformed tee set should cost the caller that tee set rather than the other fourteen. The good rows come back in `tee_sets`, and the response carries an additive `invalid` key holding the rejected rows **raw and untransformed** — a Zod issue list tells you the shape you expected, not the shape GHIN sent.
 
 `handicaps.getCourseHandicaps` now calls `onDegraded` (entity `course_handicaps_get`) whenever rows are dropped, so degradation is never silent: a response that quietly returns fourteen of fifteen tee sets is otherwise indistinguishable from a course with fourteen.
 

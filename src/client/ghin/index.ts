@@ -574,12 +574,8 @@ export class GhinClient {
     }
   }
 
-  // The single entry point for `POST /playing_handicaps.json`. `getPlayingHandicaps`
-  // hit the same URL but sent one `golfer_id` where the API requires a `golfers[]`
-  // array, so every call it ever made came back `400 {"errors":{"golfers":["is
-  // required"]}}` — and its `{ playing_handicaps: [...] }` response schema described
-  // a payload the endpoint does not return. Fixing it would have produced a duplicate
-  // of this method, so it was removed in #62 rather than repaired.
+  // The single entry point for `POST /playing_handicaps.json`; the duplicate
+  // `getPlayingHandicaps` sent a request shape the API rejects and was removed in #62.
   private async handicapsGetCoursePlayerHandicaps(
     request: GolferCourseHandicapRequest[],
   ): Promise<CoursePlayerHandicapsResponse> {
