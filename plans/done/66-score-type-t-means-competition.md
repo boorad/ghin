@@ -107,25 +107,39 @@ Distinct wire letters observed: `A`, `C`, `H`, `T`.
 | `C` | `N` | `N` | 18 | 1 |
 | `H` | `H` | `H` | 18 | 6 |
 | `T` | `C` | `C` | 18 | 4 |
-| `T` | `C` | `CA` | 18 | 3 |
+| `T` | `C` | `CA` | 18 | 4 |
 | `T` | `N` | `NCA` | 9 | 1 |
 
-Two claims in the issue are now falsified, and both were corrected in the changeset and in the
-`score.ts` comments:
+**Two claims in the issue are falsified, and a third finding reverses #65.**
 
 1. **"`score_types=C` returns 0" is wrong.** `C` is live on `/scores.json` — 1 row in 85, golfer
-   `13373254`, score id `1138044991`. Keeping `C` accepted was therefore not merely precautionary;
-   dropping it would have rejected a real row.
-2. **`C` does not render as Competition.** That row is `short: 'N'`, `full: 'N'` on an **18-hole**
-   `is_manual` / `Temporary` score with no hole details and no parent or child rows. It is also the
-   only row where the `N` display prefix does not correspond to `number_of_holes: 9`. Since every
-   row GHIN renders as Competition carries wire `T`, the `C → 'COMPETITION'` mapping from #65 rests
-   on the 2020 WHS naming argument rather than on any observed payload, and this row is mild
-   evidence against it.
+   `13373254`, score id `1138044991`. Dropping it would have rejected a real row.
+2. **`C` is COMBINED, not Competition.** That row is the exact arithmetic sum of the same golfer's
+   two nine-hole rounds — AGS 48 + 46 = 94, course rating 34.6 + 35.6 = 70.2, slope mean of 132 and
+   122 = 127, same month. It displays as `N` on an 18-hole score because the `N` marks it as
+   *derived from* nines, not as a nine-hole round. #65 relabelled `C` from `'COMBINED'` to
+   `'COMPETITION'` on the 2020 WHS naming alone with no payload behind it; **that is reverted here**
+   and `.changeset/score-type-competition.md` was deleted, since #65 never shipped and the net
+   effect on `C` across the release is nothing.
+3. **The two letters follow the same pattern.** GHIN keeps the legacy storage letter in both cases;
+   only `T`'s *name* changed (Tournament → Competition). `C`'s did not.
 
-**Open follow-up: establish what wire `C` means.** One manual Temporary row is too thin to relabel
-on, and no alternative label fits the data, so `C` keeps `'COMPETITION'` here and the doubt is
-recorded rather than guessed at.
+### Re-addressing #59
+
+#59 cited the USGA's published designations — `A`, `C`, `E`, `H`, `N`, `P`, with `C` as Competition
+and no `T` — and concluded this library was using historical letters. **That list is correct; it
+just describes a different field.** GHIN sends two letter alphabets per score row:
+
+| | field | observed on UAT | source |
+|---|---|---|---|
+| storage | `score_type` | `A`, `C`, `H`, `T` | GHIN's pre-2020 column, never migrated |
+| display | `score_type_display_short` / `_full` | `A`, `C`, `H`, `N` | the WHS/USGA set #59 cites |
+
+They **collide on `C`**, which is Competition in the display alphabet and Combined in the storage
+alphabet. That collision is how a correct citation produced a wrong mapping in #65. `N` is likewise
+a display-alphabet letter that leaked into the storage enum — #59's third point, now explained
+positively rather than by absence. It is left accepted (narrowing would also narrow
+`ScoresRequest['score_types']`), recorded as a comment in `scores/score.ts`.
 
 ### Incidental finding, unrelated to #66
 

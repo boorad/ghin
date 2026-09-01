@@ -186,8 +186,9 @@ describe('schemaScore', () => {
 
   it.each([
     ['A', 'AWAY'],
-    // C and T both mean COMPETITION (#66) — the duplicate is intentional, not a typo to clean up.
-    ['C', 'COMPETITION'],
+    // C is COMBINED (two nines combined into an 18), NOT Competition — #65 relabelled it the
+    // wrong way and #66 reverts that. Only T means Competition.
+    ['C', 'COMBINED'],
     ['E', 'EXCEPTIONAL'],
     ['H', 'HOME'],
     ['N', '9_HOLE_ROUNDS'],
@@ -215,6 +216,28 @@ describe('schemaScore', () => {
     expect(parsed.score_type_display_short).toBe('C')
     expect(parsed.score_type_display_full).toBe('NCA')
     expect(parsed.number_of_holes).toBe(9)
+  })
+
+  // The real wire-C row from UAT golfer 13373254 (#66): an 18-hole score that is the exact sum of
+  // that golfer's two nine-hole rounds (48 + 46 = 94, ratings 34.6 + 35.6 = 70.2). It displays as
+  // N because it is *derived from* nines, not because it is a nine-hole round — which is why
+  // `number_of_holes` is 18 and the display prefix must never be used to infer hole count.
+  it('maps a wire C row displayed as N on 18 holes to COMBINED', () => {
+    const parsed = schemaScore.parse({
+      ...baseScore,
+      score_type: 'C',
+      score_type_display_short: 'N',
+      score_type_display_full: 'N',
+      number_of_holes: 18,
+      number_of_played_holes: 18,
+      adjusted_gross_score: 94,
+      course_rating: 70.2,
+      slope_rating: 127,
+    })
+
+    expect(parsed.score_type).toBe('COMBINED')
+    expect(parsed.score_type_display_full).toBe('N')
+    expect(parsed.number_of_holes).toBe(18)
   })
 })
 
