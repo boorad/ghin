@@ -73,6 +73,12 @@ coverage, do not read that level as clean.
 **Also:** `course_id`, `course_name` and `facility_name` are declared but never
 sent — the UAT scores list carries no course identity at all.
 
+**Environment note:** Spicy runs against UAT too, so this capture is
+authoritative for the current consumer rather than a proxy for production.
+PROD access is close but not live as of 2026-09-01; once it lands, re-run
+`src/playground/score-keys.ts` against it — a PROD-only key would be carried by
+passthrough anyway, but a PROD-only *shape* (string vs number) would not be.
+
 ## Decisions
 
 - Whole score tree gets `.passthrough()`, not the score row alone (user call).

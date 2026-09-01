@@ -92,9 +92,11 @@ items 2 and 4 would change the changeset prose if they come back differently.
    say so.
 3. Confirm a plus golfer returns `"+1.2"` and not `-1.2` / `1.2`. Nothing in
    this repo corroborates the plus form.
-4. Sandbox vs production: observed values are from `api-uat.ghin.com`, Spicy
-   runs against production. A UAT-only *shape* (number vs string) matters even
-   though a UAT-only field would be harmless.
+4. Sandbox vs production: observed values are from `api-uat.ghin.com`, which
+   is also what Spicy runs against, so a UAT observation is authoritative for
+   the current consumer. (Corrected 2026-09-01 — this item previously claimed
+   Spicy ran against production, which was wrong and got propagated into later
+   recon. PROD access is close but not live yet; revisit then.)
 5. All three post endpoints share this schema — verify the field is present and
    identically typed on `postHoleByHole`, `postAdjusted` and `post18h9and9`.
    The 9-and-9 path has historically diverged (#41).
