@@ -615,6 +615,15 @@ export class GhinClient {
         throw result.error
       }
 
+      // One report per dropped golfer, not per dropped bucket: `invalid` is
+      // already deduplicated by `golfer_id`, and every percentage bucket carries
+      // the same golfer set, so `total` counts the golfers GHIN sent rather than
+      // twenty times that.
+      const { invalid, ...percentages } = result.value
+      const golferIds = new Set(Object.values(percentages).flatMap((bucket) => Object.keys(bucket)))
+
+      reportDegradation(this.onDegraded, 'course_handicaps', invalid, golferIds.size + invalid.length)
+
       return result.value
     } catch (error) {
       if (error instanceof z.ZodError) {

@@ -83,6 +83,14 @@ production before a consumer depends on it.
       `getCoursePlayerHandicaps`, which already POSTs the same URL with the right request
       shape. The method, `playing-handicap.ts` and the `PlayingHandicap*` schemas/types are
       deleted, along with the now-unreferenced `playing_handicaps_post` entity.
+- [x] Phase 7 — Partition `getCoursePlayerHandicaps` per golfer inside each percentage bucket
+      and wire `reportDegradation` (entity `course_handicaps`). Phase 4 fixed the two values
+      GHIN was known to send, but each bucket was still an all-or-nothing `z.record(...)`: one
+      unmodelled status string (`'N/A'`, a new suffix) for one golfer would again lose the whole
+      foursome with no `onDegraded` to report it. Rejects surface as
+      `{ golfer_id, row }` hoisted to a response-level `invalid`, deduplicated by `golfer_id` so
+      a golfer failing in all twenty buckets reports once. The twenty buckets stay required —
+      see Decision 3.
 
 ## Decisions
 
@@ -117,6 +125,18 @@ Both asked and answered before implementation:
    `null` before the inner union. Also for #63: `handicap_index: ''` yields `0`
    for the same reason (`Number('') === 0`), a live instance shared with
    `golfers.search`.
+
+3. **The twenty percentage buckets on `schemaCoursePlayerHandicapsResponse` stay
+   required** (Phase 7). Considered making them `.nullish()` so a dropped bucket
+   could not fail the response, and rejected it: row-level leniency is for data
+   variance in a golfer's values, and it is only safe because the dropped row is
+   reported through `onDegraded`. A missing bucket is the endpoint changing
+   shape, and `GhinDegradation` has no way to report it — there is no raw row to
+   put in `sample`. Nullish buckets would therefore trade a loud
+   `ValidationError` for a silent `undefined` at every call site, plus `?.` on
+   every consumer's bucket access, which is exactly the silence
+   `src/models/degradation.ts` exists to prevent. All twenty buckets are present
+   in every staging capture.
 
 ## Assumptions
 
