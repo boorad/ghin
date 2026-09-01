@@ -1,73 +1,44 @@
-# 66 — `score_type` `T` means Competition, not Tournament
+# 66 — score_type 'T' means Competition, not Tournament
 
-## Problem
-
-#65 relabelled `C: 'COMBINED'` → `C: 'COMPETITION'`. Validating against UAT
-afterwards showed the letter actually in play on `/scores.json` is not `C` at
-all — it is `T`, and GHIN itself renders every `T` row as `C` / `CA` / `NCA`.
-
-Raw `/scores.json` (Zod bypassed) for the four seeded UAT golfers `13373246`,
-`13373247`, `13373248`, `13373258`, `from_date_played=2010-01-01`, 38 scores:
-
-| `score_type` (wire) | `..._display_short` | `..._display_full` | `number_of_holes` | count |
-|---|---|---|---|---|
-| `A` | `A` | `A` | 18 | 21 |
-| `A` | `N` | `NA` | 9 | 6 |
-| `H` | `H` | `H` | 18 | 6 |
-| `T` | `C` | `C` | 18 | 2 |
-| `T` | `C` | `CA` | 18 | 2 |
-| `T` | `N` | `NCA` | 9 | 1 |
-
-`score_types=T` returns exactly those 5 rows; `score_types=C` returns 0.
-
-So `T: 'TOURNAMENT'` is the real mislabel. GHIN kept the pre-2020 storage letter
-and moved the display to the WHS name. `score_type_display_full` is
-compositional — `[N]` + `[C]` + `[A]` — so `CA` is "Competition Away" and `NCA`
-is "nine-hole Competition Away", which closes the open question from #59.
+Follow-up to #59 / #65. UAT evidence shows the wire `score_type` for Competition
+rows on `/scores.json` is `T`, not `C`. GHIN itself renders `T` as `C`/`CA`/`NCA`.
+So `T: 'TOURNAMENT'` in `scoreTypesMap` is the real mislabel; the fix is
+`T → 'COMPETITION'`, dropping `'TOURNAMENT'` from the output union. `C` stays
+accepted (documented on `PATCH /scores/hbh/{id}`, cheap to keep).
 
 ## Live tracker
 
-- [ ] Phase 1 — Relabel `T` → `'COMPETITION'`, drop `'TOURNAMENT'` from the output union, rewrite the comment, update the transform tests
-- [ ] Phase 2 — Partition `schemaScoresResponse` rows with `partitionRows` + `onDegraded`
-- [ ] Phase 3 — Changesets: new `minor` changeset, and correct the unreleased `.changeset/score-type-competition.md`
+- [ ] Phase 1 — Relabel `T` to `'COMPETITION'` in `score.ts` + `score.test.ts`, drop `'TOURNAMENT'` from union
+- [ ] Phase 2 — Add `patch` changeset spelling out the breaking union change
+- [ ] Phase 5 — Whole-branch tests
+- [ ] Phase 6 — Review + move plan doc
 
 ## Decisions
 
-Both asked before any code was written.
-
-- **`N` / `'9_HOLE_ROUNDS'` stays.** Removing it would narrow the caller-facing
-  `ScoresRequest['score_types']` input at `scores/request.ts:11` — a second,
-  independent compile break — and the evidence against `N` is "probably" plus
-  absence in a 38-row UAT sample, which is the same absence-of-evidence the
-  issue itself says is too weak to drop `C`. Same standard for both letters.
-  Record the #66 finding as a comment instead.
-- **Fix the leniency gap here, with `partitionRows`.** `schemaScoresResponse`
-  wraps scores in a plain `z.array(schemaScore)`, so today one unrecognised
-  `score_type` letter — or one null differential, per #63 — rejects the entire
-  `getScores` response. `score.ts:53-56` already prescribes `partitionRows` as
-  the fix; this change touches those exact lines, so close it now rather than
-  filing a follow-up. Preferred over `.catch()` on the transform, which would
-  have required inventing an `'UNKNOWN'` union member in the same release that
-  removes one.
+None asked — no structural fork wasted work.
 
 ## Assumptions
 
-- **Keep `C` accepted, still mapping to `'COMPETITION'`.** It did not appear on
-  `/scores.json`, but the absence is unproven — a control query with a bogus
-  letter (`score_types=Z`) also returns 0 rows, so the filter cannot distinguish
-  "no such rows" from "unrecognised letter". `PATCH /scores/hbh/{id}` documents
-  `score_type` as `["H","A","C"]`, so `C` is plausibly live on another surface.
-  Two letters mapping to one meaning costs nothing.
-- **Leave `post-request.ts` (`z.enum(['H','A','T'])`) alone.** That is the
-  letter we *send*; GHIN's POST spec documents `T` and it is a separate contract
-  from what we parse.
-- **Changeset is `minor`, not `patch`.** #65 was `patch`, but this PR adds an
-  `invalid` key to the `getScores` response, and the repo's two real precedents
-  for shipping partitioning (#51, #53) both went out as `minor`
-  (`plans/done/62-handicap-index-suffix-leniency.md:129-133`). The relabel alone
-  would have been `patch`; the partitioning sets the bump.
-- **`.changeset/score-type-competition.md` (#65, unreleased) must be corrected.**
-  Package is at `0.15.4` and that changeset has not shipped. Its last sentence
-  says the `T` → `'TOURNAMENT'` mapping is kept — if left alone, the next
-  CHANGELOG claims `T` → `'TOURNAMENT'` is preserved in the same release that
-  removes it.
+- **Keep `N` / `'9_HOLE_ROUNDS'` (recon Option A).** The issue's finding #3
+  ("`N` is probably not a score type") is hedged and absence-of-evidence.
+  `schemaScoresResponse` uses a plain `z.array(schemaScore)` with **no**
+  `partitionRows`, so `score_type` is a strict `z.enum(rawScoreTypes)` transform
+  with no per-row leniency — narrowing the *input* enum (`rawScoreTypes`) would
+  make a stray wire letter crash the whole `getScores` response. Removing `N`
+  cleanly requires adding row-level leniency (scope creep) or accepting that
+  crash risk. `N` staying in the output union is cosmetic clutter, not a
+  correctness bug. Leaving it is the minimal, safe change; removing it can be a
+  later additive follow-up if a prod sample confirms `N` never appears as a wire
+  `score_type`.
+- Ship as `patch` per repo precedent (#65, estimated-handicap-display), with the
+  breaking type change (`'TOURNAMENT'` leaving the emitted `ScoreType` union)
+  spelled out in the changeset body.
+
+## Manual verification (carried to Phase 6.5 — do NOT auto-push)
+
+1. Confirm against **production** credentials that prod `/scores.json` emits `T`
+   (not `C`) for Competition rows. All evidence is UAT/staging, 4 golfers, 38 scores.
+2. Absence of `C` on `/scores.json` is unproven (a bogus letter also returns 0
+   rows). `C` stays accepted, which sidesteps needing to prove this; spot-check a
+   real `PATCH /scores/hbh/{id}` response if reachable.
+3. `E` and `P` mappings unverified against any real payload (no seeded data).
