@@ -42,6 +42,7 @@ When activated, create a pull request for the current branch:
      - **Changes**: Bullet list of key changes
      - **Testing**: How to test the changes (if applicable)
      - **Issue references**: Add `Fixes #XXX` or `Closes #XXX` for any issues this PR resolves (these will auto-close the issues when merged)
+     - **Not verified** (only if something is): anything that could not be checked before opening the PR — a production-only response, an irreversible UAT mutation, a credential you don't have. One line each. Put it here rather than in a plan doc, so it is visible where the review happens. If everything was verified, omit the heading entirely.
 
 7. **Create the PR**:
 

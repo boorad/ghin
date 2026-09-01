@@ -77,10 +77,30 @@ your context — and this instruction set:
 >    than throwing, Zod parse leniency (a field going absent must not take down
 >    a whole response), Biome formatting. Quote them; the implementation agents
 >    get this list verbatim.
-> 8. **Manual verification** — anything unit tests can't prove: real GHIN/USGA
->    API responses, sandbox-vs-production payload differences, auth token
->    refresh against the live service, downstream consumer behaviour. Be strict.
->    If there is nothing, say "none".
+> 8. **Driveable checks** — the concrete live-API probes that would prove this
+>    works, and what each one needs to run. `.env` holds working UAT (staging)
+>    credentials, `src/playground/` has seven runnable scripts (`score-keys.ts`
+>    is the schema-drift detector), and a throwaway probe can import
+>    `src/index` directly and reach every public method. Name the actual golfer
+>    IDs, course IDs and request shapes to use. Otherwise "none".
+> 9. **Manual verification** — the short list of things that are **nobody's to
+>    do but the user's**, because the credential is missing or the action is
+>    irreversible: a production (non-UAT) response, a mutation of shared UAT
+>    account state that can't be undone (re-registering the account's webhook
+>    URL, posting a score that can't be unposted), a public receiver URL only
+>    the user can supply, or a judgement call about GHIN semantics that isn't in
+>    the docs.
+>
+>    **"It needs a real API response" is NOT this category.** `.env` is
+>    UAT-ready and the playground scripts already authenticate. Neither is "it
+>    needs an expired token" — a JWT with a far-future `exp` and a bogus
+>    signature passes the client's local expiry check and draws a real 401.
+>    Neither is "it needs downstream consumer behaviour" — the consumer is on
+>    disk at `~/dev/spicy`. Neither is "I can't tell if this is a regression" —
+>    a `main` worktree runs the same probe against the baseline.
+>
+>    Be strict in both directions: most work belongs in section 8. If there is
+>    nothing, say "none" — and "none" should be the common answer.
 
 If it returns no files to change, stop and report — the issue needs
 clarification, not code.
@@ -180,15 +200,66 @@ verification items over, marked "Carried" with an owner.
 
 Keep the review text for the final report.
 
-## Phase 6.5 — Manual verification gate (you)
+## Phase 6.5 — Prove it against live UAT (subagent)
 
-Read the recon's **Manual verification** list:
+If the recon report's **Driveable checks** section isn't "none", hand it to a
+fresh `general-purpose` subagent:
 
-- **"none"** → Phase 7.
-- **Anything listed** → **stop here.** Do not push, do not open a PR. Report
-  what shipped, the review, and a numbered list of exactly what the user must
-  check by hand and how. The branch is committed and ready; `/pr` opens it once
-  they're satisfied.
+> `.env` holds working UAT (staging) GHIN credentials, and
+> `bun --bun run src/playground/<script>.ts` picks them up automatically.
+> Read-only playground scripts are safe to run. Do **not** run anything that
+> mutates shared UAT account state — `webhook-flow.ts` re-registers the
+> account's webhook URL, and the score `post*` calls cannot be unposted. Report
+> those as unrun instead.
+>
+> For anything the playground doesn't cover, write a throwaway probe in `/tmp`
+> importing from `<repo root>/src/index` — not inside the repo, where `tsc`
+> picks it up and fails the quality gate. TypeScript `private` is compile-time
+> only, so a probe can reach `(client as any).httpClient` to exercise auth
+> paths directly.
+>
+> <paste the Driveable checks list>
+>
+> Return pass/fail per item with the actual output, and delete every probe file
+> and worktree when you're done.
+
+**When a probe fails, first ask whether the probe is wrong.** Malformed request
+arguments surface as a `ValidationError` from the request schema, which reads
+exactly like a real failure. Check the argument shape against the Zod schema
+before reporting a regression.
+
+**When you can't tell whether a failure is pre-existing, find out** rather than
+carrying it: `git worktree add /tmp/<repo>-main main`, symlink `node_modules`
+from the main checkout, and run the same probe against both. A behaviour that
+fails identically on `main` is not this branch's problem — and the before/after
+pair is the most convincing line in the final report.
+
+A genuine failure goes back to an implementation subagent; re-verify once. Still
+failing → stop and report it; do not open a PR on a change that fails its own
+check.
+
+Then take the recon's **Manual verification** list and **try to empty it**.
+Recon wrote it before any code existed, and it is routinely padded with things
+that were only hard to imagine. For each item, ask in order:
+
+1. Can a `/tmp` probe against UAT reach it, given that `.env` already works and
+   private fields are pokeable at runtime? → write it and run it.
+2. Can a `main` worktree, a forged token, or a second client instance
+   constructed with different config reach it? → do that.
+3. Is the consumer on disk at `~/dev/spicy`, so a grep answers it? → grep it.
+
+Only what survives all three is genuinely the user's. Then:
+
+- **Nothing survives** → Phase 7. This should be the common outcome.
+- **Something survives** → judge whether it *blocks the PR*. An irreversible
+  action, a missing credential, or a check that would change the diff if it
+  failed blocks it: stop, do not push, and report exactly what the user must do
+  and how. Anything else does **not** block — open the PR, and list the residue
+  in the PR body under a "Not verified" heading, so it is visible where the
+  review happens rather than parked in a doc.
+
+Handing the user a numbered list is the expensive outcome, not the safe one.
+Spending twenty minutes writing a probe is cheaper than spending Brad's.
 
 ## Phase 7 — PR
 
@@ -200,5 +271,6 @@ gets `Closes #<N>`. Report the URL.
 ## Final report
 
 Short. What shipped, the PR URL or why you stopped short of one, the review
-verbatim, every **Assumption** you made without asking, and what's left for the
-user by hand. Nothing else.
+verbatim, every **Assumption** you made without asking, what you verified
+against live UAT, what you wrote a probe for rather than carrying, and the short
+residue that is genuinely the user's. Nothing else.
