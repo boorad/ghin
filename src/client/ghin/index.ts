@@ -651,7 +651,7 @@ export class GhinClient {
         this.onDegraded,
         'course_handicaps_get',
         result.value.invalid,
-        result.value.course_handicaps.length + result.value.invalid.length,
+        result.value.tee_sets.length + result.value.invalid.length,
       )
 
       return result.value

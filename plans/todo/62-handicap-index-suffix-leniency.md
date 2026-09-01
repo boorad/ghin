@@ -77,7 +77,7 @@ production before a consumer depends on it.
 - [x] Phase 2 — Partitioning on the two list responses (superseded by Phase 5, kept in history)
 - [x] Phase 3 — Fixtures captured from staging into `handicaps/__fixtures__/`
 - [x] Phase 4 — Fix the foursome bug: `playing_handicap` / `shots_off` leniency in `course-player-handicap.ts`
-- [ ] Phase 5 — Fix `getCourseHandicaps`: real `tee_sets` response schema + `'All 18'` enum
+- [x] Phase 5 — Fix `getCourseHandicaps`: real `tee_sets` response schema + `'All 18'` enum
 - [ ] Phase 6 — Fix `getPlayingHandicaps`: `golfers[]` request + percent-record response
 
 ## Decisions
