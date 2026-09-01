@@ -22,12 +22,18 @@ const fn = async () => {
   })
 
   try {
-    const golfers = await ghinClient.golfers.search({
+    const result = await ghinClient.golfers.search({
       country: 'USA',
       last_name: 'smi%',
       first_name: 's%',
       status: 'Active',
     })
+
+    if (result.isErr()) {
+      throw result.error
+    }
+
+    const golfers = result.value
     if (golfers) {
       console.dir(golfers, { depth: null })
     } else {

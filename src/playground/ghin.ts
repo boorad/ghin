@@ -16,7 +16,13 @@ const fn = async () => {
   })
 
   try {
-    const golfer = await ghinClient.golfers.getOne(Number(process.env.GHIN_USERNAME))
+    const result = await ghinClient.golfers.getOne(Number(process.env.GHIN_USERNAME))
+
+    if (result.isErr()) {
+      throw result.error
+    }
+
+    const golfer = result.value
     if (golfer) {
       console.dir(golfer, { depth: null })
     } else {

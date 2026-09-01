@@ -19,7 +19,7 @@ omits `iterateUndelivered`. Actual count: 27 `Promise` methods + 1 async generat
 ## Live tracker
 
 - [x] Phase 1 — Foundation + `courses` + `facilities` (6 methods)
-- [ ] Phase 2 — `golfers` + `handicaps` + `scores` (10 methods)
+- [x] Phase 2 — `golfers` + `handicaps` + `scores` (10 methods)
 - [ ] Phase 3 — `gpa` + `webhooks` (11 methods + `iterateUndelivered`)
 - [ ] Phase 4 — README + changeset
 
@@ -59,6 +59,20 @@ _(anything decided without asking, recorded as it comes up)_
   `persistRefreshedToken`, `forceRefreshAccessToken`, `apiLogin`, `refreshAccessToken`,
   `authedRequest`); every `err()` in them already built a `GhinError` subclass, so only
   the two spots Decision 2 names changed behaviour.
+- **Phase 2:** `golfersGetScores` has two bare parses (`schemaScoresRequest`, then
+  `number` for the GHIN) that both fell into the same `catch (z.ZodError)`, so both
+  produced `Invalid scores request: …`. Split into two `safeParse` guards that emit that
+  same message, in the original order (request first, then GHIN) — so
+  `getScores('invalid')` still yields a `ValidationError` with the identical prefix.
+- **Phase 2:** `golfersGetOne` returns `Ok(undefined)` when the search matched nothing.
+  "No such active golfer" is a normal GHIN answer, not a failure, and `handicapsGetOne`
+  inherits it as a pure pass-through. Called out in a comment on the method and asserted
+  explicitly on both surfaces.
+- **Phase 2:** the playground consumers keep their existing `try`/`catch` and rethrow with
+  `if (result.isErr()) throw result.error` (the shape Phase 1 established in `docs/` and
+  `score-posting.ts`). In `score-keys.ts` this specifically preserves the per-golfer error
+  probing in the `catch` (`error.name`/`error.message`, plus the `issues` dump) that makes
+  the file a drift detector.
 
 ## Files
 

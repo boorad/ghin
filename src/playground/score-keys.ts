@@ -140,7 +140,14 @@ const fn = async () => {
 
   for (const g of golfers) {
     try {
-      const res = await ghinClient.golfers.getScores(g, { limit: 100 })
+      const result = await ghinClient.golfers.getScores(g, { limit: 100 })
+      // Rethrow into the existing catch so the per-golfer error probing below
+      // (name/message, plus any `issues`) keeps working unchanged.
+      if (result.isErr()) {
+        throw result.error
+      }
+
+      const res = result.value
       envelope.add(res)
       // Rows rejected by the partition never reach the tallies below, and they are raw wire data —
       // the single highest-value drift signal this script can emit. Dump them in full (#66).
