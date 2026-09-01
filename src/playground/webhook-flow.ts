@@ -31,7 +31,10 @@ const fn = async () => {
 
     console.log('-- current webhook settings --')
     const current = await ghinClient.webhooks.get()
-    console.dir(current, { depth: null })
+    if (current.isErr()) {
+      throw current.error
+    }
+    console.dir(current.value, { depth: null })
 
     console.log('-- registering revision webhook --')
     const patched = await ghinClient.webhooks.patch({
@@ -39,21 +42,33 @@ const fn = async () => {
       webhook_data_type: { revision: 'changes_only' },
       webhook_enabled: { revision: true },
     })
-    console.dir(patched, { depth: null })
+    if (patched.isErr()) {
+      throw patched.error
+    }
+    console.dir(patched.value, { depth: null })
 
     console.log('-- firing test revision event --')
     const test = await ghinClient.webhooks.test('revision')
-    console.dir(test, { depth: null })
+    if (test.isErr()) {
+      throw test.error
+    }
+    console.dir(test.value, { depth: null })
 
     console.log('-- listing recent deliveries --')
     const list = await ghinClient.webhooks.list({ page: 1, per_page: 5, object_type: 'revision' })
-    console.dir(list, { depth: null })
+    if (list.isErr()) {
+      throw list.error
+    }
+    console.dir(list.value, { depth: null })
 
-    const first = list.webhooks[0]
+    const first = list.value.webhooks[0]
     if (first) {
       console.log(`-- resending webhook id=${first.id} --`)
       const resend = await ghinClient.webhooks.resend({ webhook_id: first.id })
-      console.dir(resend, { depth: null })
+      if (resend.isErr()) {
+        throw resend.error
+      }
+      console.dir(resend.value, { depth: null })
     }
   } catch (error) {
     console.error('Error:', error)

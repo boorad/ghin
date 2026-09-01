@@ -20,7 +20,7 @@ omits `iterateUndelivered`. Actual count: 27 `Promise` methods + 1 async generat
 
 - [x] Phase 1 — Foundation + `courses` + `facilities` (6 methods)
 - [x] Phase 2 — `golfers` + `handicaps` + `scores` (10 methods)
-- [ ] Phase 3 — `gpa` + `webhooks` (11 methods + `iterateUndelivered`)
+- [x] Phase 3 — `gpa` + `webhooks` (11 methods + `iterateUndelivered`)
 - [ ] Phase 4 — README + changeset
 
 ## Decisions (answered by the user, 2026-09-01)
@@ -73,6 +73,29 @@ _(anything decided without asking, recorded as it comes up)_
   `score-posting.ts`). In `score-keys.ts` this specifically preserves the per-golfer error
   probing in the `catch` (`error.name`/`error.message`, plus the `issues` dump) that makes
   the file a drift detector.
+- **Phase 3:** `gpaRequestAccess` had the same two-bare-parses-one-catch shape as
+  `golfersGetScores` (`number.positive().parse(golferId)` then
+  `schemaGpaRequestAccessRequest.parse(request)`), so both reported
+  `Invalid GPA request access request: …`. Split into two `safeParse` guards emitting that
+  identical message, in the original order (id first, then body).
+- **Phase 3:** the `iterateUndelivered` page cap yields a **`ValidationError`**, not the
+  bare `Error` it threw before. The cap only trips because the caller's filters are too
+  broad — the message itself says "tighten from_date/to_date or object_type filters" — so
+  it belongs to the same "your request was bad" class as the other input failures.
+  `ConfigurationError` is reserved for boot-time client config (Decision 4), and a
+  `NetworkError` would be a lie: nothing failed on the wire.
+- **Phase 3:** all three of the generator's failure modes are **terminal** — yield the
+  `err`, then `return`. Bad input means there is nothing to page through; a failed page
+  fetch means there are no further pages to read (the documented "missed-delivery recovery
+  worker" in `plans/done/webhooks.md:159` still drains every envelope it did read before
+  the failure, which the old throw discarded); and the page cap only fires when the scan
+  cannot finish. Per-envelope recovery is not reachable today because
+  `schemaWebhooksListResponse` validates envelopes a page at a time and schemas are
+  off-limits (gotcha 1) — the per-envelope `Result` shape leaves room for it without a
+  second breaking change.
+- **Phase 3:** the generator's contract is now "never throws, never rejects". Asserted
+  directly (`await expect(iter.next()).resolves.toBeDefined()` with the fetch mock
+  rejecting) so a reintroduced throw fails a test rather than escaping to the caller.
 
 ## Files
 

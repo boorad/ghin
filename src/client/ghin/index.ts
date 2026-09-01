@@ -116,10 +116,13 @@ export class GhinClient {
   }
 
   gpa: {
-    getAccesses: () => Promise<GpaAccess[]>
-    requestAccess: (golferId: number, request: GpaRequestAccessRequest) => Promise<GpaSuccessResponse>
-    updateStatus: (request: GpaUpdateStatusRequest) => Promise<GpaSuccessResponse>
-    revokeAccess: (golferId: number) => Promise<GpaSuccessResponse>
+    getAccesses: () => Promise<Result<GpaAccess[], GhinError>>
+    requestAccess: (
+      golferId: number,
+      request: GpaRequestAccessRequest,
+    ) => Promise<Result<GpaSuccessResponse, GhinError>>
+    updateStatus: (request: GpaUpdateStatusRequest) => Promise<Result<GpaSuccessResponse, GhinError>>
+    revokeAccess: (golferId: number) => Promise<Result<GpaSuccessResponse, GhinError>>
   }
 
   handicaps: {
@@ -137,14 +140,21 @@ export class GhinClient {
   }
 
   webhooks: {
-    get: () => Promise<WebhookSettings>
-    patch: (settings: WebhookSettingsPatch) => Promise<WebhookSettings>
-    delete: () => Promise<WebhookSuccessResponse>
-    test: (type: WebhookEventType) => Promise<WebhookSuccessResponse>
-    list: (request?: WebhooksListRequest) => Promise<WebhooksListResponse>
-    resend: (request: WebhookResendRequest) => Promise<WebhookSuccessResponse>
-    ensureRegistered: (request: EnsureRegisteredRequest) => Promise<EnsureRegisteredResult>
-    iterateUndelivered: (request?: IterateUndeliveredRequest) => AsyncGenerator<WebhookEnvelope, void, void>
+    get: () => Promise<Result<WebhookSettings, GhinError>>
+    patch: (settings: WebhookSettingsPatch) => Promise<Result<WebhookSettings, GhinError>>
+    delete: () => Promise<Result<WebhookSuccessResponse, GhinError>>
+    test: (type: WebhookEventType) => Promise<Result<WebhookSuccessResponse, GhinError>>
+    list: (request?: WebhooksListRequest) => Promise<Result<WebhooksListResponse, GhinError>>
+    resend: (request: WebhookResendRequest) => Promise<Result<WebhookSuccessResponse, GhinError>>
+    ensureRegistered: (request: EnsureRegisteredRequest) => Promise<Result<EnsureRegisteredResult, GhinError>>
+    /**
+     * Yields one `Result` per envelope and never throws or rejects — a failure
+     * arrives as a yielded `err`, so a recovery worker can decide whether to
+     * carry on. See {@link GhinClient.webhooksIterateUndelivered}.
+     */
+    iterateUndelivered: (
+      request?: IterateUndeliveredRequest,
+    ) => AsyncGenerator<Result<WebhookEnvelope, GhinError>, void, void>
   }
 
   /** Caller's degradation reporter — see {@link ClientConfig.onDegraded}. */
@@ -436,25 +446,23 @@ export class GhinClient {
   // federations/associations/clubs alongside golfers. Flatten the `golfers`
   // branch — the only one that carries GPA state — into a clean array so
   // callers don't have to deal with the unrelated outer fields.
-  private async gpaGetAccesses(): Promise<GpaAccess[]> {
+  private async gpaGetAccesses(): Promise<Result<GpaAccess[], GhinError>> {
     try {
       const result = await this.httpClient.fetch<UserAccessesResponse>({
         entity: 'gpa_accesses',
         schema: schemaUserAccessesResponse,
       })
 
-      if (result.isErr()) {
-        throw result.error
-      }
-
-      return result.value.golfers.map((entry) => ({
-        golferId: entry.golfer.id,
-        userAccessId: entry.user_access.id,
-        golferName: entry.user_access.golfer_name,
-        gpaStatus: entry.user_access.gpa_status,
-      }))
+      return result.map((response) =>
+        response.golfers.map((entry) => ({
+          golferId: entry.golfer.id,
+          userAccessId: entry.user_access.id,
+          golferName: entry.user_access.golfer_name,
+          gpaStatus: entry.user_access.gpa_status,
+        })),
+      )
     } catch (error) {
-      throw error instanceof Error ? error : new Error(String(error))
+      return err(toGhinError(error))
     }
   }
 
@@ -462,10 +470,27 @@ export class GhinClient {
   // returns 400 `{ errors: { email: ["can't be blank"] } }`. The on-file
   // golfer email is the safe choice; whether USGA validates it against
   // their records or accepts any string is unconfirmed.
-  private async gpaRequestAccess(golferId: number, request: GpaRequestAccessRequest): Promise<GpaSuccessResponse> {
+  private async gpaRequestAccess(
+    golferId: number,
+    request: GpaRequestAccessRequest,
+  ): Promise<Result<GpaSuccessResponse, GhinError>> {
     try {
-      const id = number.positive().parse(golferId)
-      const { email } = schemaGpaRequestAccessRequest.parse(request)
+      // Both parses shared one catch, so both reported the same message.
+      // Kept in the original order (id, then body) so the wording is unchanged.
+      const parsedId = number.positive().safeParse(golferId)
+
+      if (!parsedId.success) {
+        return err(new ValidationError(`Invalid GPA request access request: ${parsedId.error.message}`))
+      }
+
+      const parsedRequest = schemaGpaRequestAccessRequest.safeParse(request)
+
+      if (!parsedRequest.success) {
+        return err(new ValidationError(`Invalid GPA request access request: ${parsedRequest.error.message}`))
+      }
+
+      const id = parsedId.data
+      const { email } = parsedRequest.data
 
       const path = `/users/golfers/${id}/request_golfer_product_access.json`
 
@@ -478,16 +503,9 @@ export class GhinClient {
         },
       })
 
-      if (result.isErr()) {
-        throw result.error
-      }
-
-      return result.value
+      return result
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        throw new ValidationError(`Invalid GPA request access request: ${error.message}`)
-      }
-      throw error instanceof Error ? error : new Error(String(error))
+      return err(toGhinError(error))
     }
   }
 
@@ -495,9 +513,15 @@ export class GhinClient {
   // `POST /users/login.json` — *not* the golfer's user and *not* the
   // `userAccessId` returned by `getAccesses()`. Easy to confuse; the URL
   // accepts all three numerically but only the admin id is authorized.
-  private async gpaUpdateStatus(request: GpaUpdateStatusRequest): Promise<GpaSuccessResponse> {
+  private async gpaUpdateStatus(request: GpaUpdateStatusRequest): Promise<Result<GpaSuccessResponse, GhinError>> {
     try {
-      const validRequest = schemaGpaUpdateStatusRequest.parse(request)
+      const parsedRequest = schemaGpaUpdateStatusRequest.safeParse(request)
+
+      if (!parsedRequest.success) {
+        return err(new ValidationError(`Invalid GPA update status request: ${parsedRequest.error.message}`))
+      }
+
+      const validRequest = parsedRequest.data
 
       const path = `/users/${validRequest.user_id}/golfers/${validRequest.golfer_id}/update_golfer_product_access_status.json`
 
@@ -510,27 +534,24 @@ export class GhinClient {
         },
       })
 
-      if (result.isErr()) {
-        throw result.error
-      }
-
-      return result.value
+      return result
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        throw new ValidationError(`Invalid GPA update status request: ${error.message}`)
-      }
-      throw error instanceof Error ? error : new Error(String(error))
+      return err(toGhinError(error))
     }
   }
 
   // Revoke marks the underlying `user_access` record `inactive`; it does
   // not delete it. Re-firing `requestAccess` against the same golfer
   // reuses that record and flips status back to `pending`.
-  private async gpaRevokeAccess(golferId: number): Promise<GpaSuccessResponse> {
+  private async gpaRevokeAccess(golferId: number): Promise<Result<GpaSuccessResponse, GhinError>> {
     try {
-      const id = number.positive().parse(golferId)
+      const parsedId = number.positive().safeParse(golferId)
 
-      const path = `/users/golfers/${id}/revoke_golfer_product_access.json`
+      if (!parsedId.success) {
+        return err(new ValidationError(`Invalid golfer ID: ${parsedId.error.message}`))
+      }
+
+      const path = `/users/golfers/${parsedId.data}/revoke_golfer_product_access.json`
 
       const result = await this.httpClient.fetchCustomPath<GpaSuccessResponse>({
         path,
@@ -540,16 +561,9 @@ export class GhinClient {
         },
       })
 
-      if (result.isErr()) {
-        throw result.error
-      }
-
-      return result.value
+      return result
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        throw new ValidationError(`Invalid golfer ID: ${error.message}`)
-      }
-      throw error instanceof Error ? error : new Error(String(error))
+      return err(toGhinError(error))
     }
   }
 
@@ -979,50 +993,43 @@ export class GhinClient {
 
   // ── Webhooks ─────────────────────────────────────────────────────────
 
-  private async webhooksGet(): Promise<WebhookSettings> {
+  private async webhooksGet(): Promise<Result<WebhookSettings, GhinError>> {
     try {
       const result = await this.httpClient.fetchCustomPath<WebhookSettings>({
         path: '/user/webhook_settings.json',
         schema: schemaWebhookSettings,
       })
 
-      if (result.isErr()) {
-        throw result.error
-      }
-
-      return result.value
+      return result
     } catch (error) {
-      throw error instanceof Error ? error : new Error(String(error))
+      return err(toGhinError(error))
     }
   }
 
-  private async webhooksPatch(settings: WebhookSettingsPatch): Promise<WebhookSettings> {
+  private async webhooksPatch(settings: WebhookSettingsPatch): Promise<Result<WebhookSettings, GhinError>> {
     try {
-      const validRequest = schemaWebhookSettingsPatch.parse(settings)
+      const parsedRequest = schemaWebhookSettingsPatch.safeParse(settings)
+
+      if (!parsedRequest.success) {
+        return err(new ValidationError(`Invalid webhook settings patch: ${parsedRequest.error.message}`))
+      }
 
       const result = await this.httpClient.fetchCustomPath<WebhookSettings>({
         path: '/user/webhook_settings.json',
         schema: schemaWebhookSettings,
         options: {
           method: 'PATCH',
-          body: JSON.stringify(validRequest),
+          body: JSON.stringify(parsedRequest.data),
         },
       })
 
-      if (result.isErr()) {
-        throw result.error
-      }
-
-      return result.value
+      return result
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        throw new ValidationError(`Invalid webhook settings patch: ${error.message}`)
-      }
-      throw error instanceof Error ? error : new Error(String(error))
+      return err(toGhinError(error))
     }
   }
 
-  private async webhooksDelete(): Promise<WebhookSuccessResponse> {
+  private async webhooksDelete(): Promise<Result<WebhookSuccessResponse, GhinError>> {
     try {
       const result = await this.httpClient.fetchCustomPath<WebhookSuccessResponse>({
         path: '/user/webhook_settings.json',
@@ -1032,20 +1039,21 @@ export class GhinClient {
         },
       })
 
-      if (result.isErr()) {
-        throw result.error
-      }
-
-      return result.value
+      return result
     } catch (error) {
-      throw error instanceof Error ? error : new Error(String(error))
+      return err(toGhinError(error))
     }
   }
 
-  private async webhooksTest(type: WebhookEventType): Promise<WebhookSuccessResponse> {
+  private async webhooksTest(type: WebhookEventType): Promise<Result<WebhookSuccessResponse, GhinError>> {
     try {
-      const validType = schemaWebhookEventType.parse(type)
-      const searchParams = new URLSearchParams([['type', validType]])
+      const parsedType = schemaWebhookEventType.safeParse(type)
+
+      if (!parsedType.success) {
+        return err(new ValidationError(`Invalid webhook event type: ${parsedType.error.message}`))
+      }
+
+      const searchParams = new URLSearchParams([['type', parsedType.data]])
 
       const result = await this.httpClient.fetchCustomPath<WebhookSuccessResponse>({
         path: '/user/webhook_settings/test.json',
@@ -1055,22 +1063,21 @@ export class GhinClient {
         },
       })
 
-      if (result.isErr()) {
-        throw result.error
-      }
-
-      return result.value
+      return result
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        throw new ValidationError(`Invalid webhook event type: ${error.message}`)
-      }
-      throw error instanceof Error ? error : new Error(String(error))
+      return err(toGhinError(error))
     }
   }
 
-  private async webhooksList(request: WebhooksListRequest = {}): Promise<WebhooksListResponse> {
+  private async webhooksList(request: WebhooksListRequest = {}): Promise<Result<WebhooksListResponse, GhinError>> {
     try {
-      const validRequest = schemaWebhooksListRequest.parse(request)
+      const parsedRequest = schemaWebhooksListRequest.safeParse(request)
+
+      if (!parsedRequest.success) {
+        return err(new ValidationError(`Invalid webhooks list request: ${parsedRequest.error.message}`))
+      }
+
+      const validRequest = parsedRequest.data
       const searchParams = new URLSearchParams()
 
       for (const [key, value] of Object.entries(validRequest)) {
@@ -1088,22 +1095,21 @@ export class GhinClient {
         },
       })
 
-      if (result.isErr()) {
-        throw result.error
-      }
-
-      return result.value
+      return result
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        throw new ValidationError(`Invalid webhooks list request: ${error.message}`)
-      }
-      throw error instanceof Error ? error : new Error(String(error))
+      return err(toGhinError(error))
     }
   }
 
-  private async webhooksResend(request: WebhookResendRequest): Promise<WebhookSuccessResponse> {
+  private async webhooksResend(request: WebhookResendRequest): Promise<Result<WebhookSuccessResponse, GhinError>> {
     try {
-      const validRequest = schemaWebhookResendRequest.parse(request)
+      const parsedRequest = schemaWebhookResendRequest.safeParse(request)
+
+      if (!parsedRequest.success) {
+        return err(new ValidationError(`Invalid webhook resend request: ${parsedRequest.error.message}`))
+      }
+
+      const validRequest = parsedRequest.data
       const searchParams = new URLSearchParams([
         ['webhook_id', validRequest.webhook_id.toString()],
         ['is_crs_webhook', validRequest.is_crs_webhook.toString()],
@@ -1118,16 +1124,9 @@ export class GhinClient {
         },
       })
 
-      if (result.isErr()) {
-        throw result.error
-      }
-
-      return result.value
+      return result
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        throw new ValidationError(`Invalid webhook resend request: ${error.message}`)
-      }
-      throw error instanceof Error ? error : new Error(String(error))
+      return err(toGhinError(error))
     }
   }
 
@@ -1135,10 +1134,27 @@ export class GhinClient {
   // the given event differs. PATCH upstream is itself idempotent, so a
   // spurious update round-trips harmlessly; the GET-first dance just avoids
   // the side-effect when nothing has changed.
-  private async webhooksEnsureRegistered(request: EnsureRegisteredRequest): Promise<EnsureRegisteredResult> {
+  private async webhooksEnsureRegistered(
+    request: EnsureRegisteredRequest,
+  ): Promise<Result<EnsureRegisteredResult, GhinError>> {
     try {
-      const { event, url, dataType, enabled } = schemaEnsureRegisteredRequest.parse(request)
-      const current = await this.webhooksGet()
+      const parsedRequest = schemaEnsureRegisteredRequest.safeParse(request)
+
+      if (!parsedRequest.success) {
+        return err(new ValidationError(`Invalid ensureRegistered request: ${parsedRequest.error.message}`))
+      }
+
+      const { event, url, dataType, enabled } = parsedRequest.data
+
+      // A failed GET short-circuits: no PATCH is attempted, and the inner
+      // error instance is handed back untouched.
+      const currentResult = await this.webhooksGet()
+
+      if (currentResult.isErr()) {
+        return err(currentResult.error)
+      }
+
+      const current = currentResult.value
 
       const currentUrl = current.webhook_url[event]
       const currentDataType = current.webhook_data_type[event]
@@ -1156,21 +1172,18 @@ export class GhinClient {
       }
 
       if (reasons.length === 0) {
-        return { changed: false, settings: current }
+        return ok({ changed: false, settings: current })
       }
 
-      const settings = await this.webhooksPatch({
+      const patchResult = await this.webhooksPatch({
         webhook_url: { [event]: url },
         webhook_data_type: { [event]: dataType },
         webhook_enabled: { [event]: enabled },
       })
 
-      return { changed: true, reason: reasons.join('; '), settings }
+      return patchResult.map((settings) => ({ changed: true, reason: reasons.join('; '), settings }))
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        throw new ValidationError(`Invalid ensureRegistered request: ${error.message}`)
-      }
-      throw error instanceof Error ? error : new Error(String(error))
+      return err(toGhinError(error))
     }
   }
 
@@ -1178,24 +1191,34 @@ export class GhinClient {
   // Stops when a page returns fewer than `per_page` results, so the caller
   // doesn't have to track pagination state. Filter by object_type/from_date
   // to bound the scan window in a recovery worker.
+  /**
+   * Never throws and never rejects: every failure is a yielded `err`, so a
+   * missed-delivery recovery worker can log one and keep its own loop alive
+   * instead of unwinding mid-scan.
+   *
+   * All three failure modes are terminal — the generator yields the `err` and
+   * returns. Bad input means there is nothing to page through; a failed page
+   * fetch means there are no further pages to read; and the page cap only
+   * fires when the filters are too broad to finish. Envelopes themselves are
+   * validated a page at a time by `schemaWebhooksListResponse`, so today an
+   * `err` is always page-shaped; the per-envelope `Result` leaves room for
+   * per-row recovery without another breaking change.
+   */
   private async *webhooksIterateUndelivered(
     request: IterateUndeliveredRequest = {},
-  ): AsyncGenerator<WebhookEnvelope, void, void> {
-    let validRequest: ReturnType<typeof schemaIterateUndeliveredRequest.parse>
-    try {
-      validRequest = schemaIterateUndeliveredRequest.parse(request)
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        throw new ValidationError(`Invalid iterateUndelivered request: ${error.message}`)
-      }
-      throw error instanceof Error ? error : new Error(String(error))
+  ): AsyncGenerator<Result<WebhookEnvelope, GhinError>, void, void> {
+    const parsedRequest = schemaIterateUndeliveredRequest.safeParse(request)
+
+    if (!parsedRequest.success) {
+      yield err(new ValidationError(`Invalid iterateUndelivered request: ${parsedRequest.error.message}`))
+      return
     }
 
-    const { per_page, object_type, from_date, to_date } = validRequest
+    const { per_page, object_type, from_date, to_date } = parsedRequest.data
 
     let page = 1
     while (true) {
-      const response = await this.webhooksList({
+      const result = await this.webhooksList({
         page,
         per_page,
         status: 'not sent',
@@ -1204,9 +1227,16 @@ export class GhinClient {
         ...(to_date !== undefined ? { to_date } : {}),
       })
 
+      if (result.isErr()) {
+        yield err(result.error)
+        return
+      }
+
+      const response = result.value
+
       for (const envelope of response.webhooks) {
         // Cast away the passthrough-inferred type; runtime shape matches WebhookEnvelope.
-        yield envelope as unknown as WebhookEnvelope
+        yield ok(envelope as unknown as WebhookEnvelope)
       }
 
       if (response.webhooks.length < per_page) {
@@ -1215,9 +1245,12 @@ export class GhinClient {
 
       page += 1
       if (page > ITERATE_UNDELIVERED_MAX_PAGES) {
-        throw new Error(
-          `iterateUndelivered exceeded ${ITERATE_UNDELIVERED_MAX_PAGES} pages; tighten from_date/to_date or object_type filters`,
+        yield err(
+          new ValidationError(
+            `iterateUndelivered exceeded ${ITERATE_UNDELIVERED_MAX_PAGES} pages; tighten from_date/to_date or object_type filters`,
+          ),
         )
+        return
       }
     }
   }

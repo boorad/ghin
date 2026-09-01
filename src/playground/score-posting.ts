@@ -47,7 +47,10 @@ const fn = async () => {
     //   number_of_holes: '18',
     //   gender: 'M',
     // })
-    // console.log('HBH result:', hbhResult)
+    // if (hbhResult.isErr()) {
+    //   throw hbhResult.error
+    // }
+    // console.log('HBH result:', hbhResult.value)
   } catch (error) {
     console.error('Error:', error)
   }
