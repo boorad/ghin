@@ -268,6 +268,13 @@ export class GhinClient {
       const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
 
       for (const [key, value] of Object.entries(validRequest)) {
+        // A present-but-`undefined` key survives zod `.optional()` — a caller
+        // spreading an optional field in — so skip it rather than throw on
+        // `.toString()`. Mirrors `webhooksList` below (#83).
+        if (value === undefined || value === null) {
+          continue
+        }
+
         searchParams.set(key, value.toString())
       }
 
@@ -388,6 +395,13 @@ export class GhinClient {
       const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
 
       for (const [key, value] of Object.entries(validRequest)) {
+        // A present-but-`undefined` key survives zod `.optional()` — a caller
+        // spreading an optional field in — so skip it rather than throw on
+        // `.toString()`. Mirrors `webhooksList` below (#83).
+        if (value === undefined || value === null) {
+          continue
+        }
+
         searchParams.set(key, value.toString())
       }
 
@@ -432,6 +446,13 @@ export class GhinClient {
       const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
 
       for (const [key, value] of Object.entries(validRequest)) {
+        // A present-but-`undefined` key survives zod `.optional()` — a caller
+        // spreading an optional field in — so skip it rather than throw on
+        // `.toString()`. Mirrors `webhooksList` below (#83).
+        if (value === undefined || value === null) {
+          continue
+        }
+
         searchParams.set(key, value.toString())
       }
 
@@ -593,13 +614,21 @@ export class GhinClient {
   // here would silently drop the very keys that passthrough exists to preserve.
   // The endpoint has no `clubs`, so the old response's `clubs` array is gone.
   //
-  // ACTIVE GOLFERS ONLY. This delegates to `golfersGetOne`, which searches with
-  // `status: 'Active'` (the same default `golfersSearch` applies), and there is
-  // no parameter here to opt out of it. A lapsed or inactive member has a real,
-  // readable Handicap Index and this method still resolves `undefined` for them
-  // — no error, and indistinguishable from "no such GHIN number". Callers who
-  // need those golfers should use `golfers.search({ golfer_id, status })` with
-  // `'Inactive'` or `'All'`. Parameterizing this is a separate design decision.
+  // Any membership status. This delegates to `golfersGetOne`, which stopped
+  // filtering by `status` in #83, so a lapsed or inactive member — who has a
+  // real, readable Handicap Index — comes back here rather than resolving
+  // `undefined`. Read `status` off the returned record to tell them apart;
+  // `undefined` means no *usable* row — an unknown GHIN number, or one dropped
+  // by the schema (see `golfersGetOne`) — but no longer a status filter.
+  // Measured against `api-uat`, 2026-09-02, golfer 2890015:
+  //
+  //   status=Active   -> 0 rows
+  //   status=Inactive -> 3 rows
+  //   status=All      -> 0 rows
+  //   (no status)     -> 3 rows
+  //   status=         -> 3 rows
+  //
+  // `All` is not GHIN's "both" value; omitting the parameter is.
   //
   // The lookup is a golfer search underneath, so a row that fails `schemaGolfer`
   // is reported to `onDegraded` under entity `golfers_search`, not a handicaps
@@ -678,6 +707,10 @@ export class GhinClient {
       const validRequest = parsedRequest.data
       const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
 
+      // No guard for a present-but-`undefined` key here, unlike the other query
+      // loops: every field of `schemaCourseHandicapGetRequest` is required, so
+      // `{ gender: undefined }` fails validation above rather than reaching this
+      // loop. Add one if the schema ever gains an optional field (#83).
       for (const [key, value] of Object.entries(validRequest)) {
         searchParams.set(key, value.toString())
       }
@@ -734,7 +767,17 @@ export class GhinClient {
         return err(new ValidationError(`Invalid golfer search request: ${parsedRequest.error.message}`))
       }
 
-      const params = parsedRequest.data
+      // `status` is pulled out of the loop because it is the one parameter with
+      // three states rather than two: absent and present-but-`undefined` both
+      // inherit the `'Active'` default below, while `null` means "no status
+      // filter" and has to leave the query string entirely — GHIN answers an
+      // omitted `status` with active *and* inactive golfers, and `status=All`
+      // with nothing (see `schemaGolfersGetManyRequest`). Every other key keeps
+      // the loop's `?? ''`: `first_name`, `state`, `club_id`, `email`,
+      // `phone_number` and `updated_since` run through `emptyStringToNull`, so
+      // `''` is already `null` by the time it gets here and has always reached
+      // the wire as `key=`.
+      const { status, ...params } = parsedRequest.data
       const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
 
       const searchDefaults = {
@@ -749,8 +792,24 @@ export class GhinClient {
         searchParams.set(key, value.toString())
       }
 
+      // A present-but-`undefined` key is skipped so the `searchDefaults` line
+      // above survives: zod `.partial()` keeps the key, and writing it as `''`
+      // put `page=` on the wire, which GHIN answers with
+      // `400 {"errors":{"page":["can't be blank"]}}`. A caller spreading an
+      // optional field in — `{ last_name, page: body.page }` — hits this.
+      // `null` still writes `key=`, unchanged.
       for (const [key, value] of Object.entries(params)) {
-        searchParams.set(key, value?.toString() ?? '')
+        if (value === undefined) {
+          continue
+        }
+
+        searchParams.set(key, value === null ? '' : value.toString())
+      }
+
+      if (status === null) {
+        searchParams.delete('status')
+      } else if (status !== undefined) {
+        searchParams.set('status', status)
       }
 
       const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
@@ -802,8 +861,17 @@ export class GhinClient {
         searchParams.set(key, value.toString())
       }
 
+      // Same hazard as `golfersSearchPage`: a present-but-`undefined` key must
+      // fall back to `searchDefaults` rather than overwrite it with `''`, which
+      // GHIN answers with `400 {"errors":{"page":["can't be blank"]}}`. No field
+      // in `schemaGolfersGlobalSearchRequest` is nullable, so there is no `null`
+      // branch to carry here.
       for (const [key, value] of Object.entries(rest)) {
-        searchParams.set(key, value?.toString() ?? '')
+        if (value === undefined) {
+          continue
+        }
+
+        searchParams.set(key, value.toString())
       }
 
       if (ghin) {
@@ -837,9 +905,32 @@ export class GhinClient {
     }
   }
 
-  // "No such active golfer" is an `Ok(undefined)`, not an `Err`: an empty search
+  // "No such golfer" is an `Ok(undefined)`, not an `Err`: an empty search
   // result is a normal answer from GHIN, not a failed request. Only a transport,
   // auth or validation failure produces an `Err` here.
+  //
+  // Resolves a golfer whatever their membership status, and the caller reads
+  // `status` off the record to tell them apart. `Active` and `Inactive` are
+  // measured below; that `Archived` rows also come back is from the separate
+  // name-search probe in `schemaGolfer`'s status comment, not from this table.
+  //
+  // It used to pass `status: 'Active'`, which made `Ok(undefined)` mean "no such
+  // GHIN number *or* not a current member". Status is no longer one of the
+  // reasons (#83), but `undefined` still means "no *usable* row" rather than "no
+  // such GHIN number": a row that fails `schemaGolfer` is partitioned into
+  // `invalid` and, if it was the golfer's only row, this resolves `undefined`
+  // too. Wire `onDegraded` to tell that case apart. Measured against `api-uat`,
+  // 2026-09-02, golfer 2890015:
+  //
+  //   status=Active   -> 0 rows
+  //   status=Inactive -> 3 rows
+  //   status=All      -> 0 rows
+  //   (no status)     -> 3 rows
+  //   status=         -> 3 rows
+  //
+  // `status: null` — not an omitted argument — is what opts out: `golfersSearchPage`
+  // re-applies `status: 'Active'` from `searchDefaults` for anything else, and
+  // `All` is not GHIN's "both" value, omission is.
   //
   // Delegates to `golfersGetMany` for the club fields. A golfer comes back once
   // per club affiliation, so the old `per_page: 1` returned whichever row GHIN
@@ -858,7 +949,7 @@ export class GhinClient {
         return err(new ValidationError(`Invalid GHIN number: ${parsedGhin.error.message}`))
       }
 
-      const result = await this.golfersGetMany([parsedGhin.data], { status: 'Active' })
+      const result = await this.golfersGetMany([parsedGhin.data], { status: null })
 
       return result.map(({ golfers }) => golfers[0])
     } catch (error) {
@@ -889,7 +980,23 @@ export class GhinClient {
    *   identical across a golfer's rows, only the club differs, and the home club
    *   is the one that disambiguates two golfers with the same name.
    * - **Unknown GHIN numbers are dropped silently.** They come back in `missing`
-   *   instead, alongside golfers excluded by `status` or `updated_since`.
+   *   instead, alongside golfers excluded by `status` or `updated_since` and any
+   *   whose only rows failed `schemaGolfer` — wire `onDegraded` to tell that last
+   *   case apart.
+   *
+   * `status` still defaults to `'Active'` here — unlike `getOne`, which stopped
+   * filtering in #83 — because dropping the default would silently move inactive
+   * golfers out of `missing` for every existing caller. Pass `status: null` to
+   * opt out: it omits the parameter on the wire, which is GHIN's "both" value.
+   * Measured against `api-uat`, 2026-09-02, golfer 2890015:
+   *
+   * ```
+   * status=Active   -> 0 rows
+   * status=Inactive -> 3 rows
+   * status=All      -> 0 rows
+   * (no status)     -> 3 rows
+   * status=         -> 3 rows
+   * ```
    *
    * `golfers` is ordered to match the requested numbers, with duplicates in the
    * request collapsed. An empty `ghinNumbers` is a `ValidationError`, not an
@@ -993,7 +1100,10 @@ export class GhinClient {
       ])
 
       for (const [key, value] of Object.entries(validRequest)) {
-        if (value === null) {
+        // A present-but-`undefined` key survives zod `.partial()` — a caller
+        // spreading an optional field in — so skip it rather than throw on
+        // `.toString()`. Mirrors `webhooksList` below (#83).
+        if (value === undefined || value === null) {
           continue
         }
 

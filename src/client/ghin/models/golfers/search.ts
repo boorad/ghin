@@ -1,7 +1,16 @@
 import { z } from 'zod'
 import { boolean, date, emptyStringToNull, gender, handicap, number, partitionRows, string } from '../../../../models'
 
+// The request filter and the response field are not the same set, so the enum is
+// split. Measured against `api-uat`, 2026-09-02: a name search with an empty
+// status returned rows with `status: "Archived"` alongside `Active` and
+// `Inactive`. `.nullish()` does not rescue those — it accepts `null`/`undefined`
+// but an unknown *string* still fails the enum, so `partitionRows` was dropping
+// every archived golfer into `invalid`. Only `Active` and `Inactive` are proven
+// to work as request *filters* against GHIN, which is why the request side is not
+// widened; and three observed values is not proof that `Archived` is the last one.
 const schemaStatus = z.enum(['Active', 'Inactive'])
+const schemaGolferStatus = z.enum(['Active', 'Inactive', 'Archived'])
 
 export const schemaGolfersGlobalSearchRequest = z
   .object({
@@ -69,7 +78,10 @@ export const schemaGolfersSearchRequest = z
       ])
       .optional(),
     order: z.enum(['asc', 'desc']).optional(),
-    status: schemaStatus.optional(),
+    // `null` is not "no value" here, it is an explicit *no status filter* —
+    // `golfers.search` defaults to `'Active'` and `null` is the only way to
+    // clear it. See `schemaGolfersGetManyRequest` below for the measurement.
+    status: schemaStatus.nullable(),
     updated_since: emptyStringToNull.optional(),
   })
   .partial()
@@ -80,15 +92,25 @@ export const schemaGolfersSearchRequest = z
 //
 // - `status` defaults to `'Active'` inside `golfers.search`, so inactive
 //   golfers land in `missing` rather than `golfers` unless it is set to
-//   `'Inactive'`. There is no "both" value — `status=All` is accepted by GHIN
-//   and returns zero rows, which is why the enum does not offer it. Callers
-//   who need both statuses have to ask twice.
+//   `'Inactive'` — or to `null`, which asks for no status filter at all.
+//   Measured against `api-uat`, 2026-09-02, golfer 2890015:
+//
+//     status=Active   -> 0 rows
+//     status=Inactive -> 3 rows
+//     status=All      -> 0 rows
+//     status=         -> 3 rows
+//     (no status)     -> 3 rows
+//
+//   `All` is not the "both" value — it is accepted and returns nothing, which
+//   is why the enum does not offer it. *Omitting* the parameter is the "both",
+//   so `null` is encoded on the wire by deleting `status` rather than by
+//   sending it empty (both return 3 rows; omission is the cleaner contract).
 // - `updated_since` filters the batch to golfers whose record moved since a
 //   date, which is the delta feed the Admin-Portal-only `hi_changed_golfers`
 //   would have given us (#81).
 export const schemaGolfersGetManyRequest = z
   .object({
-    status: schemaStatus,
+    status: schemaStatus.nullable(),
     updated_since: emptyStringToNull,
   })
   .partial()
@@ -99,8 +121,9 @@ export type GolfersGetManyResponse = {
   golfers: GolfersSearchResponse['golfers']
   // GHIN drops GHIN numbers it does not recognize from the response without an
   // error, so "asked for 12, got 11" is otherwise silent. These are the
-  // requested numbers no row came back for — unknown to GHIN, or filtered out
-  // by `status` / `updated_since`.
+  // requested numbers no *usable* row came back for — unknown to GHIN, filtered
+  // out by `status` / `updated_since`, or dropped by `schemaGolfer` into
+  // `invalid`. Wire `onDegraded` to tell the last case apart.
   missing: number[]
 }
 
@@ -144,7 +167,7 @@ export const schemaGolfer = z
     rev_date: date.nullish(),
     soft_cap: boolean.nullish(),
     state: emptyStringToNull.nullish(),
-    status: schemaStatus.nullish(),
+    status: schemaGolferStatus.nullish(),
     suffix: emptyStringToNull.nullish(),
   })
   .passthrough()

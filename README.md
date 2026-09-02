@@ -64,10 +64,10 @@ const ghin = new GhinClient({
   username: process.env.GHIN_USERNAME,
 })
 
-// Get a golfer's handicap. Active golfers only: this searches with
-// `status: 'Active'` and cannot be opted out of, so an inactive or lapsed
-// member comes back as `undefined` even though they have a readable index —
-// use `ghin.golfers.search({ golfer_id, status: 'Inactive' })` for those.
+// Get a golfer's handicap. Any membership status: an inactive or lapsed member
+// has a readable index and comes back here, so read `status` off the record if
+// that matters to you. `undefined` means no usable row came back — an unknown
+// GHIN number, or one dropped by the schema; wire `onDegraded` to tell them apart.
 const ghinNumber = 1234567
 const result = await ghin.handicaps.getOne(ghinNumber)
 
@@ -78,7 +78,7 @@ if (result.isErr()) {
   // failure came off the wire
   console.error(result.error.code, result.error.statusCode, result.error.message)
 } else {
-  // `undefined` when no active golfer matches, and `handicap_index` is `null`
+  // `undefined` when no golfer matches, and `handicap_index` is `null`
   // for a golfer with no established index (GHIN sends `"NH"` on the wire)
   const golfer = result.value
   console.log(`Golfer ${ghinNumber} has a handicap of ${golfer?.handicap_index}`)
@@ -114,8 +114,13 @@ Three things it handles that a raw `golfers.search` leaves to you:
   identical across a golfer's rows; only the club differs.
 - **Unknown GHIN numbers vanish silently.** They come back in `missing` rather
   than simply not being there. `status` defaults to `'Active'`, so inactive
-  golfers land in `missing` too, unless you pass `{ status: 'Inactive' }` —
-  GHIN has no "both" value, so covering both statuses means asking twice.
+  golfers land in `missing` too — as does anyone whose only rows failed the
+  schema, so wire `onDegraded` if you need to tell that apart. Pass
+  `{ status: null }` to cover every status in one call — that omits the
+  parameter, which is GHIN's "both". (`'All'` is not: measured against `api-uat`
+  on 2026-09-02, golfer 2890015 returns 0 rows for `status=Active` and
+  `status=All`, and 3 rows for `status=Inactive`, no `status` at all, or an empty
+  `status=`.) `getOne` never filters.
 
 `golfers` is ordered to match the numbers you asked for, with duplicates
 collapsed. An empty list is a `ValidationError`, not an empty result.
@@ -133,8 +138,8 @@ carrying a `GhinError` subclass (`AuthenticationError`, `NetworkError`,
 still throws `ConfigurationError`.
 
 **"Not found" is an `Ok`, not an `Err`.** `handicaps.getOne` and `golfers.getOne`
-return `ok(undefined)` when no active golfer matches the GHIN number — "no such
-active golfer" is a normal answer from GHIN, not a failure — so `result.isErr()`
+return `ok(undefined)` when no golfer matches the GHIN number — "no such
+golfer" is a normal answer from GHIN, not a failure — so `result.isErr()`
 stays `false` and the `undefined` shows up in `result.value`. This is the one place
 a reader might reasonably expect an `Err`; treat `ok(undefined)` as the not-found
 signal.

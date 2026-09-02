@@ -46,4 +46,14 @@ run_quiet "lint" bun run lint
 # Build
 run_quiet "build" bun run build
 
+# Tests. This gate used to stop at `build`, which is why #84 pushed a branch
+# whose `codecov/patch` failed on lines nothing exercised — everything green
+# locally, red in CI. Note what this does and does not catch: it fails on a
+# broken test, and it writes `coverage/` so the uncovered lines are there to
+# read, but it does NOT reproduce Codecov's 85% *patch* target, which scores
+# only lines the diff touched. A mid-branch commit legitimately has uncovered
+# lines a later commit covers, so a diff-scoped gate does not belong in a
+# pre-commit hook.
+run_quiet "test" bun run test:coverage
+
 echo -e "${GREEN}All checks passed${NC}"
