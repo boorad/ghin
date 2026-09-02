@@ -113,7 +113,7 @@ export class RequestClient {
     }
 
     this.lock = new Mutex()
-    this.config = schemaClientConfig.parse(results.data)
+    this.config = results.data
     this.baseUrl = new URL(`${this.config.baseUrl}/${this.config.apiVersion}`)
   }
 

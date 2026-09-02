@@ -13,7 +13,7 @@ detach site. The only working fix is making `schemaCacheClient` pass the referen
 ## Live tracker
 
 - [x] Phase 1 — schema fix: `z.custom<CacheClient>` in `src/models/cache-client.ts`, explicit `CacheClient` type, drop dead helper schemas, rewrite/add tests in `cache-client.test.ts` (identity: `parse(x) === x` for plain object and class instance) and `client-config.test.ts`
-- [ ] Phase 2 — request-client: drop the redundant re-parse at `index.ts:116` (`this.config = results.data`), delete the lying test at `index.test.ts:104` (`'should use cached token if valid'`), update the stale `makeCache` comment, add class-based stateful-cache tests (identity, cross-instance reuse, pre-seeded read)
+- [x] Phase 2 — request-client: drop the redundant re-parse at `index.ts:116` (`this.config = results.data`), delete the lying test at `index.test.ts:104` (`'should use cached token if valid'`), update the stale `makeCache` comment, add class-based stateful-cache tests (identity, cross-instance reuse, pre-seeded read)
 - [ ] Phase 3 — GhinClient hop: test in `src/client/ghin/index.test.ts` that a class-based cache passed to `new GhinClient(...)` reaches `RequestClient` by reference
 - [ ] Phase 4 — changeset (`patch`) + full gate
 
