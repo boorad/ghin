@@ -154,6 +154,15 @@ describe('GhinClient', () => {
       expect(mockFetch).toHaveBeenCalled()
     })
 
+    it('should skip a present-but-undefined parameter rather than throw', async () => {
+      mockFetch.mockResolvedValue(ok({ course_id: 12345, name: 'Test Course', TeeSets: [], invalidTeeSets: [] }))
+
+      const result = await ghinClient.courses.getDetails({ course_id: 12345, gender: undefined })
+
+      expect(result.isOk()).toBe(true)
+      expect(mockFetch.mock.calls[0]?.[0].options.searchParams.has('gender')).toBe(false)
+    })
+
     it('should return a validation error with invalid request', async () => {
       // @ts-expect-error - Testing invalid input type
       const result = await ghinClient.courses.getDetails({ course_id: 'invalid' })
@@ -389,6 +398,15 @@ describe('GhinClient', () => {
 
       expect(result._unsafeUnwrap()).toEqual(mockResponse)
       expect(mockFetch).toHaveBeenCalled()
+    })
+
+    it('should skip a present-but-undefined parameter rather than throw', async () => {
+      mockFetch.mockResolvedValue(ok({ facilities: [] }))
+
+      const result = await ghinClient.facilities.search({ name: 'Test', state: undefined })
+
+      expect(result.isOk()).toBe(true)
+      expect(mockFetch.mock.calls[0]?.[0].options.searchParams.has('state')).toBe(false)
     })
 
     // Nothing on this surface rejects any more: the promise resolves to an Err.

@@ -707,14 +707,11 @@ export class GhinClient {
       const validRequest = parsedRequest.data
       const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
 
+      // No guard for a present-but-`undefined` key here, unlike the other query
+      // loops: every field of `schemaCourseHandicapGetRequest` is required, so
+      // `{ gender: undefined }` fails validation above rather than reaching this
+      // loop. Add one if the schema ever gains an optional field (#83).
       for (const [key, value] of Object.entries(validRequest)) {
-        // A present-but-`undefined` key survives zod `.optional()` — a caller
-        // spreading an optional field in — so skip it rather than throw on
-        // `.toString()`. Mirrors `webhooksList` below (#83).
-        if (value === undefined || value === null) {
-          continue
-        }
-
         searchParams.set(key, value.toString())
       }
 
