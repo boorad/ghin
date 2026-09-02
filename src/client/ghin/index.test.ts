@@ -919,6 +919,39 @@ describe('GhinClient', () => {
       expect(result._unsafeUnwrapErr()).toBe(failure)
       expect(result._unsafeUnwrapErr().message).toBe('Search failed')
     })
+
+    // Three states, not two. `status=All` returns zero rows and omitting the
+    // parameter returns both statuses (api-uat, 2026-09-02, golfer 2890015), so
+    // `null` is encoded as a *missing* key — asserting `has()` rather than
+    // `get()` is deliberate: `status=` would also read as `null` from `get()`.
+    describe('status filter', () => {
+      const searchParamsOfCall = (call: number): URLSearchParams => mockFetch.mock.calls[call]?.[0].options.searchParams
+
+      beforeEach(() => {
+        mockFetch.mockResolvedValue(ok({ golfers: [], invalid: [] }))
+      })
+
+      it('should omit status entirely when it is null', async () => {
+        await ghinClient.golfers.search({ last_name: 'Doe', status: null })
+
+        expect(searchParamsOfCall(0).has('status')).toBe(false)
+      })
+
+      it('should still default to Active when status is not given', async () => {
+        await ghinClient.golfers.search({ last_name: 'Doe' })
+
+        expect(searchParamsOfCall(0).get('status')).toBe('Active')
+      })
+
+      // `undefined` inherits the default, `null` clears it — zod `.partial()`
+      // keeps a present-but-undefined key, so this path is reachable and would
+      // otherwise be a footgun for anyone spreading an optional field in.
+      it('should fall back to Active when status is undefined', async () => {
+        await ghinClient.golfers.search({ last_name: 'Doe', status: undefined })
+
+        expect(searchParamsOfCall(0).get('status')).toBe('Active')
+      })
+    })
   })
 
   describe('golfers.globalSearch', () => {
@@ -1188,6 +1221,18 @@ describe('GhinClient', () => {
       expect(searchParamsOfCall(0).get('status')).toBe('Inactive')
       expect(searchParamsOfCall(0).get('updated_since')).toBe('2026-08-01')
       expect(searchParamsOfCall(0).get('per_page')).toBe('100')
+    })
+
+    // The default is unchanged by the `status: null` opt-out — dropping it would
+    // silently move inactive golfers out of `missing` for every existing caller.
+    it('should default to Active and drop status entirely for null', async () => {
+      mockFetch.mockResolvedValue(ok({ golfers: [], invalid: [] }))
+
+      await ghinClient.golfers.getMany([1])
+      await ghinClient.golfers.getMany([1], { status: null })
+
+      expect(searchParamsOfCall(0).get('status')).toBe('Active')
+      expect(searchParamsOfCall(1).has('status')).toBe(false)
     })
 
     // An unfiltered `golfers/search` is not what "get these golfers" meant, so

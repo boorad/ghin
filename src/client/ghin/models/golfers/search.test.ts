@@ -167,4 +167,30 @@ describe('Golfer Search Schema', () => {
       expect(schemaGolfersGlobalSearchRequest.safeParse({ status: 'Active' }).success).toBe(true)
     })
   })
+
+  // `null` is a third filter value, not a missing one: the client deletes
+  // `status` from the query string for it, and GHIN answers an omitted `status`
+  // with both active and inactive golfers (api-uat, 2026-09-02, golfer 2890015).
+  describe('status: null clears the filter', () => {
+    it('should accept status null on the search and getMany requests', () => {
+      const search = schemaGolfersSearchRequest.safeParse({ last_name: 'Doe', status: null })
+      const getMany = schemaGolfersGetManyRequest.safeParse({ status: null })
+
+      expect(search.success).toBe(true)
+      expect(getMany.success).toBe(true)
+      if (search.success) {
+        expect(search.data.status).toBeNull()
+      }
+      if (getMany.success) {
+        expect(getMany.data.status).toBeNull()
+      }
+    })
+
+    // Nullable widened the union by exactly one value; it did not turn the enum
+    // into a free-text field.
+    it('should still reject an unknown status on both requests', () => {
+      expect(schemaGolfersSearchRequest.safeParse({ status: 'Bogus' }).success).toBe(false)
+      expect(schemaGolfersGetManyRequest.safeParse({ status: 'Bogus' }).success).toBe(false)
+    })
+  })
 })

@@ -734,7 +734,17 @@ export class GhinClient {
         return err(new ValidationError(`Invalid golfer search request: ${parsedRequest.error.message}`))
       }
 
-      const params = parsedRequest.data
+      // `status` is pulled out of the loop because it is the one parameter with
+      // three states rather than two: absent and present-but-`undefined` both
+      // inherit the `'Active'` default below, while `null` means "no status
+      // filter" and has to leave the query string entirely — GHIN answers an
+      // omitted `status` with active *and* inactive golfers, and `status=All`
+      // with nothing (see `schemaGolfersGetManyRequest`). Every other key keeps
+      // the loop's `?? ''`: `first_name`, `state`, `club_id`, `email`,
+      // `phone_number` and `updated_since` run through `emptyStringToNull`, so
+      // `''` is already `null` by the time it gets here and has always reached
+      // the wire as `key=`.
+      const { status, ...params } = parsedRequest.data
       const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
 
       const searchDefaults = {
@@ -751,6 +761,12 @@ export class GhinClient {
 
       for (const [key, value] of Object.entries(params)) {
         searchParams.set(key, value?.toString() ?? '')
+      }
+
+      if (status === null) {
+        searchParams.delete('status')
+      } else if (status !== undefined) {
+        searchParams.set('status', status)
       }
 
       const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {

@@ -78,7 +78,10 @@ export const schemaGolfersSearchRequest = z
       ])
       .optional(),
     order: z.enum(['asc', 'desc']).optional(),
-    status: schemaStatus.optional(),
+    // `null` is not "no value" here, it is an explicit *no status filter* —
+    // `golfers.search` defaults to `'Active'` and `null` is the only way to
+    // clear it. See `schemaGolfersGetManyRequest` below for the measurement.
+    status: schemaStatus.nullish(),
     updated_since: emptyStringToNull.optional(),
   })
   .partial()
@@ -89,15 +92,25 @@ export const schemaGolfersSearchRequest = z
 //
 // - `status` defaults to `'Active'` inside `golfers.search`, so inactive
 //   golfers land in `missing` rather than `golfers` unless it is set to
-//   `'Inactive'`. There is no "both" value — `status=All` is accepted by GHIN
-//   and returns zero rows, which is why the enum does not offer it. Callers
-//   who need both statuses have to ask twice.
+//   `'Inactive'` — or to `null`, which asks for no status filter at all.
+//   Measured against `api-uat`, 2026-09-02, golfer 2890015:
+//
+//     status=Active   -> 0 rows
+//     status=Inactive -> 3 rows
+//     status=All      -> 0 rows
+//     status=         -> 3 rows
+//     (no status)     -> 3 rows
+//
+//   `All` is not the "both" value — it is accepted and returns nothing, which
+//   is why the enum does not offer it. *Omitting* the parameter is the "both",
+//   so `null` is encoded on the wire by deleting `status` rather than by
+//   sending it empty (both return 3 rows; omission is the cleaner contract).
 // - `updated_since` filters the batch to golfers whose record moved since a
 //   date, which is the delta feed the Admin-Portal-only `hi_changed_golfers`
 //   would have given us (#81).
 export const schemaGolfersGetManyRequest = z
   .object({
-    status: schemaStatus,
+    status: schemaStatus.nullable(),
     updated_since: emptyStringToNull,
   })
   .partial()
