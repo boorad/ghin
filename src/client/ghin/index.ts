@@ -593,13 +593,20 @@ export class GhinClient {
   // here would silently drop the very keys that passthrough exists to preserve.
   // The endpoint has no `clubs`, so the old response's `clubs` array is gone.
   //
-  // ACTIVE GOLFERS ONLY. This delegates to `golfersGetOne`, which searches with
-  // `status: 'Active'` (the same default `golfersSearch` applies), and there is
-  // no parameter here to opt out of it. A lapsed or inactive member has a real,
-  // readable Handicap Index and this method still resolves `undefined` for them
-  // — no error, and indistinguishable from "no such GHIN number". Callers who
-  // need those golfers should use `golfers.search({ golfer_id, status })` with
-  // `'Inactive'` or `'All'`. Parameterizing this is a separate design decision.
+  // Any membership status. This delegates to `golfersGetOne`, which stopped
+  // filtering by `status` in #83, so a lapsed or inactive member — who has a
+  // real, readable Handicap Index — comes back here rather than resolving
+  // `undefined`. Read `status` off the returned record to tell them apart;
+  // `undefined` now means only "no such GHIN number". Measured against
+  // `api-uat`, 2026-09-02, golfer 2890015:
+  //
+  //   status=Active   -> 0 rows
+  //   status=Inactive -> 3 rows
+  //   status=All      -> 0 rows
+  //   (no status)     -> 3 rows
+  //   status=         -> 3 rows
+  //
+  // `All` is not GHIN's "both" value; omitting the parameter is.
   //
   // The lookup is a golfer search underneath, so a row that fails `schemaGolfer`
   // is reported to `onDegraded` under entity `golfers_search`, not a handicaps
@@ -853,9 +860,25 @@ export class GhinClient {
     }
   }
 
-  // "No such active golfer" is an `Ok(undefined)`, not an `Err`: an empty search
+  // "No such golfer" is an `Ok(undefined)`, not an `Err`: an empty search
   // result is a normal answer from GHIN, not a failed request. Only a transport,
   // auth or validation failure produces an `Err` here.
+  //
+  // Resolves a golfer of any membership status — active, inactive or archived —
+  // and the caller reads `status` off the record to tell them apart. It used to
+  // pass `status: 'Active'`, which made `Ok(undefined)` mean "no such GHIN
+  // number *or* not a current member"; now that answer is only ever the first
+  // (#83). Measured against `api-uat`, 2026-09-02, golfer 2890015:
+  //
+  //   status=Active   -> 0 rows
+  //   status=Inactive -> 3 rows
+  //   status=All      -> 0 rows
+  //   (no status)     -> 3 rows
+  //   status=         -> 3 rows
+  //
+  // `status: null` — not an omitted argument — is what opts out: `golfersSearchPage`
+  // re-applies `status: 'Active'` from `searchDefaults` for anything else, and
+  // `All` is not GHIN's "both" value, omission is.
   //
   // Delegates to `golfersGetMany` for the club fields. A golfer comes back once
   // per club affiliation, so the old `per_page: 1` returned whichever row GHIN
@@ -874,7 +897,7 @@ export class GhinClient {
         return err(new ValidationError(`Invalid GHIN number: ${parsedGhin.error.message}`))
       }
 
-      const result = await this.golfersGetMany([parsedGhin.data], { status: 'Active' })
+      const result = await this.golfersGetMany([parsedGhin.data], { status: null })
 
       return result.map(({ golfers }) => golfers[0])
     } catch (error) {
@@ -906,6 +929,20 @@ export class GhinClient {
    *   is the one that disambiguates two golfers with the same name.
    * - **Unknown GHIN numbers are dropped silently.** They come back in `missing`
    *   instead, alongside golfers excluded by `status` or `updated_since`.
+   *
+   * `status` still defaults to `'Active'` here — unlike `getOne`, which stopped
+   * filtering in #83 — because dropping the default would silently move inactive
+   * golfers out of `missing` for every existing caller. Pass `status: null` to
+   * opt out: it omits the parameter on the wire, which is GHIN's "both" value.
+   * Measured against `api-uat`, 2026-09-02, golfer 2890015:
+   *
+   * ```
+   * status=Active   -> 0 rows
+   * status=Inactive -> 3 rows
+   * status=All      -> 0 rows
+   * (no status)     -> 3 rows
+   * status=         -> 3 rows
+   * ```
    *
    * `golfers` is ordered to match the requested numbers, with duplicates in the
    * request collapsed. An empty `ghinNumbers` is a `ValidationError`, not an

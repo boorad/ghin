@@ -641,7 +641,22 @@ describe('GhinClient', () => {
       expect(mockFetch).toHaveBeenCalledWith(expect.objectContaining({ entity: 'golfers_search' }))
     })
 
-    // "No such active golfer" is a normal answer, not a failure: this stays
+    // `handicaps.getOne` delegates to `golfers.getOne`, so it inherits #83's
+    // fix: an inactive member has a real, readable Handicap Index and this used
+    // to answer `undefined` for them. That was the bug that let spicy fall back
+    // to a four-year-old cached index (spicygolf/spicy#1153).
+    it('should return the handicap of an inactive golfer', async () => {
+      const golfer = { ghin: 2890015, last_name: 'Doe', handicap_index: 8.1, hi_display: '8.1', status: 'Inactive' }
+      mockFetch.mockResolvedValue(ok({ golfers: [golfer], invalid: [] }))
+
+      const result = await ghinClient.handicaps.getOne(2890015)
+
+      expect(result._unsafeUnwrap()).toEqual(golfer)
+      expect(result._unsafeUnwrap()?.status).toBe('Inactive')
+      expect(mockFetch.mock.calls[0]?.[0].options.searchParams.has('status')).toBe(false)
+    })
+
+    // "No such golfer" is a normal answer, not a failure: this stays
     // `Ok(undefined)` so callers don't have to distinguish an empty search from
     // a transport error by inspecting the error type.
     it('should return an ok result holding undefined when no golfer matches', async () => {
@@ -988,7 +1003,7 @@ describe('GhinClient', () => {
   })
 
   describe('golfers.getOne', () => {
-    it('should fetch and return one active golfer', async () => {
+    it('should fetch and return one golfer', async () => {
       const mockResponse = {
         golfers: [
           {
@@ -1010,7 +1025,9 @@ describe('GhinClient', () => {
 
     // "No golfer matched" is an ordinary answer, so it stays on the ok track:
     // `Ok(undefined)`, never `Err`. The one place a reader might reasonably
-    // expect an error, so it is asserted explicitly.
+    // expect an error, so it is asserted explicitly. Since #83 this is the
+    // *only* thing `undefined` means — an inactive golfer comes back as a
+    // record, so the two cases are finally distinguishable.
     it('should return an ok result holding undefined when no golfer found', async () => {
       const mockResponse = {
         golfers: [],
@@ -1055,7 +1072,38 @@ describe('GhinClient', () => {
 
       expect(searchParams.get('golfer_id')).toBe('1234567')
       expect(searchParams.get('per_page')).toBe('100')
-      expect(searchParams.get('status')).toBe('Active')
+      expect(searchParams.get('page')).toBe('1')
+      expect(searchParams.get('sorting_criteria')).toBe('last_name_first_name')
+      expect(searchParams.get('order')).toBe('asc')
+      expect(searchParams.get('source')).toBe('GHINcom')
+    })
+
+    // #83: this used to send `status=Active`, which made `undefined` mean "no
+    // such GHIN number *or* not a current member". Measured against `api-uat` on
+    // 2026-09-02, golfer 2890015 returns 0 rows for `status=Active` and
+    // `status=All`, and 3 rows for `status=Inactive`, no `status` at all, or an
+    // empty `status=`. Omission is GHIN's "both", so `has` is the assertion —
+    // `get` returns null for `status=` too, and that is a different wire string.
+    it('should send no status parameter at all', async () => {
+      mockFetch.mockResolvedValue(ok({ golfers: [{ ghin: 1234567, last_name: 'Doe' }], invalid: [] }))
+
+      await ghinClient.golfers.getOne(1234567)
+
+      expect(mockFetch.mock.calls[0]?.[0].options.searchParams.has('status')).toBe(false)
+    })
+
+    // The behaviour the parameter was hiding: a lapsed member has a real,
+    // readable Handicap Index and is now returned, with `status` telling the
+    // caller what they are looking at.
+    it('should return an inactive golfer', async () => {
+      mockFetch.mockResolvedValue(
+        ok({ golfers: [{ ghin: 2890015, last_name: 'Doe', status: 'Inactive' }], invalid: [] }),
+      )
+
+      const result = await ghinClient.golfers.getOne(2890015)
+
+      expect(result._unsafeUnwrap()).toBeDefined()
+      expect(result._unsafeUnwrap()?.status).toBe('Inactive')
     })
 
     it('should return a validation error with invalid ghin', async () => {
