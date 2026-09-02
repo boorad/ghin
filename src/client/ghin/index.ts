@@ -840,6 +840,14 @@ export class GhinClient {
   // "No such active golfer" is an `Ok(undefined)`, not an `Err`: an empty search
   // result is a normal answer from GHIN, not a failed request. Only a transport,
   // auth or validation failure produces an `Err` here.
+  //
+  // Delegates to `golfersGetMany` for the club fields. A golfer comes back once
+  // per club affiliation, so the old `per_page: 1` returned whichever row GHIN
+  // happened to sort first — the Handicap Index was right either way (it is
+  // identical across a golfer's rows) but `club_name` was a coin flip for a
+  // multi-club golfer, and club is the field that tells two golfers with the
+  // same name apart. `getMany` prefers the home club row. Still one request:
+  // the page holds every affiliation of a single golfer, and no golfer has 100.
   private async golfersGetOne(
     ghinNumber: number,
   ): Promise<Result<GolfersSearchResponse['golfers'][number] | undefined, GhinError>> {
@@ -850,14 +858,9 @@ export class GhinClient {
         return err(new ValidationError(`Invalid GHIN number: ${parsedGhin.error.message}`))
       }
 
-      const results = await this.golfersSearch({
-        golfer_id: parsedGhin.data,
-        page: 1,
-        per_page: 1,
-        status: 'Active',
-      })
+      const result = await this.golfersGetMany([parsedGhin.data], { status: 'Active' })
 
-      return results.map((golfers) => golfers[0])
+      return result.map(({ golfers }) => golfers[0])
     } catch (error) {
       return err(toGhinError(error))
     }

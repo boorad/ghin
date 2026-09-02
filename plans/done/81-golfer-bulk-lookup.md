@@ -181,17 +181,18 @@ Returns low HI only — `GHINNumber`, `LowHIValue`, `LowHIDisplay`, `Holes`, `Re
   `rev_date`, `handicap_index` and `status` never differed between a golfer's
   affiliation rows — so this drops club duplicates, never handicap data.
 - Requested numbers with no row come back in `missing`.
+- `golfers.getOne` now routes through `getMany`. Its old `per_page: 1` returned
+  whichever affiliation row GHIN sorted first, so `club_name` was a coin flip for
+  a multi-club golfer — the field that tells two same-named golfers apart. The
+  index it returned was never wrong (identical across a golfer's rows). Still one
+  request; the page just holds every affiliation of the one golfer.
+  `handicaps.getOne` delegates to it and inherits the fix.
 
 Measured against UAT: 12 GHIN numbers is 1 HTTP call, 50 is 1, 121 is 3.
 Previously 121 calls.
 
 ## Deliberately not done
 
-- **`golfers.getOne` still uses `per_page=1`**, so for a multi-club golfer it
-  returns an arbitrary affiliation row rather than the home club. Handicap fields
-  are identical across those rows so nothing is wrong with the index it returns,
-  but `club_name` is a coin flip. Routing `getOne` through `getMany` would fix it
-  and cost a page-size bump on the hot single-golfer path. Separate call.
 - **No `status: 'All'`.** GHIN accepts the value and returns zero rows. Covering
   both statuses means asking twice.
 - **Batch ceiling above 100 GHIN numbers is unprobed.** 100 is what was verified;

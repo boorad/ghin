@@ -991,6 +991,40 @@ describe('GhinClient', () => {
       expect(result._unsafeUnwrap()).toBeUndefined()
     })
 
+    // The old `per_page: 1` returned whichever affiliation row GHIN sorted first,
+    // so `club_name` was a coin flip for a multi-club golfer — the field that
+    // tells two golfers with the same name apart.
+    it('should return the home club row for a multi-club golfer', async () => {
+      mockFetch.mockResolvedValue(
+        ok({
+          golfers: [
+            { ghin: 1234567, last_name: 'Doe', club_name: 'Away Club', is_home_club: false },
+            { ghin: 1234567, last_name: 'Doe', club_name: 'Home Club', is_home_club: true },
+          ],
+          invalid: [],
+        }),
+      )
+
+      const result = await ghinClient.golfers.getOne(1234567)
+
+      expect(result._unsafeUnwrap()?.club_name).toBe('Home Club')
+    })
+
+    // Delegating to `getMany` costs a bigger page, not a second request: every
+    // affiliation of one golfer fits on it.
+    it('should still take a single request, asking for a full page', async () => {
+      mockFetch.mockResolvedValue(ok({ golfers: [{ ghin: 1234567, last_name: 'Doe' }], invalid: [] }))
+
+      await ghinClient.golfers.getOne(1234567)
+
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+      const searchParams = mockFetch.mock.calls[0]?.[0].options.searchParams
+
+      expect(searchParams.get('golfer_id')).toBe('1234567')
+      expect(searchParams.get('per_page')).toBe('100')
+      expect(searchParams.get('status')).toBe('Active')
+    })
+
     it('should return a validation error with invalid ghin', async () => {
       // @ts-expect-error - Testing invalid input type
       const result = await ghinClient.golfers.getOne('invalid')
