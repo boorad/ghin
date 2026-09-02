@@ -1,7 +1,16 @@
 import { z } from 'zod'
 import { boolean, date, emptyStringToNull, gender, handicap, number, partitionRows, string } from '../../../../models'
 
+// The request filter and the response field are not the same set, so the enum is
+// split. Measured against `api-uat`, 2026-09-02: a name search with an empty
+// status returned rows with `status: "Archived"` alongside `Active` and
+// `Inactive`. `.nullish()` does not rescue those — it accepts `null`/`undefined`
+// but an unknown *string* still fails the enum, so `partitionRows` was dropping
+// every archived golfer into `invalid`. Only `Active` and `Inactive` are proven
+// to work as request *filters* against GHIN, which is why the request side is not
+// widened; and three observed values is not proof that `Archived` is the last one.
 const schemaStatus = z.enum(['Active', 'Inactive'])
+const schemaGolferStatus = z.enum(['Active', 'Inactive', 'Archived'])
 
 export const schemaGolfersGlobalSearchRequest = z
   .object({
@@ -144,7 +153,7 @@ export const schemaGolfer = z
     rev_date: date.nullish(),
     soft_cap: boolean.nullish(),
     state: emptyStringToNull.nullish(),
-    status: schemaStatus.nullish(),
+    status: schemaGolferStatus.nullish(),
     suffix: emptyStringToNull.nullish(),
   })
   .passthrough()

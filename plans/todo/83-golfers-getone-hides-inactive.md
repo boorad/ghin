@@ -34,7 +34,7 @@ Two things found alongside:
 
 ## Live tracker
 
-- [ ] Phase 1 — Split `schemaStatus`; widen the response side to include `Archived`
+- [x] Phase 1 — Split `schemaStatus`; widen the response side to include `Archived`
 - [ ] Phase 2 — `status: null` means "no filter"; omit the param on the wire
 - [ ] Phase 3 — `getOne` stops filtering; comments + README rewritten
 - [ ] Phase 4 — The empty-`page` 400
