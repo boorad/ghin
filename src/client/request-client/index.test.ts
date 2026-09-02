@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ZodSchema } from 'zod'
 import { AuthenticationError, CacheError, NetworkError, RateLimitError, ValidationError } from '../../errors'
-import type { CacheClient } from '../../models'
+import type { CacheClient, ClientConfig } from '../../models'
 import { InMemoryCacheClient } from '../in-memory-cache-client'
 import { RequestClient } from './index'
 
@@ -99,53 +99,6 @@ describe('RequestClient', () => {
         expect(result.value).toEqual(mockApiResponse)
       }
       expect(fetch).toHaveBeenCalledTimes(3)
-    })
-
-    it('should use cached token if valid', async () => {
-      // Mock JWT decode to return valid token
-      const { jwtDecode } = await import('jwt-decode')
-      vi.mocked(jwtDecode).mockReturnValue({
-        exp: Math.floor(Date.now() / 1000) + 3600,
-      })
-
-      // Set cached token
-      await mockCache.write('cached-access-token')
-
-      const mockApiResponse = { data: 'test-data' }
-
-      // Mock session fetch to avoid Zod error if called
-      vi.mocked(fetch)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            authToken: { token: 'session-token', expiresIn: '3600s' },
-          }),
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            golfer_user: { golfer_user_token: 'access-token' },
-          }),
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => mockApiResponse,
-        } as Response)
-
-      const schema = {
-        safeParse: vi.fn().mockReturnValue({ success: true, data: mockApiResponse }),
-      } as unknown as ZodSchema
-
-      const result = await requestClient.fetch({
-        entity: 'golfers_search',
-        schema,
-      })
-
-      expect(result.isOk()).toBe(true)
-      if (result.isOk()) {
-        expect(result.value).toEqual(mockApiResponse)
-      }
-      expect(fetch).toHaveBeenCalled()
     })
 
     it('should handle API errors', async () => {
@@ -776,14 +729,32 @@ describe('RequestClient', () => {
 
   const noopSchema = () => ({ safeParse: vi.fn() }) as unknown as ZodSchema
 
-  // A plain-object cache rather than a class instance: `schemaClientConfig.parse`
-  // rebuilds `config.cache` through Zod's function wrappers, so methods that
-  // close over their state survive while methods that read `this` do not.
+  // A plain-object cache with vi.fn methods, for asserting on calls. The config
+  // schema passes the cache through by reference (#79), so class instances work
+  // too — see StatefulCache below for the `this`-bound variant.
   const makeCache = (overrides: Partial<CacheClient> = {}): CacheClient => ({
     read: vi.fn(async () => undefined),
     write: vi.fn(async () => undefined),
     ...overrides,
   })
+
+  // A class-based cache whose state lives on `this` — the shape issue #79 broke:
+  // Zod's function wrappers used to detach these methods from their instance.
+  class StatefulCache implements CacheClient {
+    private store: string | undefined
+
+    constructor(seed?: string) {
+      this.store = seed
+    }
+
+    async read(): Promise<string | undefined> {
+      return this.store
+    }
+
+    async write(value: string): Promise<void> {
+      this.store = value
+    }
+  }
 
   const clientWith = (cache: CacheClient, apiAccess = false) =>
     new RequestClient({ username: 'testuser', password: 'testpass', cache, apiAccess })
@@ -941,6 +912,64 @@ describe('RequestClient', () => {
       expect(error.message).toContain('Server error: 500 Internal Server Error')
       expect(cache.write).not.toHaveBeenCalled()
       expect(fetch).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('user-supplied cache identity (#79)', () => {
+    it('should keep the exact cache instance the caller passed in', () => {
+      const cache = new StatefulCache()
+      const client = clientWith(cache)
+
+      expect((client as unknown as { config: ClientConfig }).config.cache).toBe(cache)
+    })
+
+    it('should let a second client reuse the token a first client wrote to a shared stateful cache', async () => {
+      const { jwtDecode } = await import('jwt-decode')
+      vi.mocked(jwtDecode).mockReturnValue(validExp())
+
+      const cache = new StatefulCache()
+
+      const first = clientWith(cache)
+      vi.mocked(fetch)
+        .mockResolvedValueOnce(sessionOk())
+        .mockResolvedValueOnce(loginOk('shared-token'))
+        .mockResolvedValueOnce(jsonOk({ data: 'first' }))
+
+      const firstResult = await first.fetch({ entity: 'golfers_search', schema: okSchema({ data: 'first' }) })
+      expect(firstResult.isOk()).toBe(true)
+      expect(fetch).toHaveBeenCalledTimes(3)
+
+      vi.mocked(fetch).mockClear()
+
+      const second = clientWith(cache)
+      vi.mocked(fetch).mockResolvedValueOnce(jsonOk({ data: 'second' }))
+
+      const secondResult = await second.fetch({ entity: 'golfers_search', schema: okSchema({ data: 'second' }) })
+
+      expect(secondResult.isOk()).toBe(true)
+      // the cached token was reused: one API fetch, no session/login round trip
+      expect(fetch).toHaveBeenCalledTimes(1)
+      expect(urlsFetched().filter((url) => url.includes('login'))).toHaveLength(0)
+      expect(vi.mocked(fetch).mock.calls[0]?.[1]?.headers).toMatchObject({
+        Authorization: 'Bearer shared-token',
+      })
+    })
+
+    it('should read a pre-seeded token from a stateful cache on first use', async () => {
+      const { jwtDecode } = await import('jwt-decode')
+      vi.mocked(jwtDecode).mockReturnValue(validExp())
+
+      const client = clientWith(new StatefulCache('pre-seeded-token'))
+      vi.mocked(fetch).mockResolvedValueOnce(jsonOk({ data: 'test-data' }))
+
+      const result = await client.fetch({ entity: 'golfers_search', schema: okSchema({ data: 'test-data' }) })
+
+      expect(result.isOk()).toBe(true)
+      expect(fetch).toHaveBeenCalledTimes(1)
+      expect(urlsFetched().filter((url) => url.includes('login'))).toHaveLength(0)
+      expect(vi.mocked(fetch).mock.calls[0]?.[1]?.headers).toMatchObject({
+        Authorization: 'Bearer pre-seeded-token',
+      })
     })
   })
 

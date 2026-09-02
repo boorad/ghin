@@ -48,10 +48,6 @@ describe('CacheClient', () => {
 
       const result = schemaCacheClient.safeParse(invalidCacheClient)
       expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.issues).toHaveLength(1)
-        expect(result.error.issues[0]?.path).toEqual(['read'])
-      }
     })
 
     it('should reject cache client without write method', () => {
@@ -61,10 +57,17 @@ describe('CacheClient', () => {
 
       const result = schemaCacheClient.safeParse(invalidCacheClient)
       expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.issues).toHaveLength(1)
-        expect(result.error.issues[0]?.path).toEqual(['write'])
-      }
+    })
+
+    it('should reject an empty object', () => {
+      const result = schemaCacheClient.safeParse({})
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject non-object values', () => {
+      expect(schemaCacheClient.safeParse(undefined).success).toBe(false)
+      expect(schemaCacheClient.safeParse(null).success).toBe(false)
+      expect(schemaCacheClient.safeParse('cache').success).toBe(false)
     })
 
     it('should reject cache client with non-function read method', () => {
@@ -87,6 +90,45 @@ describe('CacheClient', () => {
 
       const result = schemaCacheClient.safeParse(invalidCacheClient)
       expect(result.success).toBe(false)
+    })
+
+    it('should return the exact same reference for a plain object cache (issue #79)', () => {
+      const cache: CacheClient = {
+        read: () => 'cached-token',
+        write: () => {
+          // Mock implementation
+        },
+      }
+
+      const parsed = schemaCacheClient.parse(cache)
+      expect(parsed).toBe(cache)
+      expect(parsed.read).toBe(cache.read)
+      expect(parsed.write).toBe(cache.write)
+    })
+
+    it('should preserve a class instance with state on `this` (issue #79)', async () => {
+      class StatefulCache implements CacheClient {
+        private token: string | undefined
+
+        read(): string | undefined {
+          return this.token
+        }
+
+        write(value: string): void {
+          this.token = value
+        }
+      }
+
+      const cache = new StatefulCache()
+      const parsed = schemaCacheClient.parse(cache)
+
+      expect(parsed).toBe(cache)
+
+      // Methods must remain bound to the original instance — state written
+      // through the parsed reference must round-trip through `this`.
+      await parsed.write('token-via-parsed')
+      expect(await parsed.read()).toBe('token-via-parsed')
+      expect(cache.read()).toBe('token-via-parsed')
     })
   })
 })

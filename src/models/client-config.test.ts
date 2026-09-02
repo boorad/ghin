@@ -30,6 +30,25 @@ describe('ClientConfig', () => {
 
       const result = schemaClientConfig.safeParse(validConfig)
       expect(result.success).toBe(true)
+      if (result.success) {
+        // The caller's cache must pass through by reference — cloning it
+        // detaches the instance the client actually uses (issue #79).
+        expect(result.data.cache).toBe(validConfig.cache)
+      }
+    })
+
+    it('should reject config with an invalid cache at path ["cache"]', () => {
+      const invalidConfig = {
+        cache: { read: 'not-a-function' },
+        password: 'testpass',
+        username: 'testuser',
+      }
+
+      const result = schemaClientConfig.safeParse(invalidConfig)
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.issues[0]?.path).toEqual(['cache'])
+      }
     })
 
     it('should reject config without username', () => {

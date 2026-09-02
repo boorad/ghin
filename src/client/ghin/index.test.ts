@@ -2,6 +2,7 @@ import { err, ok } from 'neverthrow'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NetworkError, ValidationError } from '../../errors'
 import { InMemoryCacheClient } from '../in-memory-cache-client'
+import { RequestClient } from '../request-client'
 import { GhinClient } from './index'
 import {
   getAccessesResponseFixture,
@@ -67,6 +68,31 @@ describe('GhinClient', () => {
         password: 'testpass',
       })
       expect(client).toBeInstanceOf(GhinClient)
+    })
+
+    // GhinClient is the public entry point, so this hop is the path every real
+    // consumer's cache takes. Issue #79: the safeParse at construction used to
+    // rebuild the config and detach a class-based cache from its instance.
+    it('should hand a user-supplied cache to RequestClient by reference (#79)', () => {
+      // State lives on `this` — the shape #79 broke via unbound Zod wrappers.
+      class StatefulCache {
+        private store: string | undefined
+
+        async read(): Promise<string | undefined> {
+          return this.store
+        }
+
+        async write(value: string): Promise<void> {
+          this.store = value
+        }
+      }
+      const cache = new StatefulCache()
+
+      new GhinClient({ username: 'testuser', password: 'testpass', cache })
+
+      const capturedConfig = vi.mocked(RequestClient).mock.calls.at(-1)?.[0]
+      // The instance itself, not a validated clone — `toBe`, never `toEqual`.
+      expect(capturedConfig?.cache).toBe(cache)
     })
   })
 
