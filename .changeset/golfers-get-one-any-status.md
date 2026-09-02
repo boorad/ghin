@@ -44,3 +44,8 @@ Two things to check when upgrading:
   always did. If you were relying on that to see inactive golfers through
   `golfers.search` or `golfers.getMany`, switch to `null` or the filter comes
   back on silently.
+
+  Swap it in the *same* change as the version bump, not before: on 0.16.0 both
+  request schemas are `.optional()`, so `null` fails `safeParse` and comes back
+  a `ValidationError` without ever reaching the network. There is no value that
+  clears the filter on both versions.
