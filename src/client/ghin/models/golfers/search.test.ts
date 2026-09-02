@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { schemaGolfer, schemaGolfersSearchResponse } from './search'
+import { schemaGolfer, schemaGolfersSearchRequest, schemaGolfersSearchResponse } from './search'
 
 describe('Golfer Search Schema', () => {
   // Only what makes a golfer usable: the number a handicap links against and
@@ -85,6 +85,33 @@ describe('Golfer Search Schema', () => {
         expect(result.data.golfers).toEqual([])
         expect(result.data.invalid).toEqual([])
       }
+    })
+  })
+
+  // GHIN's only bulk golfer lookup for non-Admin-Portal credentials (#81). The
+  // list has to reach the wire comma-separated: `golfer_id[]=a&golfer_id[]=b`
+  // is a 500 and `golfer_ids[]` is a 400.
+  describe('schemaGolfersSearchRequest golfer_id', () => {
+    it('should join an array of GHIN numbers with commas', () => {
+      const result = schemaGolfersSearchRequest.safeParse({ golfer_id: [1234567, 7654321] })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.golfer_id).toBe('1234567,7654321')
+      }
+    })
+
+    it('should leave a single GHIN number alone', () => {
+      const result = schemaGolfersSearchRequest.safeParse({ golfer_id: 1234567 })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.golfer_id).toBe(1234567)
+      }
+    })
+
+    it('should reject an empty array', () => {
+      expect(schemaGolfersSearchRequest.safeParse({ golfer_id: [] }).success).toBe(false)
     })
   })
 })

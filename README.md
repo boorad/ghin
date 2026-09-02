@@ -85,6 +85,41 @@ if (result.isErr()) {
 }
 ```
 
+### Looking up many golfers at once
+
+`golfers.getMany` fetches a list of GHIN numbers in one batched call instead of
+one call per golfer — useful for a picker list, or a nightly Handicap Index
+refresh, against GHIN's per-account rate limit.
+
+```typescript
+const result = await ghin.golfers.getMany([1234567, 7654321])
+
+if (result.isOk()) {
+  const { golfers, missing } = result.value
+  console.log(`${golfers.length} found, ${missing.length} unknown to GHIN`)
+}
+
+// Only golfers whose record moved since a date — a delta refresh
+const changed = await ghin.golfers.getMany(storedGhinNumbers, { updated_since: '2026-08-01' })
+```
+
+Three things it handles that a raw `golfers.search` leaves to you:
+
+- **GHIN pages by row, not by golfer.** A golfer appears once per club
+  affiliation, so 100 GHIN numbers can be ~180 rows and there is no total to
+  page against. `getMany` batches the numbers and pages each batch to
+  exhaustion — 120 GHIN numbers is 3 HTTP calls, and 12 is one.
+- **Multi-club golfers arrive more than once.** Rows are deduplicated to one per
+  GHIN number, preferring the golfer's home club. The handicap fields are
+  identical across a golfer's rows; only the club differs.
+- **Unknown GHIN numbers vanish silently.** They come back in `missing` rather
+  than simply not being there. `status` defaults to `'Active'`, so inactive
+  golfers land in `missing` too, unless you pass `{ status: 'Inactive' }` —
+  GHIN has no "both" value, so covering both statuses means asking twice.
+
+`golfers` is ordered to match the numbers you asked for, with duplicates
+collapsed. An empty list is a `ValidationError`, not an empty result.
+
 ### Results, not exceptions
 
 Every method on `GhinClient` returns `Promise<Result<T, GhinError>>` from

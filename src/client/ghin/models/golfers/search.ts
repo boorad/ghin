@@ -23,7 +23,27 @@ export const schemaGolfersSearchRequest = z
   .object({
     page: number,
     per_page: number.max(100),
-    golfer_id: number.optional(),
+    // GHIN accepts a *comma-separated* list here, which is the only bulk
+    // golfer lookup the API grants ordinary (non-Admin-Portal) credentials —
+    // see plans/done/81-golfer-bulk-lookup.md. Note the bracket forms the rest
+    // of the API uses do not work: `golfer_id[]=a&golfer_id[]=b` is a 500 and
+    // `golfer_ids[]` is a 400. Prefer `golfers.getMany`, which handles the
+    // row-based paging and deduping this raw parameter leaves to the caller.
+    //
+    // The scalar branch is `z.number().or(z.string()).pipe(number)` rather than a
+    // bare `number`: `number` is `z.coerce.number()` and `Number([]) === 0`, so a
+    // bare branch would quietly accept an empty array as a search for golfer 0
+    // (the coercion trap from #63). Narrowing the input to number-or-string first
+    // makes an empty array fail the whole union instead.
+    golfer_id: z
+      .union([
+        z
+          .array(number)
+          .min(1)
+          .transform((ids) => ids.join(',')),
+        z.number().or(z.string()).pipe(number),
+      ])
+      .optional(),
     last_name: string.optional(),
     first_name: emptyStringToNull.optional(),
     state: emptyStringToNull.transform((value) => value?.toUpperCase()).optional(),
@@ -54,7 +74,40 @@ export const schemaGolfersSearchRequest = z
   })
   .partial()
 
-export type GolfersSearchRequest = z.infer<typeof schemaGolfersSearchRequest>
+// `getMany` owns `golfer_id`, `page` and `per_page` — passing them would fight
+// the batching and paging it does on the caller's behalf. What is left is the
+// two filters that change *which* golfers come back:
+//
+// - `status` defaults to `'Active'` inside `golfers.search`, so inactive
+//   golfers land in `missing` rather than `golfers` unless it is set to
+//   `'Inactive'`. There is no "both" value — `status=All` is accepted by GHIN
+//   and returns zero rows, which is why the enum does not offer it. Callers
+//   who need both statuses have to ask twice.
+// - `updated_since` filters the batch to golfers whose record moved since a
+//   date, which is the delta feed the Admin-Portal-only `hi_changed_golfers`
+//   would have given us (#81).
+export const schemaGolfersGetManyRequest = z
+  .object({
+    status: schemaStatus,
+    updated_since: emptyStringToNull,
+  })
+  .partial()
+
+export type GolfersGetManyRequest = z.infer<typeof schemaGolfersGetManyRequest>
+
+export type GolfersGetManyResponse = {
+  golfers: GolfersSearchResponse['golfers']
+  // GHIN drops GHIN numbers it does not recognize from the response without an
+  // error, so "asked for 12, got 11" is otherwise silent. These are the
+  // requested numbers no row came back for — unknown to GHIN, or filtered out
+  // by `status` / `updated_since`.
+  missing: number[]
+}
+
+// `z.input`, not `z.infer`: `golfer_id` accepts `number | number[]` and the
+// schema transforms the array into GHIN's comma-separated string, so the output
+// type is what goes on the wire rather than what a caller may hand us.
+export type GolfersSearchRequest = z.input<typeof schemaGolfersSearchRequest>
 export type GolfersGlobalSearchRequest = z.infer<typeof schemaGolfersGlobalSearchRequest>
 
 // `ghin` is the only field that makes a golfer usable — it's what a handicap
