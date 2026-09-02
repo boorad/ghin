@@ -967,6 +967,43 @@ describe('GhinClient', () => {
         expect(searchParamsOfCall(0).get('status')).toBe('Active')
       })
     })
+
+    // #83: zod `.partial()` keeps a present-but-`undefined` key, so a caller
+    // spreading an optional field in — `{ last_name, page: body.page }` — used
+    // to put `page=` on the wire, and GHIN answers that with
+    // `400 {"errors":{"page":["can't be blank"]}}`.
+    describe('undefined parameters', () => {
+      const searchParamsOfCall = (call: number): URLSearchParams => mockFetch.mock.calls[call]?.[0].options.searchParams
+      const emptyValuedKeys = (params: URLSearchParams): string[] =>
+        [...params].filter(([, value]) => value === '').map(([key]) => key)
+
+      beforeEach(() => {
+        mockFetch.mockResolvedValue(ok({ golfers: [], invalid: [] }))
+      })
+
+      it('should fall back to the default page when page is undefined', async () => {
+        await ghinClient.golfers.search({ last_name: 'Doe', page: undefined })
+
+        expect(searchParamsOfCall(0).get('page')).toBe('1')
+        expect(emptyValuedKeys(searchParamsOfCall(0))).toEqual([])
+      })
+
+      it('should still send an explicit page', async () => {
+        await ghinClient.golfers.search({ last_name: 'Doe', page: 3 })
+
+        expect(searchParamsOfCall(0).get('page')).toBe('3')
+      })
+
+      // Scope pin: this phase changed `undefined` only. `first_name: ''` runs
+      // through `emptyStringToNull`, and a `null` non-`status` parameter still
+      // reaches the wire as `key=` exactly as it always has.
+      it('should still send an empty value for a null parameter', async () => {
+        await ghinClient.golfers.search({ last_name: 'Doe', first_name: '' })
+
+        expect(searchParamsOfCall(0).get('first_name')).toBe('')
+        expect(emptyValuedKeys(searchParamsOfCall(0))).toEqual(['first_name'])
+      })
+    })
   })
 
   describe('golfers.globalSearch', () => {
@@ -999,6 +1036,30 @@ describe('GhinClient', () => {
       expect(result.isErr()).toBe(true)
       expect(result._unsafeUnwrapErr()).toBe(failure)
       expect(result._unsafeUnwrapErr().message).toBe('Search failed')
+    })
+
+    // Same `400 {"errors":{"page":["can't be blank"]}}` hazard as
+    // `golfers.search`: a present-but-`undefined` key must inherit the default
+    // rather than overwrite it with an empty string.
+    describe('undefined parameters', () => {
+      const searchParamsOfCall = (call: number): URLSearchParams => mockFetch.mock.calls[call]?.[0].options.searchParams
+
+      beforeEach(() => {
+        mockFetch.mockResolvedValue(ok({ golfers: [], invalid: [] }))
+      })
+
+      it('should fall back to the default page when page is undefined', async () => {
+        await ghinClient.golfers.globalSearch({ ghin: 1234567, page: undefined })
+
+        expect(searchParamsOfCall(0).get('page')).toBe('1')
+        expect([...searchParamsOfCall(0)].filter(([, value]) => value === '')).toEqual([])
+      })
+
+      it('should still send an explicit page', async () => {
+        await ghinClient.golfers.globalSearch({ ghin: 1234567, page: 3 })
+
+        expect(searchParamsOfCall(0).get('page')).toBe('3')
+      })
     })
   })
 

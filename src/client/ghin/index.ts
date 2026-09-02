@@ -766,7 +766,17 @@ export class GhinClient {
         searchParams.set(key, value.toString())
       }
 
+      // A present-but-`undefined` key is skipped so the `searchDefaults` line
+      // above survives: zod `.partial()` keeps the key, and writing it as `''`
+      // put `page=` on the wire, which GHIN answers with
+      // `400 {"errors":{"page":["can't be blank"]}}`. A caller spreading an
+      // optional field in — `{ last_name, page: body.page }` — hits this.
+      // `null` still writes `key=`, unchanged.
       for (const [key, value] of Object.entries(params)) {
+        if (value === undefined) {
+          continue
+        }
+
         searchParams.set(key, value?.toString() ?? '')
       }
 
@@ -825,7 +835,14 @@ export class GhinClient {
         searchParams.set(key, value.toString())
       }
 
+      // Same hazard as `golfersSearchPage`: a present-but-`undefined` key must
+      // fall back to `searchDefaults` rather than overwrite it with `''`, which
+      // GHIN answers with `400 {"errors":{"page":["can't be blank"]}}`.
       for (const [key, value] of Object.entries(rest)) {
+        if (value === undefined) {
+          continue
+        }
+
         searchParams.set(key, value?.toString() ?? '')
       }
 
