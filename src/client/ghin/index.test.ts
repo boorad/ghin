@@ -191,6 +191,21 @@ describe('GhinClient', () => {
       expect(mockFetch).toHaveBeenCalled()
     })
 
+    // Representative of the same one-line hole in `courses.getDetails`,
+    // `facilities.search` and `handicaps.getCourseHandicaps`: their loops called
+    // `value.toString()` unguarded, and zod `.partial()`/`.optional()` keeps a
+    // present-but-`undefined` key, so a caller spreading an optional field in got
+    // a `TypeError` wrapped as an `Err`. All five now mirror `webhooksList` (#83).
+    it('should skip a present-but-undefined parameter rather than throw', async () => {
+      const mockResponse = { courses: [], invalid: [] }
+      mockFetch.mockResolvedValue(ok(mockResponse))
+
+      const result = await ghinClient.courses.search({ name: 'Test', facility_id: undefined })
+
+      expect(result.isOk()).toBe(true)
+      expect(mockFetch.mock.calls[0]?.[0].options.searchParams.has('facility_id')).toBe(false)
+    })
+
     // Degradation must never be silent: a search that quietly returns 2 of 3
     // rows is indistinguishable from a search that found 2 rows, which is
     // exactly how a GHIN payload change hides until a user reports it.
@@ -1086,9 +1101,9 @@ describe('GhinClient', () => {
 
     // "No golfer matched" is an ordinary answer, so it stays on the ok track:
     // `Ok(undefined)`, never `Err`. The one place a reader might reasonably
-    // expect an error, so it is asserted explicitly. Since #83 this is the
-    // *only* thing `undefined` means — an inactive golfer comes back as a
-    // record, so the two cases are finally distinguishable.
+    // expect an error, so it is asserted explicitly. #83 removed the status
+    // filter as one reason for this `undefined`; the schema-drop below is the
+    // one that remains.
     it('should return an ok result holding undefined when no golfer found', async () => {
       const mockResponse = {
         golfers: [],
@@ -1100,6 +1115,25 @@ describe('GhinClient', () => {
 
       expect(result.isOk()).toBe(true)
       expect(result._unsafeUnwrap()).toBeUndefined()
+    })
+
+    // `undefined` is not proof of "no such GHIN number". If every row a golfer
+    // has fails `schemaGolfer` it is partitioned into `invalid` and this resolves
+    // the identical `undefined` — the `Archived` status found in #83 was one such
+    // value, and `gender: z.enum(['M','F'])` is the same trap still live. Only
+    // `onDegraded` separates the two, and it is undefined unless the consumer
+    // wires it up, so the ambiguity is pinned here rather than left to a reader.
+    it('should return an ok result holding undefined when the only row failed the schema', async () => {
+      const onDegraded = vi.fn()
+      const client = new GhinClient({ password: 'p', username: 'u', onDegraded })
+      const rejected = { ghin: 1234567, last_name: 'Doe', status: 'Something GHIN added' }
+      mockFetch.mockResolvedValue(ok({ golfers: [], invalid: [rejected] }))
+
+      const result = await client.golfers.getOne(1234567)
+
+      expect(result.isOk()).toBe(true)
+      expect(result._unsafeUnwrap()).toBeUndefined()
+      expect(onDegraded).toHaveBeenCalledWith({ entity: 'golfers_search', dropped: 1, total: 1, sample: [rejected] })
     })
 
     // The old `per_page: 1` returned whichever affiliation row GHIN sorted first,
@@ -1420,6 +1454,23 @@ describe('GhinClient', () => {
 
       expect(result.isErr()).toBe(true)
       expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
+    })
+
+    // #83: the query-string loop guarded `null` but not `undefined`, and zod
+    // `.partial()` keeps a present-but-`undefined` key — verified, `safeParse({
+    // course_id: undefined })` succeeds with `course_id` still in `data`. So
+    // `.toString()` threw a `TypeError` inside the `try`, `toGhinError` swallowed
+    // it, and the exact "caller spreads an optional field in" pattern came back
+    // as an `Err` instead of working. Skipping the key is the right wire shape:
+    // the caller meant "don't filter on course", not `course_id=`.
+    it('should skip a present-but-undefined parameter rather than throw', async () => {
+      const mockResponse = { scores: [], invalid: [] }
+      mockFetch.mockResolvedValue(ok(mockResponse))
+
+      const result = await ghinClient.golfers.getScores(1234567, { course_id: undefined })
+
+      expect(result.isOk()).toBe(true)
+      expect(mockFetch.mock.calls[0]?.[0].options.searchParams.has('course_id')).toBe(false)
     })
 
     // Degradation must never be silent: a history that quietly comes back one

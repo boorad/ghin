@@ -81,7 +81,7 @@ export const schemaGolfersSearchRequest = z
     // `null` is not "no value" here, it is an explicit *no status filter* —
     // `golfers.search` defaults to `'Active'` and `null` is the only way to
     // clear it. See `schemaGolfersGetManyRequest` below for the measurement.
-    status: schemaStatus.nullish(),
+    status: schemaStatus.nullable(),
     updated_since: emptyStringToNull.optional(),
   })
   .partial()
@@ -121,8 +121,9 @@ export type GolfersGetManyResponse = {
   golfers: GolfersSearchResponse['golfers']
   // GHIN drops GHIN numbers it does not recognize from the response without an
   // error, so "asked for 12, got 11" is otherwise silent. These are the
-  // requested numbers no row came back for — unknown to GHIN, or filtered out
-  // by `status` / `updated_since`.
+  // requested numbers no *usable* row came back for — unknown to GHIN, filtered
+  // out by `status` / `updated_since`, or dropped by `schemaGolfer` into
+  // `invalid`. Wire `onDegraded` to tell the last case apart.
   missing: number[]
 }
 
