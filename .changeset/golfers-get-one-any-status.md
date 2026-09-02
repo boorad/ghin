@@ -38,3 +38,9 @@ Two things to check when upgrading:
 - Code that treated "`getOne` returned something" as "this golfer is an active
   member" needs to read `status` off the record. That inference was never sound;
   the old behaviour made it work by accident.
+- `{ status: undefined }` no longer clears the filter — use `status: null`.
+  Passing `undefined` used to reach the wire as `status=`, which GHIN reads as
+  "no filter"; it now falls back to the `'Active'` default like an absent key
+  always did. If you were relying on that to see inactive golfers through
+  `golfers.search` or `golfers.getMany`, switch to `null` or the filter comes
+  back on silently.
