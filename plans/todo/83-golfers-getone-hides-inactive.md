@@ -38,7 +38,7 @@ Two things found alongside:
 - [x] Phase 2 — `status: null` means "no filter"; omit the param on the wire
 - [x] Phase 3 — `getOne` stops filtering; comments + README rewritten
 - [x] Phase 4 — The empty-`page` 400
-- [ ] Phase 5 — Changeset
+- [x] Phase 5 — Changeset
 
 ## Decisions
 
@@ -71,6 +71,25 @@ Decided during implementation without asking:
   a present-but-`undefined` key, so the query-string loop must distinguish three
   states: key absent, key present-and-`undefined` (use the default), key
   present-and-`null` (omit). This is also the mechanism behind the `page=` 400.
+
+- **The `undefined`-param `TypeError` was fixed in all five loops, not just the
+  golfers one.** Review found that `golfersGetScores` guarded only `null` and
+  then called `value.toString()`, so a present-but-`undefined` param throws a
+  `TypeError` that `toGhinError` swallows into an `Err` — strictly worse than
+  the `page=` 400 this branch set out to fix. The same hole was live in
+  `courseGetDetails`, `courseSearch`, `facilitySearch` and
+  `handicapsGetCourseHandicaps`. The reviewer offered the four non-golfer loops
+  as a follow-up issue; fixing them is a one-line guard each, matching the shape
+  `webhooksList` already used, which is cheaper than filing four follow-ups.
+- **Doc claims about `undefined` were softened rather than made true.** A golfer
+  whose every row fails `schemaGolfer` also resolves `undefined`, so
+  `undefined`/`missing` means "no usable row came back — unknown GHIN number,
+  filtered out, or dropped by the schema", with `onDegraded` as the only signal
+  that tells the last case apart. A characterization test pins that residual
+  ambiguity.
+- **Test-helper duplication left alone.** `searchParamsOfCall` is redefined four
+  times in `index.test.ts`; consolidating it is churn across four blocks for no
+  behaviour change.
 
 ## Published surface
 
