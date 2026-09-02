@@ -1015,6 +1015,189 @@ describe('GhinClient', () => {
     })
   })
 
+  describe('golfers.getMany', () => {
+    // GHIN's bulk shape is a comma-separated `golfer_id`; the bracket forms the
+    // rest of the API uses are a 500/400 (#81). Asserting the wire string, not
+    // just "some ids were sent", is the point of this test.
+    const searchParamsOfCall = (call: number): URLSearchParams => mockFetch.mock.calls[call]?.[0].options.searchParams
+
+    const row = (ghin: number, overrides: Record<string, unknown> = {}) => ({
+      ghin,
+      last_name: `Golfer${ghin}`,
+      club_name: 'Home Club',
+      is_home_club: true,
+      hi_display: '11.4',
+      ...overrides,
+    })
+
+    it('should send one comma-separated golfer_id and return golfers in request order', async () => {
+      mockFetch.mockResolvedValue(ok({ golfers: [row(3), row(1), row(2)], invalid: [] }))
+
+      const result = await ghinClient.golfers.getMany([1, 2, 3])
+
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+      expect(searchParamsOfCall(0).get('golfer_id')).toBe('1,2,3')
+      expect(result._unsafeUnwrap().golfers.map((golfer) => golfer.ghin)).toEqual([1, 2, 3])
+      expect(result._unsafeUnwrap().missing).toEqual([])
+    })
+
+    // The whole reason this method exists over a raw `search`: GHIN drops GHIN
+    // numbers it does not know without an error, so the caller cannot tell
+    // "not a golfer" from "we forgot to ask".
+    it('should report requested numbers GHIN did not return as missing', async () => {
+      mockFetch.mockResolvedValue(ok({ golfers: [row(1)], invalid: [] }))
+
+      const result = await ghinClient.golfers.getMany([1, 2, 3])
+
+      expect(result._unsafeUnwrap().golfers.map((golfer) => golfer.ghin)).toEqual([1])
+      expect(result._unsafeUnwrap().missing).toEqual([2, 3])
+    })
+
+    it('should collapse duplicate GHIN numbers in the request', async () => {
+      mockFetch.mockResolvedValue(ok({ golfers: [row(1)], invalid: [] }))
+
+      const result = await ghinClient.golfers.getMany([1, 1, 1])
+
+      expect(searchParamsOfCall(0).get('golfer_id')).toBe('1')
+      expect(result._unsafeUnwrap().golfers).toHaveLength(1)
+    })
+
+    // A golfer comes back once per club affiliation. Handicap fields are
+    // identical across those rows; only the club differs, so the home club is
+    // the one that disambiguates two golfers with the same name (#1148).
+    it('should deduplicate multi-club golfers to their home club row', async () => {
+      mockFetch.mockResolvedValue(
+        ok({
+          golfers: [
+            row(1, { club_name: 'Away Club', is_home_club: false }),
+            row(1, { club_name: 'Real Home Club', is_home_club: true }),
+            row(1, { club_name: 'Other Away Club', is_home_club: false }),
+          ],
+          invalid: [],
+        }),
+      )
+
+      const result = await ghinClient.golfers.getMany([1])
+
+      expect(result._unsafeUnwrap().golfers).toHaveLength(1)
+      expect(result._unsafeUnwrap().golfers[0]?.club_name).toBe('Real Home Club')
+    })
+
+    it('should keep a golfer whose rows never say is_home_club', async () => {
+      mockFetch.mockResolvedValue(
+        ok({
+          golfers: [
+            row(1, { club_name: 'First Club', is_home_club: false }),
+            row(1, { club_name: 'Second', is_home_club: false }),
+          ],
+          invalid: [],
+        }),
+      )
+
+      const result = await ghinClient.golfers.getMany([1])
+
+      expect(result._unsafeUnwrap().golfers[0]?.club_name).toBe('First Club')
+    })
+
+    // `per_page` bounds *rows*, and there is no `meta` block to page against, so
+    // a full page is the only signal there is more to read.
+    it('should page until GHIN sends a short page', async () => {
+      const fullPage = Array.from({ length: 100 }, (_, index) => row(index + 1))
+
+      mockFetch
+        .mockResolvedValueOnce(ok({ golfers: fullPage, invalid: [] }))
+        .mockResolvedValueOnce(ok({ golfers: [row(101)], invalid: [] }))
+
+      const result = await ghinClient.golfers.getMany([1, 101])
+
+      expect(mockFetch).toHaveBeenCalledTimes(2)
+      expect(searchParamsOfCall(0).get('page')).toBe('1')
+      expect(searchParamsOfCall(1).get('page')).toBe('2')
+      expect(searchParamsOfCall(1).get('golfer_id')).toBe('1,101')
+      expect(result._unsafeUnwrap().golfers.map((golfer) => golfer.ghin)).toEqual([1, 101])
+    })
+
+    // The regression this pages on `rowsReceived` for: a page of 100 rows with
+    // two that fail `schemaGolfer` yields 98 parsed golfers. Measuring "short
+    // page" against the parsed count would call that the last page and silently
+    // drop everything after it.
+    it('should keep paging when a full page had rows dropped by the schema', async () => {
+      const partialPage = Array.from({ length: 98 }, (_, index) => row(index + 1))
+
+      mockFetch
+        .mockResolvedValueOnce(ok({ golfers: partialPage, invalid: [{ bad: 'row' }, { bad: 'row' }] }))
+        .mockResolvedValueOnce(ok({ golfers: [row(99)], invalid: [] }))
+
+      const result = await ghinClient.golfers.getMany([1, 99])
+
+      expect(mockFetch).toHaveBeenCalledTimes(2)
+      expect(result._unsafeUnwrap().golfers.map((golfer) => golfer.ghin)).toContain(99)
+    })
+
+    it('should split more than 100 GHIN numbers into separate batches', async () => {
+      const ghins = Array.from({ length: 150 }, (_, index) => index + 1)
+      mockFetch.mockResolvedValue(ok({ golfers: [], invalid: [] }))
+
+      const result = await ghinClient.golfers.getMany(ghins)
+
+      expect(mockFetch).toHaveBeenCalledTimes(2)
+      expect(searchParamsOfCall(0).get('golfer_id')?.split(',')).toHaveLength(100)
+      expect(searchParamsOfCall(1).get('golfer_id')?.split(',')).toHaveLength(50)
+      expect(result._unsafeUnwrap().missing).toHaveLength(150)
+    })
+
+    it('should forward status and updated_since', async () => {
+      mockFetch.mockResolvedValue(ok({ golfers: [], invalid: [] }))
+
+      await ghinClient.golfers.getMany([1], { status: 'Inactive', updated_since: '2026-08-01' })
+
+      expect(searchParamsOfCall(0).get('status')).toBe('Inactive')
+      expect(searchParamsOfCall(0).get('updated_since')).toBe('2026-08-01')
+      expect(searchParamsOfCall(0).get('per_page')).toBe('100')
+    })
+
+    // An unfiltered `golfers/search` is not what "get these golfers" meant, so
+    // an empty list is a caller bug rather than an empty result.
+    it('should return a validation error for an empty list', async () => {
+      const result = await ghinClient.golfers.getMany([])
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
+      expect(mockFetch).not.toHaveBeenCalled()
+    })
+
+    it('should return a validation error for a non-numeric GHIN number', async () => {
+      // @ts-expect-error - Testing invalid input type
+      const result = await ghinClient.golfers.getMany(['nope'])
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
+    })
+
+    it('should stop and surface a fetch failure rather than returning a partial batch', async () => {
+      const failure = new NetworkError('Search failed')
+      mockFetch.mockResolvedValue(err(failure))
+
+      const result = await ghinClient.golfers.getMany([1, 2])
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+    })
+
+    // Only fires if GHIN stops shortening the last page; without the cap that
+    // is an infinite loop rather than an error.
+    it('should give up rather than page forever on a never-shortening page', async () => {
+      const fullPage = Array.from({ length: 100 }, (_, index) => row(index + 1))
+      mockFetch.mockResolvedValue(ok({ golfers: fullPage, invalid: [] }))
+
+      const result = await ghinClient.golfers.getMany([1])
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
+      expect(mockFetch).toHaveBeenCalledTimes(25)
+    })
+  })
+
   describe('golfers.getScores', () => {
     it('should fetch and return golfer scores', async () => {
       const mockResponse = {

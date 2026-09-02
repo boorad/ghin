@@ -20,6 +20,8 @@ import {
   type FacilitySearchRequest,
   type FacilitySearchResponse,
   type GolferCourseHandicapRequest,
+  type GolfersGetManyRequest,
+  type GolfersGetManyResponse,
   type GolfersGlobalSearchRequest,
   type GolfersSearchRequest,
   type GolfersSearchResponse,
@@ -59,6 +61,7 @@ import {
   schemaFacilitySearchRequest,
   schemaFacilitySearchResponse,
   schemaGolferCourseHandicapRequest,
+  schemaGolfersGetManyRequest,
   schemaGolfersGlobalSearchRequest,
   schemaGolfersSearchRequest,
   schemaGolfersSearchResponse,
@@ -110,6 +113,10 @@ export class GhinClient {
 
   golfers: {
     getOne: (ghinNumber: number) => Promise<Result<GolfersSearchResponse['golfers'][number] | undefined, GhinError>>
+    getMany: (
+      ghinNumbers: number[],
+      request?: GolfersGetManyRequest,
+    ) => Promise<Result<GolfersGetManyResponse, GhinError>>
     getScores: (ghinNumber: number, request?: ScoresRequest) => Promise<Result<ScoresResponse, GhinError>>
     search: (request: GolfersSearchRequest) => Promise<Result<GolfersSearchResponse['golfers'], GhinError>>
     globalSearch: (request: GolfersGlobalSearchRequest) => Promise<Result<GolfersSearchResponse['golfers'], GhinError>>
@@ -204,6 +211,7 @@ export class GhinClient {
 
     this.golfers = {
       getOne: this.golfersGetOne.bind(this),
+      getMany: this.golfersGetMany.bind(this),
       getScores: this.golfersGetScores.bind(this),
       search: this.golfersSearch.bind(this),
       globalSearch: this.golfersGlobalSearch.bind(this),
@@ -706,6 +714,19 @@ export class GhinClient {
   private async golfersSearch(
     request: GolfersSearchRequest,
   ): Promise<Result<GolfersSearchResponse['golfers'], GhinError>> {
+    const result = await this.golfersSearchPage(request)
+
+    return result.map(({ golfers }) => golfers)
+  }
+
+  // Same request as `golfersSearch`, but keeps the rows GHIN dropped for failing
+  // `schemaGolfer`. `golfersGetMany` pages until a page comes back short, and
+  // "short" has to be measured against what GHIN *sent*, not what parsed — one
+  // malformed row on a full page would otherwise look like the last page and
+  // silently truncate the batch.
+  private async golfersSearchPage(
+    request: GolfersSearchRequest,
+  ): Promise<Result<{ golfers: GolfersSearchResponse['golfers']; rowsReceived: number }, GhinError>> {
     try {
       const parsedRequest = schemaGolfersSearchRequest.safeParse(request)
 
@@ -746,14 +767,11 @@ export class GhinClient {
         return err(result.error)
       }
 
-      reportDegradation(
-        this.onDegraded,
-        'golfers_search',
-        result.value.invalid,
-        result.value.golfers.length + result.value.invalid.length,
-      )
+      const rowsReceived = result.value.golfers.length + result.value.invalid.length
 
-      return ok(result.value.golfers)
+      reportDegradation(this.onDegraded, 'golfers_search', result.value.invalid, rowsReceived)
+
+      return ok({ golfers: result.value.golfers, rowsReceived })
     } catch (error) {
       return err(toGhinError(error))
     }
@@ -840,6 +858,107 @@ export class GhinClient {
       })
 
       return results.map((golfers) => golfers[0])
+    } catch (error) {
+      return err(toGhinError(error))
+    }
+  }
+
+  /**
+   * Current record for a list of GHIN numbers, in one batched call rather than
+   * one call per golfer.
+   *
+   * This is `golfers/search` underneath — the `golfer_id` parameter takes a
+   * comma-separated list (#81). The Admin-Portal bulk endpoints
+   * (`hi_changed_golfers`, `clubs/{id}/golfers`) return richer feeds but are
+   * `AccessDenied` for ordinary credentials, so this is the bulk lookup the API
+   * actually grants us. Rows carry the whole `schemaGolfer` record, so the
+   * Handicap Index (`hi_display`, `hi_value`, `rev_date`) and the club/state
+   * fields both come from the same call.
+   *
+   * Three things the raw parameter gets wrong and this method fixes:
+   *
+   * - **`per_page` counts rows, not golfers.** A golfer comes back once per club
+   *   affiliation, so 100 GHIN numbers can be 180 rows and the first page of 100
+   *   holds only ~50 golfers. There is no `meta` block to page against, so this
+   *   pages until GHIN sends a short page.
+   * - **Multi-club golfers arrive more than once.** Rows are deduplicated to one
+   *   per GHIN, preferring the `is_home_club` row — the handicap fields are
+   *   identical across a golfer's rows, only the club differs, and the home club
+   *   is the one that disambiguates two golfers with the same name.
+   * - **Unknown GHIN numbers are dropped silently.** They come back in `missing`
+   *   instead, alongside golfers excluded by `status` or `updated_since`.
+   *
+   * `golfers` is ordered to match the requested numbers, with duplicates in the
+   * request collapsed. An empty `ghinNumbers` is a `ValidationError`, not an
+   * empty result — an unfiltered `golfers/search` is not what the caller meant.
+   */
+  private async golfersGetMany(
+    ghinNumbers: number[],
+    request: GolfersGetManyRequest = {},
+  ): Promise<Result<GolfersGetManyResponse, GhinError>> {
+    try {
+      const parsedGhins = z.array(number).min(1).safeParse(ghinNumbers)
+
+      if (!parsedGhins.success) {
+        return err(new ValidationError(`Invalid GHIN numbers: ${parsedGhins.error.message}`))
+      }
+
+      const parsedRequest = schemaGolfersGetManyRequest.safeParse(request)
+
+      if (!parsedRequest.success) {
+        return err(new ValidationError(`Invalid golfer getMany request: ${parsedRequest.error.message}`))
+      }
+
+      const requested = [...new Set(parsedGhins.data)]
+      const found = new Map<number, GolfersSearchResponse['golfers'][number]>()
+
+      for (let start = 0; start < requested.length; start += GET_MANY_ID_BATCH) {
+        const batch = requested.slice(start, start + GET_MANY_ID_BATCH)
+
+        let page = 1
+        while (true) {
+          const result = await this.golfersSearchPage({
+            ...parsedRequest.data,
+            golfer_id: batch,
+            page,
+            per_page: GET_MANY_PER_PAGE,
+          })
+
+          if (result.isErr()) {
+            return err(result.error)
+          }
+
+          for (const golfer of result.value.golfers) {
+            // First row wins unless a later one is the home club; `is_home_club`
+            // is true on exactly one row per golfer in practice, and falling back
+            // to the first row keeps a golfer whose rows all say false.
+            if (!found.has(golfer.ghin) || golfer.is_home_club === true) {
+              found.set(golfer.ghin, golfer)
+            }
+          }
+
+          if (result.value.rowsReceived < GET_MANY_PER_PAGE) {
+            break
+          }
+
+          page += 1
+          if (page > GET_MANY_MAX_PAGES_PER_BATCH) {
+            return err(
+              new ValidationError(
+                `golfers.getMany exceeded ${GET_MANY_MAX_PAGES_PER_BATCH} pages for a batch of ${batch.length} GHIN numbers`,
+              ),
+            )
+          }
+        }
+      }
+
+      const golfers = requested.flatMap((ghin) => {
+        const golfer = found.get(ghin)
+
+        return golfer ? [golfer] : []
+      })
+
+      return ok({ golfers, missing: requested.filter((ghin) => !found.has(ghin)) })
     } catch (error) {
       return err(toGhinError(error))
     }
@@ -1258,6 +1377,19 @@ export class GhinClient {
     }
   }
 }
+
+// How many GHIN numbers ride in one `golfer_id` list. 100 is the largest batch
+// verified against the API (#81); the real ceiling is the URL length and was not
+// probed past this. Lower it if GHIN starts rejecting long query strings.
+const GET_MANY_ID_BATCH = 100
+
+// GHIN's documented `per_page` maximum. Requesting more is silently reduced to 100.
+const GET_MANY_PER_PAGE = 100
+
+// Safety cap per batch. 100 GHIN numbers at 100 rows a page needs one page per
+// club affiliation per golfer, and no golfer has 25 clubs — this only fires if
+// GHIN stops shortening the last page, which would otherwise loop forever.
+const GET_MANY_MAX_PAGES_PER_BATCH = 25
 
 // Safety cap. At default per_page=25 this is 250k envelopes — far past any
 // realistic backlog. Exists only to keep a misconfigured filter from spinning
