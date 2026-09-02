@@ -1,0 +1,21 @@
+# Codecov was running on inferred defaults. These are the explicit targets, so a
+# passing check means something specific rather than whatever Codecov guessed.
+
+coverage:
+  status:
+    project:
+      default:
+        target: auto # never below the parent commit...
+        threshold: 1% # ...by more than a point
+    patch:
+      default:
+        target: 85% # new and changed lines; the repo sits around 95% overall
+
+# Mirrors coverage.exclude in vitest.config.ts, so Codecov's numbers match local ones.
+ignore:
+  - "src/playground/**"
+  - "docs/**"
+  - "dist/**"
+
+comment:
+  require_changes: true # no PR comment when coverage is unaffected
