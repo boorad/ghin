@@ -25,7 +25,12 @@ const fn = async () => {
     // Get tee set ratings for score posting
     console.log('--- Tee Set Ratings for Score Posting ---')
     const teeSetRatings = await ghinClient.courses.getTeeSetRatingsForScorePosting({ course_id: 2539 })
-    console.dir(teeSetRatings, { depth: null })
+
+    if (teeSetRatings.isErr()) {
+      throw teeSetRatings.error
+    }
+
+    console.dir(teeSetRatings.value, { depth: null })
 
     // Post a hole-by-hole score (replace with actual values)
     // const hbhResult = await ghinClient.scores.postHoleByHole({
@@ -42,7 +47,10 @@ const fn = async () => {
     //   number_of_holes: '18',
     //   gender: 'M',
     // })
-    // console.log('HBH result:', hbhResult)
+    // if (hbhResult.isErr()) {
+    //   throw hbhResult.error
+    // }
+    // console.log('HBH result:', hbhResult.value)
   } catch (error) {
     console.error('Error:', error)
   }

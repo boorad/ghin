@@ -1,6 +1,6 @@
 import { err, ok } from 'neverthrow'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ValidationError } from '../../errors'
+import { NetworkError, ValidationError } from '../../errors'
 import { InMemoryCacheClient } from '../in-memory-cache-client'
 import { GhinClient } from './index'
 import {
@@ -49,6 +49,9 @@ describe('GhinClient', () => {
       expect(ghinClient.webhooks).toBeDefined()
     })
 
+    // Deliberate carve-out (#42, Decision 4): every *method* on GhinClient
+    // returns a Result, but the constructor keeps throwing. A bad config is a
+    // boot-time programmer error, not a runtime API failure. Do not "fix".
     it('should throw error with invalid config', () => {
       expect(() => {
         new GhinClient({
@@ -79,7 +82,7 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.courses.getCountries()
 
-      expect(result).toEqual(mockCountries.countries)
+      expect(result._unsafeUnwrap()).toEqual(mockCountries.countries)
       expect(mockFetch).toHaveBeenCalledWith({
         entity: 'course_countries',
         options: expect.objectContaining({
@@ -89,10 +92,20 @@ describe('GhinClient', () => {
       })
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetch.mockResolvedValue(err(new Error('Network error')))
+    // Nothing on this surface rejects any more: the promise resolves to an Err.
+    // Asserting only `isErr()` would still pass if a throw crept back in.
+    it('should resolve to an error result when fetch fails', async () => {
+      const failure = new NetworkError('Network error')
+      mockFetch.mockResolvedValue(err(failure))
 
-      await expect(ghinClient.courses.getCountries()).rejects.toThrow('Network error')
+      await expect(ghinClient.courses.getCountries()).resolves.toBeDefined()
+
+      const result = await ghinClient.courses.getCountries()
+
+      expect(result.isErr()).toBe(true)
+      // The instance, not a copy — statusCode/retryAfter/field are the point.
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Network error')
     })
   })
 
@@ -111,19 +124,27 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.courses.getDetails({ course_id: 12345 })
 
-      expect(result).toEqual(mockDetails)
+      expect(result._unsafeUnwrap()).toEqual(mockDetails)
       expect(mockFetch).toHaveBeenCalled()
     })
 
-    it('should throw validation error with invalid request', async () => {
+    it('should return a validation error with invalid request', async () => {
       // @ts-expect-error - Testing invalid input type
-      await expect(ghinClient.courses.getDetails({ course_id: 'invalid' })).rejects.toThrow(ValidationError)
+      const result = await ghinClient.courses.getDetails({ course_id: 'invalid' })
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetch.mockResolvedValue(err(new Error('Not found')))
+    it('should return an error result when fetch fails', async () => {
+      const failure = new NetworkError('Not found', 404)
+      mockFetch.mockResolvedValue(err(failure))
 
-      await expect(ghinClient.courses.getDetails({ course_id: 12345 })).rejects.toThrow('Not found')
+      const result = await ghinClient.courses.getDetails({ course_id: 12345 })
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Not found')
     })
   })
 
@@ -140,7 +161,7 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.courses.search({ name: 'Test' })
 
-      expect(result).toEqual(mockResponse)
+      expect(result._unsafeUnwrap()).toEqual(mockResponse)
       expect(mockFetch).toHaveBeenCalled()
     })
 
@@ -185,13 +206,20 @@ describe('GhinClient', () => {
       })
       mockFetch.mockResolvedValue(ok({ courses: [{ course_id: 1 }], invalid: [{ bad: true }] }))
 
-      await expect(client.courses.search({ name: 'Test' })).resolves.toBeDefined()
+      const result = await client.courses.search({ name: 'Test' })
+
+      expect(result.isOk()).toBe(true)
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetch.mockResolvedValue(err(new Error('Search failed')))
+    it('should return an error result when fetch fails', async () => {
+      const failure = new NetworkError('Search failed')
+      mockFetch.mockResolvedValue(err(failure))
 
-      await expect(ghinClient.courses.search({ name: 'Test' })).rejects.toThrow('Search failed')
+      const result = await ghinClient.courses.search({ name: 'Test' })
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Search failed')
     })
   })
 
@@ -221,7 +249,7 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.courses.getTeeSetRatingsForScorePosting({ course_id: 2539 })
 
-      expect(result).toEqual(mockResponse)
+      expect(result._unsafeUnwrap()).toEqual(mockResponse)
       expect(mockFetchCustomPath).toHaveBeenCalledWith({
         path: '/Courses/2539/TeeSetRatingsForScorePosting.json',
         options: expect.objectContaining({
@@ -273,28 +301,37 @@ describe('GhinClient', () => {
         ok({ tee_set_ratings: [{ TeeSetRatingId: 605066 }], invalid: [{ bad: true }] }),
       )
 
-      await expect(client.courses.getTeeSetRatingsForScorePosting({ course_id: 7817 })).resolves.toBeDefined()
+      const result = await client.courses.getTeeSetRatingsForScorePosting({ course_id: 7817 })
+
+      expect(result.isOk()).toBe(true)
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetchCustomPath.mockResolvedValue(err(new Error('Not found')))
+    it('should return an error result when fetch fails', async () => {
+      const failure = new NetworkError('Not found', 404)
+      mockFetchCustomPath.mockResolvedValue(err(failure))
 
-      await expect(ghinClient.courses.getTeeSetRatingsForScorePosting({ course_id: 2539 })).rejects.toThrow('Not found')
+      const result = await ghinClient.courses.getTeeSetRatingsForScorePosting({ course_id: 2539 })
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Not found')
     })
 
-    it('should throw validation error with invalid request', async () => {
+    it('should return a validation error with invalid request', async () => {
       // @ts-expect-error - Testing invalid input type
-      await expect(ghinClient.courses.getTeeSetRatingsForScorePosting({ course_id: 'invalid' })).rejects.toThrow(
-        ValidationError,
-      )
+      const result = await ghinClient.courses.getTeeSetRatingsForScorePosting({ course_id: 'invalid' })
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
     })
 
     it('should wrap non-Error throws', async () => {
       mockFetchCustomPath.mockRejectedValue('string error')
 
-      await expect(ghinClient.courses.getTeeSetRatingsForScorePosting({ course_id: 2539 })).rejects.toThrow(
-        'string error',
-      )
+      const result = await ghinClient.courses.getTeeSetRatingsForScorePosting({ course_id: 2539 })
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr().message).toBe('string error')
     })
   })
 
@@ -309,14 +346,22 @@ describe('GhinClient', () => {
         name: 'Test',
       })
 
-      expect(result).toEqual(mockResponse)
+      expect(result._unsafeUnwrap()).toEqual(mockResponse)
       expect(mockFetch).toHaveBeenCalled()
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetch.mockResolvedValue(err(new Error('Search failed')))
+    // Nothing on this surface rejects any more: the promise resolves to an Err.
+    it('should resolve to an error result when fetch fails', async () => {
+      const failure = new NetworkError('Search failed')
+      mockFetch.mockResolvedValue(err(failure))
 
-      await expect(ghinClient.facilities.search({ name: 'Test' })).rejects.toThrow('Search failed')
+      await expect(ghinClient.facilities.search({ name: 'Test' })).resolves.toBeDefined()
+
+      const result = await ghinClient.facilities.search({ name: 'Test' })
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Search failed')
     })
   })
 
@@ -328,7 +373,7 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.gpa.getAccesses()
 
-      expect(result).toEqual([
+      expect(result._unsafeUnwrap()).toEqual([
         {
           golferId: 13373246,
           userAccessId: 6863457,
@@ -356,19 +401,31 @@ describe('GhinClient', () => {
         ),
       )
 
-      await expect(ghinClient.gpa.getAccesses()).resolves.toEqual([])
+      const result = await ghinClient.gpa.getAccesses()
+
+      expect(result._unsafeUnwrap()).toEqual([])
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetch.mockResolvedValue(err(new Error('Unauthorized')))
+    // Nothing on this surface rejects any more: the promise resolves to an Err.
+    it('should resolve to an error result when fetch fails', async () => {
+      const failure = new NetworkError('Unauthorized')
+      mockFetch.mockResolvedValue(err(failure))
 
-      await expect(ghinClient.gpa.getAccesses()).rejects.toThrow('Unauthorized')
+      await expect(ghinClient.gpa.getAccesses()).resolves.toBeDefined()
+
+      const result = await ghinClient.gpa.getAccesses()
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Unauthorized')
     })
 
     it('should wrap non-Error throws', async () => {
       mockFetch.mockRejectedValue('string error')
 
-      await expect(ghinClient.gpa.getAccesses()).rejects.toThrow('string error')
+      const result = await ghinClient.gpa.getAccesses()
+
+      expect(result._unsafeUnwrapErr().message).toBe('string error')
     })
   })
 
@@ -378,7 +435,7 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.gpa.requestAccess(123, { email: 'golfer@example.com' })
 
-      expect(result).toEqual(requestAccessResponseFixture)
+      expect(result._unsafeUnwrap()).toEqual(requestAccessResponseFixture)
       expect(mockFetchCustomPath).toHaveBeenCalledWith({
         path: '/users/golfers/123/request_golfer_product_access.json',
         schema: expect.anything(),
@@ -389,30 +446,47 @@ describe('GhinClient', () => {
       })
     })
 
-    it('should throw validation error with invalid golfer ID', async () => {
+    it('should return validation error with invalid golfer ID', async () => {
       // @ts-expect-error - Testing invalid input type
-      await expect(ghinClient.gpa.requestAccess('invalid', { email: 'a@b.com' })).rejects.toThrow(ValidationError)
+      const result = await ghinClient.gpa.requestAccess('invalid', { email: 'a@b.com' })
+
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
+      expect(result._unsafeUnwrapErr().message).toContain('Invalid GPA request access request:')
     })
 
-    it('should throw validation error when email is missing', async () => {
+    it('should return validation error when email is missing', async () => {
       // @ts-expect-error - Testing missing required input
-      await expect(ghinClient.gpa.requestAccess(123, {})).rejects.toThrow(ValidationError)
+      const result = await ghinClient.gpa.requestAccess(123, {})
+
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
+      expect(result._unsafeUnwrapErr().message).toContain('Invalid GPA request access request:')
     })
 
-    it('should throw validation error when email is empty', async () => {
-      await expect(ghinClient.gpa.requestAccess(123, { email: '' })).rejects.toThrow(ValidationError)
+    it('should return validation error when email is empty', async () => {
+      const result = await ghinClient.gpa.requestAccess(123, { email: '' })
+
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetchCustomPath.mockResolvedValue(err(new Error('Request failed')))
+    it('should resolve to an error result when fetch fails', async () => {
+      const failure = new NetworkError('Request failed')
+      mockFetchCustomPath.mockResolvedValue(err(failure))
 
-      await expect(ghinClient.gpa.requestAccess(123, { email: 'a@b.com' })).rejects.toThrow('Request failed')
+      await expect(ghinClient.gpa.requestAccess(123, { email: 'a@b.com' })).resolves.toBeDefined()
+
+      const result = await ghinClient.gpa.requestAccess(123, { email: 'a@b.com' })
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Request failed')
     })
 
     it('should wrap non-Error throws', async () => {
       mockFetchCustomPath.mockRejectedValue('string error')
 
-      await expect(ghinClient.gpa.requestAccess(123, { email: 'a@b.com' })).rejects.toThrow('string error')
+      const result = await ghinClient.gpa.requestAccess(123, { email: 'a@b.com' })
+
+      expect(result._unsafeUnwrapErr().message).toBe('string error')
     })
   })
 
@@ -426,7 +500,7 @@ describe('GhinClient', () => {
         status: 'approved',
       })
 
-      expect(result).toEqual(updateStatusResponseFixture)
+      expect(result._unsafeUnwrap()).toEqual(updateStatusResponseFixture)
       expect(mockFetchCustomPath).toHaveBeenCalledWith({
         path: '/users/4695277/golfers/13373246/update_golfer_product_access_status.json',
         schema: expect.anything(),
@@ -437,31 +511,35 @@ describe('GhinClient', () => {
       })
     })
 
-    it('should throw validation error with invalid status', async () => {
-      await expect(
-        ghinClient.gpa.updateStatus({
-          user_id: 1,
-          golfer_id: 123,
-          // @ts-expect-error - Testing invalid input type
-          status: 'invalid',
-        }),
-      ).rejects.toThrow(ValidationError)
+    it('should return validation error with invalid status', async () => {
+      const result = await ghinClient.gpa.updateStatus({
+        user_id: 1,
+        golfer_id: 123,
+        // @ts-expect-error - Testing invalid input type
+        status: 'invalid',
+      })
+
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
+      expect(result._unsafeUnwrapErr().message).toContain('Invalid GPA update status request:')
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetchCustomPath.mockResolvedValue(err(new Error('Update failed')))
+    it('should resolve to an error result when fetch fails', async () => {
+      const failure = new NetworkError('Update failed')
+      mockFetchCustomPath.mockResolvedValue(err(failure))
 
-      await expect(ghinClient.gpa.updateStatus({ user_id: 1, golfer_id: 123, status: 'approved' })).rejects.toThrow(
-        'Update failed',
-      )
+      const result = await ghinClient.gpa.updateStatus({ user_id: 1, golfer_id: 123, status: 'approved' })
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Update failed')
     })
 
     it('should wrap non-Error throws', async () => {
       mockFetchCustomPath.mockRejectedValue('string error')
 
-      await expect(ghinClient.gpa.updateStatus({ user_id: 1, golfer_id: 123, status: 'approved' })).rejects.toThrow(
-        'string error',
-      )
+      const result = await ghinClient.gpa.updateStatus({ user_id: 1, golfer_id: 123, status: 'approved' })
+
+      expect(result._unsafeUnwrapErr().message).toBe('string error')
     })
   })
 
@@ -471,7 +549,7 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.gpa.revokeAccess(123)
 
-      expect(result).toEqual(revokeAccessResponseFixture)
+      expect(result._unsafeUnwrap()).toEqual(revokeAccessResponseFixture)
       expect(mockFetchCustomPath).toHaveBeenCalledWith({
         path: '/users/golfers/123/revoke_golfer_product_access.json',
         schema: expect.anything(),
@@ -479,21 +557,31 @@ describe('GhinClient', () => {
       })
     })
 
-    it('should throw validation error with invalid golfer ID', async () => {
+    it('should return validation error with invalid golfer ID', async () => {
       // @ts-expect-error - Testing invalid input type
-      await expect(ghinClient.gpa.revokeAccess('invalid')).rejects.toThrow(ValidationError)
+      const result = await ghinClient.gpa.revokeAccess('invalid')
+
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
+      expect(result._unsafeUnwrapErr().message).toContain('Invalid golfer ID:')
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetchCustomPath.mockResolvedValue(err(new Error('Revoke failed')))
+    it('should resolve to an error result when fetch fails', async () => {
+      const failure = new NetworkError('Revoke failed')
+      mockFetchCustomPath.mockResolvedValue(err(failure))
 
-      await expect(ghinClient.gpa.revokeAccess(123)).rejects.toThrow('Revoke failed')
+      const result = await ghinClient.gpa.revokeAccess(123)
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Revoke failed')
     })
 
     it('should wrap non-Error throws', async () => {
       mockFetchCustomPath.mockRejectedValue('string error')
 
-      await expect(ghinClient.gpa.revokeAccess(123)).rejects.toThrow('string error')
+      const result = await ghinClient.gpa.revokeAccess(123)
+
+      expect(result._unsafeUnwrapErr().message).toBe('string error')
     })
   })
 
@@ -522,26 +610,45 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.handicaps.getOne(1234567)
 
-      expect(result).toEqual(mockResponse.golfers[0])
-      expect(result?.handicap_index).toBe(12.5)
+      expect(result._unsafeUnwrap()).toEqual(mockResponse.golfers[0])
+      expect(result._unsafeUnwrap()?.handicap_index).toBe(12.5)
       expect(mockFetch).toHaveBeenCalledWith(expect.objectContaining({ entity: 'golfers_search' }))
     })
 
-    it('should return undefined when no golfer matches', async () => {
+    // "No such active golfer" is a normal answer, not a failure: this stays
+    // `Ok(undefined)` so callers don't have to distinguish an empty search from
+    // a transport error by inspecting the error type.
+    it('should return an ok result holding undefined when no golfer matches', async () => {
       mockFetch.mockResolvedValue(ok({ golfers: [], invalid: [] }))
 
-      await expect(ghinClient.handicaps.getOne(1234567)).resolves.toBeUndefined()
+      const result = await ghinClient.handicaps.getOne(1234567)
+
+      expect(result.isOk()).toBe(true)
+      expect(result._unsafeUnwrap()).toBeUndefined()
     })
 
-    it('should throw validation error with invalid ghin', async () => {
+    it('should return a validation error with invalid ghin', async () => {
       // @ts-expect-error - Testing invalid input type
-      await expect(ghinClient.handicaps.getOne('invalid')).rejects.toThrow(ValidationError)
+      const result = await ghinClient.handicaps.getOne('invalid')
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetch.mockResolvedValue(err(new Error('Not found')))
+    // Nothing on this surface rejects any more: the promise resolves to an Err.
+    // Asserting only `isErr()` would still pass if a throw crept back in.
+    it('should resolve to an error result when fetch fails', async () => {
+      const failure = new NetworkError('Not found', 404)
+      mockFetch.mockResolvedValue(err(failure))
 
-      await expect(ghinClient.handicaps.getOne(1234567)).rejects.toThrow('Not found')
+      await expect(ghinClient.handicaps.getOne(1234567)).resolves.toBeDefined()
+
+      const result = await ghinClient.handicaps.getOne(1234567)
+
+      expect(result.isErr()).toBe(true)
+      // The instance, not a copy — statusCode/retryAfter/field are the point.
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Not found')
     })
   })
 
@@ -559,7 +666,7 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.handicaps.getCoursePlayerHandicaps([...request])
 
-      expect(result).toEqual(mockResponse)
+      expect(result._unsafeUnwrap()).toEqual(mockResponse)
       expect(mockFetch).toHaveBeenCalled()
     })
 
@@ -604,15 +711,22 @@ describe('GhinClient', () => {
       })
       mockFetch.mockResolvedValue(ok({ 100: bucket, 5: bucket, invalid: [{ golfer_id: '7654321', row: {} }] }))
 
-      await expect(client.handicaps.getCoursePlayerHandicaps([...request])).resolves.toBeDefined()
+      const result = await client.handicaps.getCoursePlayerHandicaps([...request])
+
+      expect(result.isOk()).toBe(true)
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetch.mockResolvedValue(err(new Error('Calculation failed')))
+    it('should return an error result when fetch fails', async () => {
+      const failure = new NetworkError('Calculation failed')
+      mockFetch.mockResolvedValue(err(failure))
 
-      await expect(
-        ghinClient.handicaps.getCoursePlayerHandicaps([{ ghin: 1234567, tee_set_id: 12345, tee_set_side: 'All 18' }]),
-      ).rejects.toThrow('Calculation failed')
+      const result = await ghinClient.handicaps.getCoursePlayerHandicaps([
+        { ghin: 1234567, tee_set_id: 12345, tee_set_side: 'All 18' },
+      ])
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Calculation failed')
     })
   })
 
@@ -654,7 +768,7 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.handicaps.getCourseHandicaps(validRequest)
 
-      expect(result).toEqual(mockResponse)
+      expect(result._unsafeUnwrap()).toEqual(mockResponse)
       expect(mockFetch).toHaveBeenCalledWith({
         entity: 'course_handicaps_get',
         options: expect.objectContaining({
@@ -703,35 +817,50 @@ describe('GhinClient', () => {
       })
       mockFetch.mockResolvedValue(ok({ tee_sets: [teeSet], invalid: [{ bad: true }] }))
 
-      await expect(client.handicaps.getCourseHandicaps(validRequest)).resolves.toBeDefined()
+      const result = await client.handicaps.getCourseHandicaps(validRequest)
+
+      expect(result.isOk()).toBe(true)
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetch.mockResolvedValue(err(new Error('Failed')))
+    // Nothing on this surface rejects any more: the promise resolves to an Err.
+    it('should resolve to an error result when fetch fails', async () => {
+      const failure = new NetworkError('Failed')
+      mockFetch.mockResolvedValue(err(failure))
 
-      await expect(ghinClient.handicaps.getCourseHandicaps(validRequest)).rejects.toThrow('Failed')
+      await expect(ghinClient.handicaps.getCourseHandicaps(validRequest)).resolves.toBeDefined()
+
+      const result = await ghinClient.handicaps.getCourseHandicaps(validRequest)
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Failed')
     })
 
     // GHIN rejects the spaceless `'All18'` outright:
     // `{"errors":{"tee_set_side":["must be one of the following: 'All 18', 'F9', 'B9'"]}}`.
-    it('should throw validation error for the spaceless All18 tee_set_side', async () => {
-      await expect(
-        // @ts-expect-error - Testing invalid input type
-        ghinClient.handicaps.getCourseHandicaps({ ...validRequest, tee_set_side: 'All18' }),
-      ).rejects.toThrow(ValidationError)
+    it('should return a validation error for the spaceless All18 tee_set_side', async () => {
+      // @ts-expect-error - Testing invalid input type
+      const result = await ghinClient.handicaps.getCourseHandicaps({ ...validRequest, tee_set_side: 'All18' })
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
     })
 
-    it('should throw validation error with invalid request', async () => {
-      await expect(
-        // @ts-expect-error - Testing invalid input type
-        ghinClient.handicaps.getCourseHandicaps({ ...validRequest, tee_set_side: 'invalid' }),
-      ).rejects.toThrow(ValidationError)
+    it('should return a validation error with invalid request', async () => {
+      // @ts-expect-error - Testing invalid input type
+      const result = await ghinClient.handicaps.getCourseHandicaps({ ...validRequest, tee_set_side: 'invalid' })
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
     })
 
     it('should wrap non-Error throws', async () => {
       mockFetch.mockRejectedValue('string error')
 
-      await expect(ghinClient.handicaps.getCourseHandicaps(validRequest)).rejects.toThrow('string error')
+      const result = await ghinClient.handicaps.getCourseHandicaps(validRequest)
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr().message).toBe('string error')
     })
   })
 
@@ -745,14 +874,24 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.golfers.search({ last_name: 'Doe' })
 
-      expect(result).toEqual(mockResponse.golfers)
+      expect(result._unsafeUnwrap()).toEqual(mockResponse.golfers)
       expect(mockFetch).toHaveBeenCalled()
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetch.mockResolvedValue(err(new Error('Search failed')))
+    // Nothing on this surface rejects any more: the promise resolves to an Err.
+    // Asserting only `isErr()` would still pass if a throw crept back in.
+    it('should resolve to an error result when fetch fails', async () => {
+      const failure = new NetworkError('Search failed')
+      mockFetch.mockResolvedValue(err(failure))
 
-      await expect(ghinClient.golfers.search({ last_name: 'Doe' })).rejects.toThrow('Search failed')
+      await expect(ghinClient.golfers.search({ last_name: 'Doe' })).resolves.toBeDefined()
+
+      const result = await ghinClient.golfers.search({ last_name: 'Doe' })
+
+      expect(result.isErr()).toBe(true)
+      // The instance, not a copy — statusCode/retryAfter/field are the point.
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Search failed')
     })
   })
 
@@ -773,14 +912,19 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.golfers.globalSearch({ ghin: 1234567 })
 
-      expect(result).toEqual(mockResponse.golfers)
+      expect(result._unsafeUnwrap()).toEqual(mockResponse.golfers)
       expect(mockFetch).toHaveBeenCalled()
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetch.mockResolvedValue(err(new Error('Search failed')))
+    it('should return an error result when fetch fails', async () => {
+      const failure = new NetworkError('Search failed')
+      mockFetch.mockResolvedValue(err(failure))
 
-      await expect(ghinClient.golfers.globalSearch({ ghin: 1234567 })).rejects.toThrow('Search failed')
+      const result = await ghinClient.golfers.globalSearch({ ghin: 1234567 })
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Search failed')
     })
   })
 
@@ -801,11 +945,14 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.golfers.getOne(1234567)
 
-      expect(result).toEqual(mockResponse.golfers[0])
+      expect(result._unsafeUnwrap()).toEqual(mockResponse.golfers[0])
       expect(mockFetch).toHaveBeenCalledWith(expect.objectContaining({ entity: 'golfers_search' }))
     })
 
-    it('should return undefined when no golfer found', async () => {
+    // "No golfer matched" is an ordinary answer, so it stays on the ok track:
+    // `Ok(undefined)`, never `Err`. The one place a reader might reasonably
+    // expect an error, so it is asserted explicitly.
+    it('should return an ok result holding undefined when no golfer found', async () => {
       const mockResponse = {
         golfers: [],
         invalid: [],
@@ -814,18 +961,31 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.golfers.getOne(1234567)
 
-      expect(result).toBeUndefined()
+      expect(result.isOk()).toBe(true)
+      expect(result._unsafeUnwrap()).toBeUndefined()
     })
 
-    it('should throw validation error with invalid ghin', async () => {
+    it('should return a validation error with invalid ghin', async () => {
       // @ts-expect-error - Testing invalid input type
-      await expect(ghinClient.golfers.getOne('invalid')).rejects.toThrow(ValidationError)
+      const result = await ghinClient.golfers.getOne('invalid')
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetch.mockResolvedValue(err(new Error('Not found')))
+    // The error travels up through `golfersSearch`, so this also pins that the
+    // inner Result is threaded rather than unwrapped-and-rethrown.
+    it('should resolve to an error result when fetch fails', async () => {
+      const failure = new NetworkError('Not found', 404)
+      mockFetch.mockResolvedValue(err(failure))
 
-      await expect(ghinClient.golfers.getOne(1234567)).rejects.toThrow('Not found')
+      await expect(ghinClient.golfers.getOne(1234567)).resolves.toBeDefined()
+
+      const result = await ghinClient.golfers.getOne(1234567)
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Not found')
     })
   })
 
@@ -839,7 +999,7 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.golfers.getScores(1234567)
 
-      expect(result).toEqual(mockResponse)
+      expect(result._unsafeUnwrap()).toEqual(mockResponse)
       expect(mockFetch).toHaveBeenCalled()
     })
 
@@ -853,13 +1013,16 @@ describe('GhinClient', () => {
         score_types: ['H', 'A'],
       })
 
-      expect(result).toEqual(mockResponse)
+      expect(result._unsafeUnwrap()).toEqual(mockResponse)
       expect(mockFetch).toHaveBeenCalled()
     })
 
-    it('should throw validation error with invalid ghin', async () => {
+    it('should return a validation error with invalid ghin', async () => {
       // @ts-expect-error - Testing invalid input type
-      await expect(ghinClient.golfers.getScores('invalid')).rejects.toThrow(ValidationError)
+      const result = await ghinClient.golfers.getScores('invalid')
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
     })
 
     // Degradation must never be silent: a history that quietly comes back one
@@ -903,13 +1066,20 @@ describe('GhinClient', () => {
       })
       mockFetch.mockResolvedValue(ok({ scores: [{ id: 1 }], invalid: [{ bad: true }] }))
 
-      await expect(client.golfers.getScores(1234567)).resolves.toBeDefined()
+      const result = await client.golfers.getScores(1234567)
+
+      expect(result.isOk()).toBe(true)
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetch.mockResolvedValue(err(new Error('Fetch failed')))
+    it('should return an error result when fetch fails', async () => {
+      const failure = new NetworkError('Fetch failed')
+      mockFetch.mockResolvedValue(err(failure))
 
-      await expect(ghinClient.golfers.getScores(1234567)).rejects.toThrow('Fetch failed')
+      const result = await ghinClient.golfers.getScores(1234567)
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Fetch failed')
     })
   })
 
@@ -953,11 +1123,11 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.scores.postHoleByHole(validHbhRequest)
 
-      expect(result).toEqual(mockResponse)
+      expect(result._unsafeUnwrap()).toEqual(mockResponse)
       // `RequestClient` is mocked wholesale, so this asserts the field is
       // carried through `scores.postHoleByHole` to the caller — it does not
       // exercise the schema. Parse coverage lives in `post-response.test.ts`.
-      expect(result.estimated_handicap_display).toBe('15.4')
+      expect(result._unsafeUnwrap().estimated_handicap_display).toBe('15.4')
       expect(mockFetch).toHaveBeenCalledWith({
         entity: 'scores_hbh',
         options: expect.objectContaining({
@@ -977,23 +1147,37 @@ describe('GhinClient', () => {
       expect(hbhBody.hole_details).toHaveLength(18)
     })
 
-    it('should throw validation error with invalid request', async () => {
+    it('should return a validation error with invalid request', async () => {
       // @ts-expect-error - Testing invalid input type
-      await expect(ghinClient.scores.postHoleByHole({ ...validHbhRequest, score_type: 'X' })).rejects.toThrow(
-        ValidationError,
-      )
+      const result = await ghinClient.scores.postHoleByHole({ ...validHbhRequest, score_type: 'X' })
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetch.mockResolvedValue(err(new Error('Post failed')))
+    // Nothing on this surface rejects any more: the promise resolves to an Err.
+    // Asserting only `isErr()` would still pass if a throw crept back in.
+    it('should resolve to an error result when fetch fails', async () => {
+      const failure = new NetworkError('Post failed')
+      mockFetch.mockResolvedValue(err(failure))
 
-      await expect(ghinClient.scores.postHoleByHole(validHbhRequest)).rejects.toThrow('Post failed')
+      await expect(ghinClient.scores.postHoleByHole(validHbhRequest)).resolves.toBeDefined()
+
+      const result = await ghinClient.scores.postHoleByHole(validHbhRequest)
+
+      expect(result.isErr()).toBe(true)
+      // The instance, not a copy — statusCode/retryAfter/field are the point.
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Post failed')
     })
 
     it('should wrap non-Error throws', async () => {
       mockFetch.mockRejectedValue('string error')
 
-      await expect(ghinClient.scores.postHoleByHole(validHbhRequest)).rejects.toThrow('string error')
+      const result = await ghinClient.scores.postHoleByHole(validHbhRequest)
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr().message).toBe('string error')
     })
   })
 
@@ -1035,8 +1219,8 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.scores.postAdjusted(validAdjustedRequest)
 
-      expect(result).toEqual(mockResponse)
-      expect(result.estimated_handicap_display).toBe('NH')
+      expect(result._unsafeUnwrap()).toEqual(mockResponse)
+      expect(result._unsafeUnwrap().estimated_handicap_display).toBe('NH')
       expect(mockFetch).toHaveBeenCalledWith({
         entity: 'scores_adjusted',
         options: expect.objectContaining({
@@ -1055,23 +1239,32 @@ describe('GhinClient', () => {
       })
     })
 
-    it('should throw validation error with invalid request', async () => {
+    it('should return a validation error with invalid request', async () => {
       // @ts-expect-error - Testing invalid input type
-      await expect(ghinClient.scores.postAdjusted({ ...validAdjustedRequest, score_type: 'X' })).rejects.toThrow(
-        ValidationError,
-      )
+      const result = await ghinClient.scores.postAdjusted({ ...validAdjustedRequest, score_type: 'X' })
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetch.mockResolvedValue(err(new Error('Post failed')))
+    it('should return an error result when fetch fails', async () => {
+      const failure = new NetworkError('Post failed')
+      mockFetch.mockResolvedValue(err(failure))
 
-      await expect(ghinClient.scores.postAdjusted(validAdjustedRequest)).rejects.toThrow('Post failed')
+      const result = await ghinClient.scores.postAdjusted(validAdjustedRequest)
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Post failed')
     })
 
     it('should wrap non-Error throws', async () => {
       mockFetch.mockRejectedValue('string error')
 
-      await expect(ghinClient.scores.postAdjusted(validAdjustedRequest)).rejects.toThrow('string error')
+      const result = await ghinClient.scores.postAdjusted(validAdjustedRequest)
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr().message).toBe('string error')
     })
   })
 
@@ -1113,8 +1306,8 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.scores.post18h9and9(valid9and9Request)
 
-      expect(result).toEqual(mockResponse)
-      expect(result.estimated_handicap_display).toBe('+1.2')
+      expect(result._unsafeUnwrap()).toEqual(mockResponse)
+      expect(result._unsafeUnwrap().estimated_handicap_display).toBe('+1.2')
       expect(mockFetch).toHaveBeenCalledWith({
         entity: 'scores_18h9and9',
         options: expect.objectContaining({
@@ -1134,23 +1327,32 @@ describe('GhinClient', () => {
       })
     })
 
-    it('should throw validation error with invalid request', async () => {
+    it('should return a validation error with invalid request', async () => {
       // @ts-expect-error - Testing invalid input type
-      await expect(ghinClient.scores.post18h9and9({ ...valid9and9Request, score_type: 'X' })).rejects.toThrow(
-        ValidationError,
-      )
+      const result = await ghinClient.scores.post18h9and9({ ...valid9and9Request, score_type: 'X' })
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetch.mockResolvedValue(err(new Error('Post failed')))
+    it('should return an error result when fetch fails', async () => {
+      const failure = new NetworkError('Post failed')
+      mockFetch.mockResolvedValue(err(failure))
 
-      await expect(ghinClient.scores.post18h9and9(valid9and9Request)).rejects.toThrow('Post failed')
+      const result = await ghinClient.scores.post18h9and9(valid9and9Request)
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Post failed')
     })
 
     it('should wrap non-Error throws', async () => {
       mockFetch.mockRejectedValue('string error')
 
-      await expect(ghinClient.scores.post18h9and9(valid9and9Request)).rejects.toThrow('string error')
+      const result = await ghinClient.scores.post18h9and9(valid9and9Request)
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr().message).toBe('string error')
     })
   })
 
@@ -1165,21 +1367,33 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.webhooks.get()
 
-      expect(result).toEqual(mockResponse)
+      expect(result._unsafeUnwrap()).toEqual(mockResponse)
       expect(mockFetchCustomPath).toHaveBeenCalledWith({
         path: '/user/webhook_settings.json',
         schema: expect.anything(),
       })
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetchCustomPath.mockResolvedValue(err(new Error('Unauthorized')))
-      await expect(ghinClient.webhooks.get()).rejects.toThrow('Unauthorized')
+    // Nothing on this surface rejects any more: the promise resolves to an Err.
+    it('should resolve to an error result when fetch fails', async () => {
+      const failure = new NetworkError('Unauthorized')
+      mockFetchCustomPath.mockResolvedValue(err(failure))
+
+      await expect(ghinClient.webhooks.get()).resolves.toBeDefined()
+
+      const result = await ghinClient.webhooks.get()
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Unauthorized')
     })
 
     it('should wrap non-Error throws', async () => {
       mockFetchCustomPath.mockRejectedValue('string error')
-      await expect(ghinClient.webhooks.get()).rejects.toThrow('string error')
+
+      const result = await ghinClient.webhooks.get()
+
+      expect(result._unsafeUnwrapErr().message).toBe('string error')
     })
   })
 
@@ -1198,7 +1412,7 @@ describe('GhinClient', () => {
         webhook_enabled: { revision: true },
       })
 
-      expect(result).toEqual(mockResponse)
+      expect(result._unsafeUnwrap()).toEqual(mockResponse)
       expect(mockFetchCustomPath).toHaveBeenCalledWith({
         path: '/user/webhook_settings.json',
         schema: expect.anything(),
@@ -1216,28 +1430,37 @@ describe('GhinClient', () => {
       })
     })
 
-    it('should throw validation error with empty patch', async () => {
-      await expect(ghinClient.webhooks.patch({})).rejects.toThrow(ValidationError)
+    it('should return validation error with empty patch', async () => {
+      const result = await ghinClient.webhooks.patch({})
+
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
+      expect(result._unsafeUnwrapErr().message).toContain('Invalid webhook settings patch:')
     })
 
-    it('should throw validation error when all event maps are empty', async () => {
-      await expect(
-        ghinClient.webhooks.patch({ webhook_url: {}, webhook_data_type: {}, webhook_enabled: {} }),
-      ).rejects.toThrow(ValidationError)
+    it('should return validation error when all event maps are empty', async () => {
+      const result = await ghinClient.webhooks.patch({ webhook_url: {}, webhook_data_type: {}, webhook_enabled: {} })
+
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
     })
 
-    it('should throw validation error with invalid data type', async () => {
-      await expect(
-        ghinClient.webhooks.patch({
-          // @ts-expect-error - testing invalid input
-          webhook_data_type: { revision: 'invalid' },
-        }),
-      ).rejects.toThrow(ValidationError)
+    it('should return validation error with invalid data type', async () => {
+      const result = await ghinClient.webhooks.patch({
+        // @ts-expect-error - testing invalid input
+        webhook_data_type: { revision: 'invalid' },
+      })
+
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetchCustomPath.mockResolvedValue(err(new Error('Update failed')))
-      await expect(ghinClient.webhooks.patch({ webhook_enabled: { revision: true } })).rejects.toThrow('Update failed')
+    it('should resolve to an error result when fetch fails', async () => {
+      const failure = new NetworkError('Update failed')
+      mockFetchCustomPath.mockResolvedValue(err(failure))
+
+      const result = await ghinClient.webhooks.patch({ webhook_enabled: { revision: true } })
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Update failed')
     })
   })
 
@@ -1248,7 +1471,7 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.webhooks.delete()
 
-      expect(result).toEqual(mockResponse)
+      expect(result._unsafeUnwrap()).toEqual(mockResponse)
       expect(mockFetchCustomPath).toHaveBeenCalledWith({
         path: '/user/webhook_settings.json',
         schema: expect.anything(),
@@ -1256,9 +1479,15 @@ describe('GhinClient', () => {
       })
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetchCustomPath.mockResolvedValue(err(new Error('Delete failed')))
-      await expect(ghinClient.webhooks.delete()).rejects.toThrow('Delete failed')
+    it('should resolve to an error result when fetch fails', async () => {
+      const failure = new NetworkError('Delete failed')
+      mockFetchCustomPath.mockResolvedValue(err(failure))
+
+      const result = await ghinClient.webhooks.delete()
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Delete failed')
     })
   })
 
@@ -1269,7 +1498,7 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.webhooks.test('revision')
 
-      expect(result).toEqual(mockResponse)
+      expect(result._unsafeUnwrap()).toEqual(mockResponse)
       expect(mockFetchCustomPath).toHaveBeenCalledWith({
         path: '/user/webhook_settings/test.json',
         schema: expect.anything(),
@@ -1282,14 +1511,23 @@ describe('GhinClient', () => {
       expect(searchParams.get('type')).toBe('revision')
     })
 
-    it('should throw validation error with invalid event type', async () => {
+    it('should return validation error with invalid event type', async () => {
       // @ts-expect-error - testing invalid input
-      await expect(ghinClient.webhooks.test('tournament')).rejects.toThrow(ValidationError)
+      const result = await ghinClient.webhooks.test('tournament')
+
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
+      expect(result._unsafeUnwrapErr().message).toContain('Invalid webhook event type:')
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetchCustomPath.mockResolvedValue(err(new Error('Test failed')))
-      await expect(ghinClient.webhooks.test('revision')).rejects.toThrow('Test failed')
+    it('should resolve to an error result when fetch fails', async () => {
+      const failure = new NetworkError('Test failed')
+      mockFetchCustomPath.mockResolvedValue(err(failure))
+
+      const result = await ghinClient.webhooks.test('revision')
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Test failed')
     })
   })
 
@@ -1300,7 +1538,7 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.webhooks.list()
 
-      expect(result).toEqual(mockResponse)
+      expect(result._unsafeUnwrap()).toEqual(mockResponse)
       expect(mockFetchCustomPath).toHaveBeenCalledWith({
         path: '/user/webhooks.json',
         schema: expect.anything(),
@@ -1336,18 +1574,28 @@ describe('GhinClient', () => {
       expect(searchParams.get('to_date')).toBe('2026-01-31')
     })
 
-    it('should throw validation error with invalid object_type', async () => {
-      await expect(
-        ghinClient.webhooks.list({
-          // @ts-expect-error - testing invalid input
-          object_type: 'tournament',
-        }),
-      ).rejects.toThrow(ValidationError)
+    it('should return validation error with invalid object_type', async () => {
+      const result = await ghinClient.webhooks.list({
+        // @ts-expect-error - testing invalid input
+        object_type: 'tournament',
+      })
+
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
+      expect(result._unsafeUnwrapErr().message).toContain('Invalid webhooks list request:')
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetchCustomPath.mockResolvedValue(err(new Error('List failed')))
-      await expect(ghinClient.webhooks.list()).rejects.toThrow('List failed')
+    // Nothing on this surface rejects any more: the promise resolves to an Err.
+    it('should resolve to an error result when fetch fails', async () => {
+      const failure = new NetworkError('List failed')
+      mockFetchCustomPath.mockResolvedValue(err(failure))
+
+      await expect(ghinClient.webhooks.list()).resolves.toBeDefined()
+
+      const result = await ghinClient.webhooks.list()
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('List failed')
     })
   })
 
@@ -1358,7 +1606,7 @@ describe('GhinClient', () => {
 
       const result = await ghinClient.webhooks.resend({ webhook_id: 12345 })
 
-      expect(result).toEqual(mockResponse)
+      expect(result._unsafeUnwrap()).toEqual(mockResponse)
       expect(mockFetchCustomPath).toHaveBeenCalledWith({
         path: '/user/resend_webhook.json',
         schema: expect.anything(),
@@ -1383,13 +1631,22 @@ describe('GhinClient', () => {
       expect(searchParams.get('is_crs_webhook')).toBe('true')
     })
 
-    it('should throw validation error with non-positive id', async () => {
-      await expect(ghinClient.webhooks.resend({ webhook_id: 0 })).rejects.toThrow(ValidationError)
+    it('should return validation error with non-positive id', async () => {
+      const result = await ghinClient.webhooks.resend({ webhook_id: 0 })
+
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
+      expect(result._unsafeUnwrapErr().message).toContain('Invalid webhook resend request:')
     })
 
-    it('should throw error when fetch fails', async () => {
-      mockFetchCustomPath.mockResolvedValue(err(new Error('Resend failed')))
-      await expect(ghinClient.webhooks.resend({ webhook_id: 12345 })).rejects.toThrow('Resend failed')
+    it('should resolve to an error result when fetch fails', async () => {
+      const failure = new NetworkError('Resend failed')
+      mockFetchCustomPath.mockResolvedValue(err(failure))
+
+      const result = await ghinClient.webhooks.resend({ webhook_id: 12345 })
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(result._unsafeUnwrapErr().message).toBe('Resend failed')
     })
   })
 
@@ -1408,8 +1665,8 @@ describe('GhinClient', () => {
         url: 'https://example.com/hooks',
       })
 
-      expect(result.changed).toBe(false)
-      expect(result.settings).toEqual(matchingSettings)
+      expect(result._unsafeUnwrap().changed).toBe(false)
+      expect(result._unsafeUnwrap().settings).toEqual(matchingSettings)
       expect(mockFetchCustomPath).toHaveBeenCalledTimes(1)
     })
 
@@ -1426,7 +1683,7 @@ describe('GhinClient', () => {
         url: 'https://example.com/hooks',
       })
 
-      expect(result.changed).toBe(false)
+      expect(result._unsafeUnwrap().changed).toBe(false)
       expect(mockFetchCustomPath).toHaveBeenCalledTimes(1)
     })
 
@@ -1446,8 +1703,8 @@ describe('GhinClient', () => {
         url: 'https://example.com/hooks',
       })
 
-      expect(result.changed).toBe(true)
-      expect(result.reason).toMatch(/url differs/)
+      expect(result._unsafeUnwrap().changed).toBe(true)
+      expect(result._unsafeUnwrap().reason).toMatch(/url differs/)
       expect(mockFetchCustomPath).toHaveBeenCalledTimes(2)
 
       const patchCall = mockFetchCustomPath.mock.calls[1]?.[0]
@@ -1476,8 +1733,8 @@ describe('GhinClient', () => {
         url: 'https://example.com/hooks',
       })
 
-      expect(result.changed).toBe(true)
-      expect(result.reason).toMatch(/enabled differs/)
+      expect(result._unsafeUnwrap().changed).toBe(true)
+      expect(result._unsafeUnwrap().reason).toMatch(/enabled differs/)
     })
 
     it('should PATCH when leaf is missing entirely', async () => {
@@ -1490,7 +1747,7 @@ describe('GhinClient', () => {
         url: 'https://example.com/hooks',
       })
 
-      expect(result.changed).toBe(true)
+      expect(result._unsafeUnwrap().changed).toBe(true)
     })
 
     it('should PATCH when GHIN returns null leaves (unregistered sentinel)', async () => {
@@ -1512,8 +1769,8 @@ describe('GhinClient', () => {
         url: 'https://example.com/hooks',
       })
 
-      expect(result.changed).toBe(true)
-      expect(result.reason).toMatch(/url differs.*\(not set\)/)
+      expect(result._unsafeUnwrap().changed).toBe(true)
+      expect(result._unsafeUnwrap().reason).toMatch(/url differs.*\(not set\)/)
       expect(mockFetchCustomPath).toHaveBeenCalledTimes(2)
     })
 
@@ -1535,7 +1792,7 @@ describe('GhinClient', () => {
         enabled: false,
       })
 
-      expect(result.changed).toBe(true)
+      expect(result._unsafeUnwrap().changed).toBe(true)
       const patchBody = JSON.parse(mockFetchCustomPath.mock.calls[1]?.[0]?.options?.body as string)
       expect(patchBody).toEqual({
         webhook_url: { score: 'https://example.com/scores' },
@@ -1544,17 +1801,51 @@ describe('GhinClient', () => {
       })
     })
 
-    it('should throw validation error with invalid url', async () => {
-      await expect(ghinClient.webhooks.ensureRegistered({ event: 'revision', url: 'not-a-url' })).rejects.toThrow(
-        ValidationError,
-      )
+    it('should return validation error with invalid url', async () => {
+      const result = await ghinClient.webhooks.ensureRegistered({ event: 'revision', url: 'not-a-url' })
+
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
+      expect(result._unsafeUnwrapErr().message).toContain('Invalid ensureRegistered request:')
+      expect(mockFetchCustomPath).not.toHaveBeenCalled()
     })
 
-    it('should throw validation error with invalid event', async () => {
-      await expect(
-        // @ts-expect-error - testing invalid input
-        ghinClient.webhooks.ensureRegistered({ event: 'tournament', url: 'https://example.com' }),
-      ).rejects.toThrow(ValidationError)
+    it('should return validation error with invalid event', async () => {
+      // @ts-expect-error - testing invalid input
+      const result = await ghinClient.webhooks.ensureRegistered({ event: 'tournament', url: 'https://example.com' })
+
+      expect(result._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
+    })
+
+    // The GET used to throw, which short-circuited the PATCH for free. Now the
+    // Result has to be threaded, so assert the PATCH is genuinely skipped.
+    it('should short-circuit without attempting the PATCH when the GET fails', async () => {
+      const failure = new NetworkError('Unauthorized', 401)
+      mockFetchCustomPath.mockResolvedValueOnce(err(failure))
+
+      const promise = ghinClient.webhooks.ensureRegistered({ event: 'revision', url: 'https://example.com/hooks' })
+
+      await expect(promise).resolves.toBeDefined()
+
+      const result = await promise
+
+      expect(result.isErr()).toBe(true)
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(mockFetchCustomPath).toHaveBeenCalledTimes(1)
+    })
+
+    it('should surface a failing PATCH without rewrapping it', async () => {
+      const failure = new NetworkError('Update failed', 500)
+      mockFetchCustomPath
+        .mockResolvedValueOnce(ok({ webhook_url: {}, webhook_data_type: {}, webhook_enabled: {} }))
+        .mockResolvedValueOnce(err(failure))
+
+      const result = await ghinClient.webhooks.ensureRegistered({
+        event: 'revision',
+        url: 'https://example.com/hooks',
+      })
+
+      expect(result._unsafeUnwrapErr()).toBe(failure)
+      expect(mockFetchCustomPath).toHaveBeenCalledTimes(2)
     })
   })
 
@@ -1572,12 +1863,12 @@ describe('GhinClient', () => {
       status: 'not sent',
     })
 
-    it('should yield envelopes from a single page and stop', async () => {
+    it('should yield ok envelopes from a single page and stop', async () => {
       mockFetchCustomPath.mockResolvedValueOnce(ok({ webhooks: [envelope(1), envelope(2)] }))
 
       const collected: number[] = []
       for await (const item of ghinClient.webhooks.iterateUndelivered({ per_page: 25 })) {
-        collected.push(item.id)
+        collected.push(item._unsafeUnwrap().id)
       }
 
       expect(collected).toEqual([1, 2])
@@ -1594,7 +1885,7 @@ describe('GhinClient', () => {
 
       const collected: number[] = []
       for await (const item of ghinClient.webhooks.iterateUndelivered({ per_page: 2 })) {
-        collected.push(item.id)
+        collected.push(item._unsafeUnwrap().id)
       }
 
       expect(collected).toEqual([1, 2, 3])
@@ -1607,7 +1898,7 @@ describe('GhinClient', () => {
 
       const collected: number[] = []
       for await (const item of ghinClient.webhooks.iterateUndelivered()) {
-        collected.push(item.id)
+        collected.push(item._unsafeUnwrap().id)
       }
 
       expect(collected).toEqual([])
@@ -1631,37 +1922,75 @@ describe('GhinClient', () => {
       expect(searchParams.get('status')).toBe('not sent')
     })
 
-    it('should throw validation error with invalid per_page', async () => {
+    // Per #42 Decision 1 the generator never throws: every failure mode below
+    // arrives as a yielded `err` and then ends the scan.
+    it('should yield a validation error and stop with invalid per_page', async () => {
       const iter = ghinClient.webhooks.iterateUndelivered({ per_page: 0 })
-      await expect(iter.next()).rejects.toThrow(ValidationError)
+
+      const first = await iter.next()
+
+      expect(first.done).toBe(false)
+      expect(first.value?._unsafeUnwrapErr()).toBeInstanceOf(ValidationError)
+      expect(first.value?._unsafeUnwrapErr().message).toContain('Invalid iterateUndelivered request:')
+      expect((await iter.next()).done).toBe(true)
+      expect(mockFetchCustomPath).not.toHaveBeenCalled()
     })
 
-    it('should propagate fetch errors', async () => {
-      mockFetchCustomPath.mockResolvedValueOnce(err(new Error('List failed')))
+    it('should yield the list error unrewrapped and stop paging', async () => {
+      const failure = new NetworkError('List failed', 500)
+      mockFetchCustomPath.mockResolvedValueOnce(err(failure))
 
       const iter = ghinClient.webhooks.iterateUndelivered()
-      await expect(iter.next()).rejects.toThrow('List failed')
+
+      const first = await iter.next()
+
+      expect(first.done).toBe(false)
+      expect(first.value?._unsafeUnwrapErr()).toBe(failure)
+      expect((await iter.next()).done).toBe(true)
+      expect(mockFetchCustomPath).toHaveBeenCalledTimes(1)
     })
 
-    it('should throw when the page cap is exceeded', async () => {
+    it('should never reject, even when the underlying fetch throws', async () => {
+      mockFetchCustomPath.mockRejectedValue('string error')
+
+      const iter = ghinClient.webhooks.iterateUndelivered()
+
+      await expect(iter.next()).resolves.toBeDefined()
+    })
+
+    it('should yield the envelopes it already read before a mid-scan list failure', async () => {
+      const failure = new NetworkError('List failed', 500)
+      mockFetchCustomPath
+        .mockResolvedValueOnce(ok({ webhooks: [envelope(1), envelope(2)] }))
+        .mockResolvedValueOnce(err(failure))
+
+      const collected: Array<number | string> = []
+      for await (const item of ghinClient.webhooks.iterateUndelivered({ per_page: 2 })) {
+        collected.push(item.isErr() ? item.error.message : item.value.id)
+      }
+
+      expect(collected).toEqual([1, 2, 'List failed'])
+    })
+
+    it('should yield an error and stop when the page cap is exceeded', async () => {
       // Sticky mock: every page returns a full page so the loop never
       // terminates on its own. The hard cap (ITERATE_UNDELIVERED_MAX_PAGES)
       // is the only thing that stops it.
       mockFetchCustomPath.mockResolvedValue(ok({ webhooks: [envelope(1), envelope(2)] }))
 
       let drained = 0
-      let caught: unknown
-      try {
-        for await (const _item of ghinClient.webhooks.iterateUndelivered({ per_page: 2 })) {
-          drained += 1
+      let capError: Error | undefined
+      for await (const item of ghinClient.webhooks.iterateUndelivered({ per_page: 2 })) {
+        if (item.isErr()) {
+          capError = item.error
+          continue
         }
-      } catch (error) {
-        caught = error
+        drained += 1
       }
 
-      expect(caught).toBeInstanceOf(Error)
-      expect((caught as Error).message).toMatch(/exceeded \d+ pages/)
-      // 10_000 pages * 2 envelopes per page were yielded before the throw.
+      expect(capError).toBeInstanceOf(ValidationError)
+      expect(capError?.message).toMatch(/exceeded \d+ pages/)
+      // 10_000 pages * 2 envelopes per page were yielded before the cap error.
       expect(drained).toBeGreaterThan(0)
     }, 30000)
   })

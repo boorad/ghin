@@ -25,13 +25,21 @@ const fn = async () => {
     // List current GPA accesses
     console.log('--- GPA Accesses ---')
     const accesses = await ghinClient.gpa.getAccesses()
-    console.dir(accesses, { depth: null })
+
+    if (accesses.isErr()) {
+      throw accesses.error
+    }
+
+    console.dir(accesses.value, { depth: null })
 
     // Request access for a golfer (replace with actual golfer ID + email)
     // const requestResult = await ghinClient.gpa.requestAccess(12345, {
     //   email: 'golfer@example.com',
     // })
-    // console.log('Request result:', requestResult)
+    // if (requestResult.isErr()) {
+    //   throw requestResult.error
+    // }
+    // console.log('Request result:', requestResult.value)
 
     // Update status (sandbox/staging only)
     // const updateResult = await ghinClient.gpa.updateStatus({
@@ -39,7 +47,10 @@ const fn = async () => {
     //   golfer_id: 12345,
     //   status: 'approved',
     // })
-    // console.log('Update result:', updateResult)
+    // if (updateResult.isErr()) {
+    //   throw updateResult.error
+    // }
+    // console.log('Update result:', updateResult.value)
   } catch (error) {
     console.error('Error:', error)
   }

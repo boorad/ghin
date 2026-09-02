@@ -14,7 +14,7 @@ async function test() {
   console.log("=".repeat(80));
 
   try {
-    const details = await ghinClient.courses.getDetails({
+    const result = await ghinClient.courses.getDetails({
       course_id: 13995,
       // tee_set_status defaults to "Active" - only returns current tees
       // Use "All" to include historical/deleted tees
@@ -22,6 +22,12 @@ async function test() {
       // gender: "M", // Optional: filter by gender ('M', 'm', 'F', 'f')
       // number_of_holes: 18, // Optional: filter by holes (9 or 18)
     });
+
+    if (result.isErr()) {
+      throw result.error;
+    }
+
+    const details = result.value;
 
     console.log("\n✓ Success! Course details:");
     console.log("CourseId:", details.CourseId);

@@ -56,7 +56,9 @@ Here's a quick example of how to use this library:
 ```typescript
 import { GhinClient } from '@spicygolf/ghin'
 
-// Initialize the client
+// Initialize the client. The constructor is the one part of the surface that
+// still throws — a bad config is a boot-time programmer error, not a runtime
+// API failure, so it raises `ConfigurationError` rather than returning a Result.
 const ghin = new GhinClient({
   password: process.env.GHIN_PASSWORD,
   username: process.env.GHIN_USERNAME,
@@ -64,15 +66,43 @@ const ghin = new GhinClient({
 
 // Get a golfer's handicap. Active golfers only: this searches with
 // `status: 'Active'` and cannot be opted out of, so an inactive or lapsed
-// member resolves `undefined` even though they have a readable index — use
-// `ghin.golfers.search({ golfer_id, status: 'Inactive' })` for those.
+// member comes back as `undefined` even though they have a readable index —
+// use `ghin.golfers.search({ golfer_id, status: 'Inactive' })` for those.
 const ghinNumber = 1234567
-const golfer = await ghin.handicaps.getOne(ghinNumber)
+const result = await ghin.handicaps.getOne(ghinNumber)
 
-// `undefined` when no active golfer matches, and `handicap_index` is `null`
-// for a golfer with no established index (GHIN sends `"NH"` on the wire)
-console.log(`Golfer ${ghinNumber} has a handicap of ${golfer?.handicap_index}`)
+// Every method resolves to a `Result<T, GhinError>` and never rejects, so
+// check the error case before touching the value.
+if (result.isErr()) {
+  // a `GhinError` — `code`, `message`, `cause`, and `statusCode` when the
+  // failure came off the wire
+  console.error(result.error.code, result.error.statusCode, result.error.message)
+} else {
+  // `undefined` when no active golfer matches, and `handicap_index` is `null`
+  // for a golfer with no established index (GHIN sends `"NH"` on the wire)
+  const golfer = result.value
+  console.log(`Golfer ${ghinNumber} has a handicap of ${golfer?.handicap_index}`)
+}
 ```
+
+### Results, not exceptions
+
+Every method on `GhinClient` returns `Promise<Result<T, GhinError>>` from
+[neverthrow](https://github.com/supermacro/neverthrow) — already a dependency of
+this package, so there is nothing extra to install — and `webhooks.iterateUndelivered`
+yields one `Result` per envelope. None of them reject; a failure arrives as an `Err`
+carrying a `GhinError` subclass (`AuthenticationError`, `NetworkError`,
+`RateLimitError`, `ValidationError`, `CacheError`) with `code`, `statusCode` and
+`cause` intact, plus `retryAfter` on `RateLimitError` and `field` on
+`ValidationError`. `new GhinClient(config)` is the sole exception and
+still throws `ConfigurationError`.
+
+**"Not found" is an `Ok`, not an `Err`.** `handicaps.getOne` and `golfers.getOne`
+return `ok(undefined)` when no active golfer matches the GHIN number — "no such
+active golfer" is a normal answer from GHIN, not a failure — so `result.isErr()`
+stays `false` and the `undefined` shows up in `result.value`. This is the one place
+a reader might reasonably expect an `Err`; treat `ok(undefined)` as the not-found
+signal.
 
 ## TODOs
 

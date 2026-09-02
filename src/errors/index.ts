@@ -62,6 +62,20 @@ export class CacheError extends GhinError {
   }
 }
 
+/**
+ * Narrows an unknown thrown value to the `GhinError` that every `Result`
+ * surface promises. A `GhinError` passes through untouched so `statusCode`,
+ * `retryAfter`, `field` and friends survive the wrap; anything else becomes a
+ * `NetworkError` carrying the original message verbatim.
+ */
+export function toGhinError(error: unknown): GhinError {
+  if (error instanceof GhinError) {
+    return error
+  }
+
+  return error instanceof Error ? new NetworkError(error.message, undefined, error) : new NetworkError(String(error))
+}
+
 // Error codes for easy identification
 export const ErrorCodes = {
   AUTHENTICATION_ERROR: 'AUTHENTICATION_ERROR',
