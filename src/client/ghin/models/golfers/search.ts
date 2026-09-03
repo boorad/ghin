@@ -137,13 +137,21 @@ export type GolfersGlobalSearchRequest = z.infer<typeof schemaGolfersGlobalSearc
 // links against. `last_name` is what a human picks from a result list. Every
 // other key is descriptive, and GHIN has already dropped optional fields mid-
 // batch once (an empty optional field rejected an entire `golfers.search`).
+//
+// Which is why no descriptive string here is `string` (= `.trim().min(1)`):
+// GHIN sends `''` for a display field it has nothing to display, and that is
+// not malformed data — a golfer with no recorded low index has
+// `low_hi_value: 999` and `low_hi_display: ''`. Under `string.nullish()` the
+// blank failed `.min(1)` and took the whole golfer into `invalid`, so they
+// vanished from search results (seen in production, 23 rows in, 22 out).
+// `emptyStringToNull` reads the blank as what it means: no value.
 export const schemaGolfer = z
   .object({
     ghin: number,
     first_name: emptyStringToNull.nullish(),
     last_name: string,
     association_id: number.nullish(),
-    association_name: string.nullish(),
+    association_name: emptyStringToNull.nullish(),
     handicap_index: handicap.nullish(),
     club_affiliation_id: number.nullish(),
     club_id: number.nullish(),
@@ -153,14 +161,14 @@ export const schemaGolfer = z
     gender: gender.nullish(),
     hard_cap: boolean.nullish(),
     has_digital_profile: boolean.nullish(),
-    hi_display: string.nullish(),
+    hi_display: emptyStringToNull.nullish(),
     hi_value: handicap.nullish(),
     is_home_club: boolean.nullish(),
     low_hi_date: date.nullish(),
-    low_hi_display: string.nullish(),
+    low_hi_display: emptyStringToNull.nullish(),
     low_hi_value: handicap.nullish(),
     low_hi: handicap.nullish(),
-    message_club_authorized: string.nullish(),
+    message_club_authorized: emptyStringToNull.nullish(),
     middle_name: emptyStringToNull.nullish(),
     phone_number: emptyStringToNull.nullish(),
     prefix: emptyStringToNull.nullish(),

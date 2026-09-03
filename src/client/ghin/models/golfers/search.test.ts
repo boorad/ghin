@@ -43,6 +43,28 @@ describe('Golfer Search Schema', () => {
       }
     })
 
+    // Production, 2026-09-03: a 23-row `golfers.search` came back 22 valid + 1
+    // invalid because the dropped golfer had no recorded low index, which GHIN
+    // reports as `low_hi_value: 999` plus a *blank* `low_hi_display` — and
+    // `string` is `.trim().min(1)`. A missing display string must never cost the
+    // caller the golfer.
+    it('should parse a golfer whose display strings are blank', () => {
+      const result = schemaGolfer.safeParse({
+        ...minimalGolfer,
+        association_name: '',
+        hi_display: '',
+        low_hi_display: '',
+        low_hi_value: 999,
+        message_club_authorized: '',
+      })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.low_hi_display).toBe(null)
+        expect(result.data.hi_display).toBe(null)
+      }
+    })
+
     it('should reject a golfer with no ghin', () => {
       expect(schemaGolfer.safeParse({ last_name: 'Doe' }).success).toBe(false)
     })
