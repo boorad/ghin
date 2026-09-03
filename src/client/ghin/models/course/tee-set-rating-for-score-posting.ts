@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { boolean, float, number, partitionRows, strictFloat, string } from '../../../../models'
+import { boolean, emptyStringToNull, float, number, partitionRows, strictFloat, string } from '../../../../models'
 
 const schemaTeeSetRatingForScorePostingRequest = z.object({
   course_id: number.positive(),
@@ -80,13 +80,13 @@ const schemaTeeSetRatingForScorePostingEntry = z
     CourseRating: strictFloat,
     SlopeRating: strictFloat,
     BogeyRating: float.nullish(),
-    DisplayName: string.nullish(),
-    Gender: string.nullish(),
-    TeeSetStatus: string.nullish(),
+    DisplayName: emptyStringToNull.nullish(),
+    Gender: emptyStringToNull.nullish(),
+    TeeSetStatus: emptyStringToNull.nullish(),
     StrokeAllocation: boolean.nullish(),
     TotalPar: number.nullish(),
     IsShorter: boolean.nullish(),
-    EligibleSides: string.nullish(),
+    EligibleSides: emptyStringToNull.nullish(),
     // Nullish so a dropped `Holes` key doesn't cost the caller the ratings they
     // asked for. A hole list that is present but malformed still fails the whole
     // row into `invalid` — deliberate: a silently short hole list is

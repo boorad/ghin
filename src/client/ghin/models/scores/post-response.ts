@@ -27,10 +27,17 @@ import { schemaRawScoreStatus } from './score'
 // The descriptive strings use `emptyStringToNull`, not the `string` helper:
 // `string` is `z.string().trim().min(1)`, so a `""` — GHIN's ordinary "no
 // message" sentinel, above all on `validation_message` — would reject the whole
-// response. `course.ts` and `tee-set-rating.ts` keep the stricter bare
-// `string.nullish()` because their rows sit behind `partitionRows`, where a bad
-// value costs one row and surfaces through `onDegraded`. This response has no
-// such salvage, so an empty string is normalized to `null` instead.
+// response.
+//
+// This used to be a carve-out. `course.ts` and `tee-set-rating.ts` kept the
+// stricter bare `string.nullish()` on the grounds that their rows sit behind
+// `partitionRows`, where a bad value costs one row and surfaces through
+// `onDegraded`. #85 retired that reasoning: in production "costs one row and
+// reports" meant a real golfer silently absent from search results, because the
+// report goes to an error tracker and the caller just sees "not on GHIN".
+// Salvage bounds the damage; it does not justify strictness on a field nothing
+// computes on. Every descriptive string in the library now reads `""` as `null`,
+// here and behind `partitionRows` alike.
 //
 // The 0.15.1 carve-out in `tee-set-rating.ts` — "a zero there is a fabricated
 // rating that passes a `typeof x === 'number'` guard and yields a wrong Course

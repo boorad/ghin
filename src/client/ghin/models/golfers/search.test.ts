@@ -60,8 +60,10 @@ describe('Golfer Search Schema', () => {
 
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.low_hi_display).toBe(null)
+        expect(result.data.association_name).toBe(null)
         expect(result.data.hi_display).toBe(null)
+        expect(result.data.low_hi_display).toBe(null)
+        expect(result.data.message_club_authorized).toBe(null)
       }
     })
 
@@ -130,6 +132,51 @@ describe('Golfer Search Schema', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data.golfers.map((g) => g.ghin)).toEqual([1234567, 2890015])
+        expect(result.data.invalid).toEqual([])
+      }
+    })
+
+    // The #85 row exactly as production sent it, blank `low_hi_display` and all:
+    // 23 golfers went to GHIN, 22 came back to the caller, and the missing one
+    // read as "not on GHIN". The row schema passing is not the guarantee that
+    // matters here — staying out of `invalid` is.
+    it('should keep a golfer with blank display strings in the valid partition', () => {
+      const blankLowHiDisplay = {
+        first_name: 'Cosmina',
+        last_name: 'Test',
+        gender: 'F',
+        phone_number: '',
+        suffix: null,
+        prefix: null,
+        middle_name: '',
+        status: 'Active',
+        ghin: '13362874',
+        handicap_index: 'NH',
+        association_id: 237,
+        association_name: 'Trial Association',
+        club_name: 'Trial Club 1',
+        club_id: 56254,
+        state: '',
+        country: null,
+        low_hi: 999,
+        soft_cap: 'false',
+        hard_cap: 'false',
+        entitlement: false,
+        club_affiliation_id: 8515936,
+        is_home_club: true,
+        rev_date: null,
+        hi_value: 999,
+        hi_display: 'NH',
+        message_club_authorized: null,
+        low_hi_value: 999,
+        low_hi_display: '',
+        low_hi_date: null,
+      }
+      const result = schemaGolfersSearchResponse.safeParse({ golfers: [minimalGolfer, blankLowHiDisplay] })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.golfers.map((g) => g.ghin)).toEqual([1234567, 13362874])
         expect(result.data.invalid).toEqual([])
       }
     })

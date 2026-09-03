@@ -1,5 +1,14 @@
 import { z } from 'zod'
-import { boolean, gender, handicap, number, partitionRows, strictFloat, string } from '../../../../models'
+import {
+  boolean,
+  emptyStringToNull,
+  gender,
+  handicap,
+  number,
+  partitionRows,
+  strictFloat,
+  string,
+} from '../../../../models'
 import { schemaTeeSetSide } from './request'
 
 // `tee_set_side` must be `'All 18'` with a space. The shared `teeSetSide`
@@ -69,7 +78,7 @@ const schemaCourseHandicapRating = z
     slope_rating: strictFloat,
     par: number.nullish(),
     course_handicap: handicap.nullable(),
-    course_handicap_display: string.nullish(),
+    course_handicap_display: emptyStringToNull.nullish(),
   })
   .passthrough()
 

@@ -1,5 +1,14 @@
 import { z } from 'zod'
-import { boolean, float, monthDay, number, partitionRows, strictFloat, string } from '../../../../models'
+import {
+  boolean,
+  emptyStringToNull,
+  float,
+  monthDay,
+  number,
+  partitionRows,
+  strictFloat,
+  string,
+} from '../../../../models'
 import { schemaCourseCountry } from './country'
 import { schemaCourse } from './course'
 import { schemaGeoAddress, schemaGeoCoordinate } from './geolocation'
@@ -37,9 +46,9 @@ type CourseSearchResponse = z.infer<typeof schemaCourseSearchResponse>
 const schemaCourseDetailsFacility = z
   .object({
     FacilityId: number,
-    FacilityName: string.nullish(),
+    FacilityName: emptyStringToNull.nullish(),
     FacilityNumber: number.nullish(),
-    FacilityStatus: string.nullish(),
+    FacilityStatus: emptyStringToNull.nullish(),
     GeoLocationFormattedAddress: schemaGeoAddress.nullish(),
     GeoLocationLatitude: schemaGeoCoordinate.nullish(),
     GeoLocationLongitude: schemaGeoCoordinate.nullish(),
@@ -150,7 +159,7 @@ const schemaCourseDetailsTeeSet = z
 // indistinguishable from working and is exactly how an outage hides.
 const schemaCourseDetailsResponse = z
   .object({
-    CourseCity: string.nullish(),
+    CourseCity: emptyStringToNull.nullish(),
     CourseId: number,
     CourseName: string,
     CourseNumber: number.nullish(),

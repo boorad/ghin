@@ -138,13 +138,15 @@ export type GolfersGlobalSearchRequest = z.infer<typeof schemaGolfersGlobalSearc
 // other key is descriptive, and GHIN has already dropped optional fields mid-
 // batch once (an empty optional field rejected an entire `golfers.search`).
 //
-// Which is why no descriptive string here is `string` (= `.trim().min(1)`):
-// GHIN sends `''` for a display field it has nothing to display, and that is
-// not malformed data — a golfer with no recorded low index has
-// `low_hi_value: 999` and `low_hi_display: ''`. Under `string.nullish()` the
-// blank failed `.min(1)` and took the whole golfer into `invalid`, so they
-// vanished from search results (seen in production, 23 rows in, 22 out).
-// `emptyStringToNull` reads the blank as what it means: no value.
+// Which is why the descriptive strings are `emptyStringToNull` rather than the
+// `string` helper (= `.trim().min(1)`). Measured in production 2026-09-03: a
+// golfer with no recorded low index comes back with `low_hi_value: 999` and
+// `low_hi_display: ''`, the blank failed `.min(1)`, and the whole golfer went
+// to `invalid` — 23 rows in, 22 out, and that golfer read to the user as "not
+// on GHIN". `association_name`, `hi_display` and `message_club_authorized` are
+// widened on inference, not measurement: same class of field, same one-token
+// cost to a caller if GHIN ever blanks one. `last_name` stays strict; it is the
+// field a human picks the golfer by.
 export const schemaGolfer = z
   .object({
     ghin: number,

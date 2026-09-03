@@ -59,6 +59,25 @@ describe('Course Handicap Schemas', () => {
       }
     })
 
+    // The #85 class, one endpoint over and with a bigger blast radius: a blank
+    // `course_handicap_display` used to fail its rating row, and `ratings` is
+    // all-or-nothing, so it cost the caller the entire tee set — not one row.
+    it('should keep a tee set whose course_handicap_display is blank', () => {
+      const [first, second] = courseHandicapsGetFixture.tee_sets
+      const blankDisplay = {
+        ...second,
+        ratings: second?.ratings.map((rating) => ({ ...rating, course_handicap_display: '' })),
+      }
+      const result = schemaCourseHandicapsGetResponse.safeParse({ tee_sets: [first, blankDisplay] })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.tee_sets).toHaveLength(2)
+        expect(result.data.tee_sets[1]?.ratings[0]?.course_handicap_display).toBe(null)
+        expect(result.data.invalid).toEqual([])
+      }
+    })
+
     // Issue #63: `float` is `z.coerce.number()` and `Number(null) === 0`, so a
     // null course_rating used to parse as a scratch rating and feed the Course
     // Handicap formula a fabricated 0. It now costs that tee set, not the others.
