@@ -1,5 +1,15 @@
 import { z } from 'zod'
-import { boolean, date, emptyStringToNull, gender, handicap, number, partitionRows, string } from '../../../../models'
+import {
+  boolean,
+  date,
+  emptyStringToNull,
+  gender,
+  handicap,
+  number,
+  partitionRows,
+  strictNumber,
+  string,
+} from '../../../../models'
 
 // The request filter and the response field are not the same set, so the enum is
 // split. Measured against `api-uat`, 2026-09-02: a name search with an empty
@@ -147,9 +157,23 @@ export type GolfersGlobalSearchRequest = z.infer<typeof schemaGolfersGlobalSearc
 // widened on inference, not measurement: same class of field, same one-token
 // cost to a caller if GHIN ever blanks one. `last_name` stays strict; it is the
 // field a human picks the golfer by.
+//
+// That same sentence is what forces `strictNumber` on `ghin` rather than the
+// lenient `number` helper (#86). `number` is `z.coerce.number()`, and
+// `Number(null) === Number('') === Number('   ') === 0`, so a blank ghin used to
+// parse as golfer 0 — the coercion trap from #63. A fabricated 0 is wrong
+// information, not missing information: the row looks valid, so `onDegraded`
+// never fires and nothing reports it, and a 0 can never match a requested number
+// in `GolfersGetManyResponse.missing`, so the golfer was reported missing *and*
+// held a slot in `golfers`. A confidently wrong 0 there is worse than the
+// rejected parse. Genuine numeric-string ghins still coerce (GHIN sends
+// `ghin: '13362874'` on the wire), so only null and blank/whitespace ghins move
+// into `invalid`. This is the one audited exception on this row, not a
+// reopening of the carve-out #85 retired — every descriptive field above stays
+// lenient.
 export const schemaGolfer = z
   .object({
-    ghin: number,
+    ghin: strictNumber,
     first_name: emptyStringToNull.nullish(),
     last_name: string,
     association_id: number.nullish(),

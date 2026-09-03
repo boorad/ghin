@@ -71,6 +71,37 @@ describe('Golfer Search Schema', () => {
       expect(schemaGolfer.safeParse({ last_name: 'Doe' }).success).toBe(false)
     })
 
+    // The #63 coercion trap: `Number(null)` and `Number('')` are both 0, so a
+    // bare `z.coerce.number()` would fabricate golfer 0 from a blank ghin — a
+    // row that looks valid, never fires `onDegraded`, and can never match a
+    // requested number in `missing`. `strictNumber` rejects both.
+    it('should reject a golfer whose ghin is null', () => {
+      expect(schemaGolfer.safeParse({ ghin: null, last_name: 'Doe' }).success).toBe(false)
+    })
+
+    it('should reject a golfer whose ghin is a blank string', () => {
+      expect(schemaGolfer.safeParse({ ghin: '', last_name: 'Doe' }).success).toBe(false)
+    })
+
+    // Whitespace-only is the same trap one step further out: `Number('   ')` is
+    // also 0. `strictNumber` trims before deciding (asserted in
+    // `src/models/validation.test.ts`), pinned here because this is the field
+    // the fabricated 0 does the damage on.
+    it('should reject a golfer whose ghin is whitespace only', () => {
+      expect(schemaGolfer.safeParse({ ghin: '   ', last_name: 'Doe' }).success).toBe(false)
+    })
+
+    // A genuine numeric string still coerces — the response the blank-display
+    // test below relies on sends `ghin` as a string.
+    it('should coerce a numeric-string ghin to a number', () => {
+      const result = schemaGolfer.safeParse({ ghin: '13362874', last_name: 'Doe' })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.ghin).toBe(13362874)
+      }
+    })
+
     // Measured against `api-uat`, 2026-09-02: a name search with an empty status
     // returned `Archived` rows. The response enum has to accept them — `.nullish()`
     // does not, so these golfers were being dropped into `invalid`.
@@ -112,6 +143,19 @@ describe('Golfer Search Schema', () => {
       if (result.success) {
         expect(result.data.golfers.map((g) => g.ghin)).toEqual([1234567, 7654321])
         expect(result.data.invalid).toEqual([rejected])
+      }
+    })
+
+    // A row GHIN blanks the ghin on must degrade to `invalid`, not fabricate
+    // golfer 0 in the valid partition where it defeats `missing` reconciliation.
+    it('should move a golfer with a null ghin into invalid', () => {
+      const nullGhin = { ghin: null, last_name: 'Ghinless' }
+      const result = schemaGolfersSearchResponse.safeParse({ golfers: [minimalGolfer, nullGhin] })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.golfers.map((g) => g.ghin)).toEqual([1234567])
+        expect(result.data.invalid).toEqual([nullGhin])
       }
     })
 

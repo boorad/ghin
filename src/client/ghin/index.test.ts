@@ -4,6 +4,7 @@ import { NetworkError, ValidationError } from '../../errors'
 import { InMemoryCacheClient } from '../in-memory-cache-client'
 import { RequestClient } from '../request-client'
 import { GhinClient } from './index'
+import { schemaGolfersSearchResponse } from './models/golfers/search'
 import {
   getAccessesResponseFixture,
   requestAccessResponseFixture,
@@ -1279,6 +1280,26 @@ describe('GhinClient', () => {
 
       expect(result._unsafeUnwrap().golfers.map((golfer) => golfer.ghin)).toEqual([1])
       expect(result._unsafeUnwrap().missing).toEqual([2, 3])
+    })
+
+    // The client-level consequence of the #63 coercion trap on `schemaGolfer.ghin`
+    // (#86). With the old `z.coerce.number()`, `Number(null) === 0`, so this row
+    // parsed as golfer 0: it took a slot in `golfers` under a number nobody asked
+    // for, 1234567 was *still* reported missing because a fabricated 0 matches no
+    // request, and `onDegraded` stayed silent because nothing looked dropped. The
+    // response goes through the real schema here, as RequestClient does, so this
+    // fails if `ghin` ever goes back to the lenient helper.
+    it('should report a golfer whose only row has a null ghin as missing rather than as golfer 0', async () => {
+      const onDegraded = vi.fn()
+      const client = new GhinClient({ password: 'p', username: 'u', onDegraded })
+      const nullGhin = { ghin: null, last_name: 'Ghinless' }
+      mockFetch.mockResolvedValue(ok(schemaGolfersSearchResponse.parse({ golfers: [nullGhin] })))
+
+      const result = await client.golfers.getMany([1234567])
+
+      expect(result._unsafeUnwrap().golfers).toEqual([])
+      expect(result._unsafeUnwrap().missing).toEqual([1234567])
+      expect(onDegraded).toHaveBeenCalledWith({ entity: 'golfers_search', dropped: 1, total: 1, sample: [nullGhin] })
     })
 
     it('should collapse duplicate GHIN numbers in the request', async () => {
