@@ -953,6 +953,26 @@ describe('GhinClient', () => {
       expect(mockFetch).toHaveBeenCalled()
     })
 
+    // Where the #86 fabricated 0 was actually reachable by a caller. `search`
+    // returns the partitioned rows as they came (`index.ts:752`), so with the old
+    // `z.coerce.number()` on `schemaGolfer.ghin` (`Number(null) === 0`) this row
+    // came back as a golfer under a number nobody has. `strictNumber` moves it to
+    // `invalid`, which `search` does not return, so the only thing that reaches
+    // the caller is the `onDegraded` report. The response goes through the real
+    // schema here, as RequestClient does, so this fails if `ghin` ever goes back
+    // to the lenient helper.
+    it('should drop a null-ghin row into invalid rather than return it as golfer 0', async () => {
+      const onDegraded = vi.fn()
+      const client = new GhinClient({ password: 'testpass', username: 'testuser', onDegraded })
+      const nullGhin = { ghin: null, last_name: 'Ghinless' }
+      mockFetch.mockResolvedValue(ok(schemaGolfersSearchResponse.parse({ golfers: [nullGhin] })))
+
+      const result = await client.golfers.search({ last_name: 'Ghinless' })
+
+      expect(result._unsafeUnwrap()).toEqual([])
+      expect(onDegraded).toHaveBeenCalledWith({ entity: 'golfers_search', dropped: 1, total: 1, sample: [nullGhin] })
+    })
+
     // Nothing on this surface rejects any more: the promise resolves to an Err.
     // Asserting only `isErr()` would still pass if a throw crept back in.
     it('should resolve to an error result when fetch fails', async () => {
@@ -1284,12 +1304,16 @@ describe('GhinClient', () => {
 
     // The client-level consequence of the #63 coercion trap on `schemaGolfer.ghin`
     // (#86). With the old `z.coerce.number()`, `Number(null) === 0`, so this row
-    // parsed as golfer 0: it took a slot in `golfers` under a number nobody asked
-    // for, 1234567 was *still* reported missing because a fabricated 0 matches no
-    // request, and `onDegraded` stayed silent because nothing looked dropped. The
+    // parsed as golfer 0 — and `getMany` builds its result by iterating the
+    // *requested* numbers (`index.ts:1065`), which a fabricated 0 matches none of,
+    // so the row was silently dropped: never in `golfers`, never reconciled
+    // against `missing`, and `onDegraded` stayed quiet because nothing looked
+    // invalid. `onDegraded` is therefore the only assertion here that regresses —
+    // `golfers` and `missing` read the same either way. The fabricated-0 slot is
+    // real on `golfers.search`, and is pinned in that describe instead. The
     // response goes through the real schema here, as RequestClient does, so this
     // fails if `ghin` ever goes back to the lenient helper.
-    it('should report a golfer whose only row has a null ghin as missing rather than as golfer 0', async () => {
+    it('should report a null-ghin row through onDegraded rather than discard it silently', async () => {
       const onDegraded = vi.fn()
       const client = new GhinClient({ password: 'p', username: 'u', onDegraded })
       const nullGhin = { ghin: null, last_name: 'Ghinless' }

@@ -163,9 +163,14 @@ export type GolfersGlobalSearchRequest = z.infer<typeof schemaGolfersGlobalSearc
 // `Number(null) === Number('') === Number('   ') === 0`, so a blank ghin used to
 // parse as golfer 0 — the coercion trap from #63. A fabricated 0 is wrong
 // information, not missing information: the row looks valid, so `onDegraded`
-// never fires and nothing reports it, and a 0 can never match a requested number
-// in `GolfersGetManyResponse.missing`, so the golfer was reported missing *and*
-// held a slot in `golfers`. A confidently wrong 0 there is worse than the
+// never fires and nothing reports it. Where it went from there depended on the
+// caller. `golfersGetMany` builds its result by iterating the *requested*
+// numbers (`index.ts:1065`), which a fabricated 0 matches none of, so the row
+// was silently dropped from `getMany` — never in `golfers`, never reconciled
+// against `missing`, and no `onDegraded` to report it. `golfers.search` and
+// `golfersGlobalSearch` return the partitioned rows as they came
+// (`index.ts:752`, `index.ts:902`), so there the same row was handed back as a
+// fabricated golfer 0. A confidently wrong 0 is worse than the
 // rejected parse. Genuine numeric-string ghins still coerce (GHIN sends
 // `ghin: '13362874'` on the wire), so only null and blank/whitespace ghins move
 // into `invalid`. This is the one audited exception on this row, not a
