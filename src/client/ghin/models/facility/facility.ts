@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { number, shortDate, string } from '../../../../models'
+import { emptyStringToNull, number, shortDate, string } from '../../../../models'
 import { schemaGeoCoordinate } from '../course/geolocation'
 
 const schemaStatus = string.transform((value) => value.toUpperCase()).pipe(z.enum(['ACTIVE', 'INACTIVE']))
@@ -14,15 +14,15 @@ const schemaFacilityCourse = z.object({
 type FacilityCourse = z.infer<typeof schemaFacilityCourse>
 
 const schemaFacility = z.object({
-  Address1: string.nullable().optional(),
-  Address2: string.nullable().optional(),
+  Address1: emptyStringToNull.optional(),
+  Address2: emptyStringToNull.optional(),
   Associations: z.array(z.unknown()).optional(),
-  City: string.nullable(),
-  Country: string.nullable(),
+  City: emptyStringToNull,
+  Country: emptyStringToNull,
   Courses: z.array(schemaFacilityCourse).optional(),
   // Not validated — see the note on schemaCourse.Email. GHIN stores websites
   // and free text here, and a bad value must not cost the caller the facility.
-  Email: string.nullish(),
+  Email: emptyStringToNull.nullish(),
   EntCountryCode: number.nullable(),
   EntStateCode: number.nullable(),
   FacilityId: number,
@@ -30,8 +30,8 @@ const schemaFacility = z.object({
   FacilityStatus: schemaStatus,
   GeoLocationLatitude: schemaGeoCoordinate.nullable().optional(),
   GeoLocationLongitude: schemaGeoCoordinate.nullable().optional(),
-  State: string.nullable(),
-  Telephone: string.nullable().optional(),
+  State: emptyStringToNull,
+  Telephone: emptyStringToNull.optional(),
   UpdatedOn: shortDate.nullable().optional(),
   Zip: z
     .string()

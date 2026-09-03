@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { boolean, float, number, strictFloat, string } from '../../../../models'
+import { boolean, emptyStringToNull, float, number, strictFloat, string } from '../../../../models'
 import { schemaGeoAddress, schemaGeoCoordinate } from './geolocation'
 import { schemaSeasonDate, schemaSeasonName } from './season'
 import { schemaCourseSearchState } from './state'
@@ -40,7 +40,7 @@ const schemaTeeSetRatingCourse = z
     CourseStatus: schemaStatus.nullish(),
     CourseName: string,
     CourseNumber: number.nullish(),
-    CourseCity: string.nullish(),
+    CourseCity: emptyStringToNull.nullish(),
     CourseState: schemaCourseSearchState.nullish(),
   })
   .passthrough()
@@ -48,8 +48,8 @@ const schemaTeeSetRatingCourse = z
 const schemaTeeSetRatingFacility = z
   .object({
     FacilityId: number,
-    FacilityStatus: string.nullish(),
-    FacilityName: string.nullish(),
+    FacilityStatus: emptyStringToNull.nullish(),
+    FacilityName: emptyStringToNull.nullish(),
     FacilityNumber: number.nullish(),
     GolfAssociationId: number.nullish(),
     GeoLocationFormattedAddress: schemaGeoAddress.nullish(),

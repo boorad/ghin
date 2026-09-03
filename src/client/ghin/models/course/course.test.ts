@@ -264,4 +264,38 @@ describe('Course Schema', () => {
       expect(result.data.Email).toBe('www.parkview18.com')
     }
   })
+
+  // Same class as #85 on the golfer schema: `string` is `.trim().min(1)`, and a
+  // blank `Address2` is what a course with a one-line address looks like — not
+  // malformed data. It used to fail the row, dropping a playable course from
+  // search over a field nothing reads.
+  it('should read blank descriptive strings as null rather than rejecting the course', () => {
+    const result = schemaCourse.safeParse({
+      Address1: '740 Clifton Road NE',
+      Address2: '',
+      City: '',
+      Country: '',
+      CourseID: 12345,
+      CourseName: 'Test Golf Club',
+      CourseStatus: 'Active',
+      Email: '',
+      FacilityID: 11807,
+      FacilityName: 'Test Facility',
+      FacilityStatus: 'Active',
+      FullName: 'Test Facility - Test Golf Club',
+      GeoLocationLatitude: 33.7756,
+      GeoLocationLongitude: -84.3963,
+      Ratings: [],
+      State: '',
+      Telephone: '',
+    })
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.Address1).toBe('740 Clifton Road NE')
+      expect(result.data.Address2).toBe(null)
+      expect(result.data.City).toBe(null)
+      expect(result.data.Telephone).toBe(null)
+    }
+  })
 })
