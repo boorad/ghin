@@ -35,6 +35,20 @@ const DEFAULT_USER_AGENT =
 
 export const CLIENT_SOURCE = 'GHINcom'
 
+/**
+ * Sentinel header value meaning "send no such header at all".
+ *
+ * `authedRequest` defaults every authed request to `source: CLIENT_SOURCE`, and
+ * USGA read that header as the origin of a posted score — so every score we
+ * posted was filed as a manual GHIN.com entry (#1178). USGA stamp the real
+ * source server-side, so the score-post endpoints must assert nothing. We omit
+ * the header rather than blanking it: a blank `source` is still a value we are
+ * sending, and its meaning is USGA's to define. A caller passes
+ * `headers: { source: OMIT_HEADER }` and `authedRequest` strips the key before
+ * the request goes out, so the sentinel never reaches the wire.
+ */
+export const OMIT_HEADER = '__omit__'
+
 const SESSION_DEFAULTS = {
   appId: '1:884417644529:web:47fb315bc6c70242f72650',
   authVersion: 'FIS_v2',
@@ -42,7 +56,7 @@ const SESSION_DEFAULTS = {
   sdkVersion: 'w:0.5.7',
 } as const
 
-const FETCH_HEADER_DEFAULTS: RequestInit['headers'] = {
+const FETCH_HEADER_DEFAULTS: Record<string, string> = {
   'Content-Type': 'application/json',
   'User-Agent': DEFAULT_USER_AGENT,
 }
@@ -384,15 +398,24 @@ export class RequestClient {
 
     const { headers, searchParams, ...requestInitOptions } = options
 
-    const buildOptions = (token: string): RequestInit => ({
-      ...requestInitOptions,
-      headers: {
+    const buildOptions = (token: string): RequestInit => {
+      const mergedHeaders: Record<string, string> = {
         ...FETCH_HEADER_DEFAULTS,
         source: CLIENT_SOURCE,
         ...makeAuthHeaders(token),
-        ...headers,
-      },
-    })
+        // Caller-supplied headers land last, so a per-request value wins over
+        // the defaults above — including the OMIT_HEADER sentinel.
+        ...(headers as Record<string, string> | undefined),
+      }
+
+      for (const [key, value] of Object.entries(mergedHeaders)) {
+        if (value === OMIT_HEADER) {
+          delete mergedHeaders[key]
+        }
+      }
+
+      return { ...requestInitOptions, headers: mergedHeaders }
+    }
 
     if (searchParams) {
       // URLSearchParams.toString() form-encodes space as `+`. Some upstream

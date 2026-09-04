@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { ConfigurationError, type GhinError, ValidationError, toGhinError } from '../../errors'
 import { type ClientConfig, number, reportDegradation, schemaClientConfig } from '../../models'
 import { InMemoryCacheClient } from '../in-memory-cache-client'
-import { CLIENT_SOURCE, RequestClient } from '../request-client'
+import { CLIENT_SOURCE, OMIT_HEADER, RequestClient } from '../request-client'
 import {
   type CourseCountriesResponse,
   type CourseCountry,
@@ -1159,9 +1159,15 @@ export class GhinClient {
         return err(new ValidationError(`Invalid hole-by-hole score request: ${parsedRequest.error.message}`))
       }
 
+      // USGA read the `source` header as the origin of the score, so our
+      // default `source: GHINcom` filed every post as a manual GHIN.com entry
+      // (#1178). They stamp the real source server-side, so send no `source`
+      // header at all here — not a blank one. GETs and `playing_handicaps`
+      // still send it; GHIN may key off it there and that API is not ours.
       const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
         method: 'POST',
         body: JSON.stringify(parsedRequest.data),
+        headers: { source: OMIT_HEADER },
       }
 
       const result = await this.httpClient.fetch<{ score: ScorePostResponse }>({
@@ -1184,9 +1190,15 @@ export class GhinClient {
         return err(new ValidationError(`Invalid adjusted score request: ${parsedRequest.error.message}`))
       }
 
+      // USGA read the `source` header as the origin of the score, so our
+      // default `source: GHINcom` filed every post as a manual GHIN.com entry
+      // (#1178). They stamp the real source server-side, so send no `source`
+      // header at all here — not a blank one. GETs and `playing_handicaps`
+      // still send it; GHIN may key off it there and that API is not ours.
       const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
         method: 'POST',
         body: JSON.stringify(parsedRequest.data),
+        headers: { source: OMIT_HEADER },
       }
 
       const result = await this.httpClient.fetch<{ score: ScorePostResponse }>({
@@ -1209,9 +1221,15 @@ export class GhinClient {
         return err(new ValidationError(`Invalid 18h 9-and-9 score request: ${parsedRequest.error.message}`))
       }
 
+      // USGA read the `source` header as the origin of the score, so our
+      // default `source: GHINcom` filed every post as a manual GHIN.com entry
+      // (#1178). They stamp the real source server-side, so send no `source`
+      // header at all here — not a blank one. GETs and `playing_handicaps`
+      // still send it; GHIN may key off it there and that API is not ours.
       const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
         method: 'POST',
         body: JSON.stringify(parsedRequest.data),
+        headers: { source: OMIT_HEADER },
       }
 
       const result = await this.httpClient.fetch<{ score: ScorePostResponse }>({
