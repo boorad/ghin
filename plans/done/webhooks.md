@@ -163,7 +163,7 @@ Phase 3 is nice-to-have. Phase 1 + 2 unblock all current webhook integration wor
 ## Implementation Notes
 
 - **Auth**: `apiAccess: true` mode in `RequestClient` already handles the `/users/login.json` + Bearer + 12h refresh used by webhook endpoints. The new namespace should be wired through that, not bypass it.
-- **Source header**: GHIN expects `source: GHINcom` on first-party API requests. `RequestClient.CLIENT_SOURCE` already provides this; reuse it.
+- **Source header**: ~~GHIN expects `source: GHINcom` on first-party API requests. `RequestClient.CLIENT_SOURCE` already provides this; reuse it.~~ Superseded: USGA asked us to stop sending `source` entirely, and `CLIENT_SOURCE` has been deleted. Send no `source` on any transport (#1178).
 - **Signature scheme is unconfirmed**: ship `verifyWebhookSignature` with the most-common default (HMAC-SHA256, header `X-GHIN-Signature`, `sha256=<hex>` value) but make the algorithm/header swappable from one config point so a USGA reply confirming a different scheme is a one-line change. Document the assumption in the function's docstring.
 - **Test-event body capture**: the cleanest way to lock down the inner `payload.object` shapes is to register a webhook.site (or your own) URL via `webhooks.patch()`, fire `webhooks.test('revision')`, copy the body USGA POSTs into a fixture, and write the parser/type against the real data. Do this for each `object_type` we care about (revision first, then score and gpa).
 - **Empty `payload.object`** in the Swagger example is intentional — Swagger uses `{}` as a placeholder rather than documenting the inner shape. Don't be misled into typing it as `Record<string, never>`.

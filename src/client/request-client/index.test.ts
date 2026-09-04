@@ -1062,7 +1062,6 @@ describe('RequestClient', () => {
       expect(urlsFetched()[0]).toBe('https://api2.ghin.com/api/v1/golfers/12345/scores.json')
       expect(vi.mocked(fetch).mock.calls[0]?.[1]?.headers).toMatchObject({
         Authorization: 'Bearer cached-access-token',
-        source: 'GHINcom',
       })
     })
 

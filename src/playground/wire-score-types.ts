@@ -7,7 +7,7 @@
  * letter — every other path in this library maps it through `scoreTypesMap` first.
  */
 import { z } from 'zod'
-import { CLIENT_SOURCE, RequestClient } from '../client/request-client'
+import { RequestClient } from '../client/request-client'
 
 const client = new RequestClient({
   password: process.env.GHIN_PASSWORD as string,
@@ -34,7 +34,6 @@ const get = (o: Row, key: string): unknown => o[key]
 const rawScores = async (golfer: string, extra: [string, string][] = []): Promise<Row[]> => {
   const searchParams = new URLSearchParams([
     ['golfer_id', golfer],
-    ['source', CLIENT_SOURCE],
     ['from_date_played', '2000-01-01'],
     ['per_page', '200'],
     ...extra,

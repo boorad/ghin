@@ -21,8 +21,6 @@ vi.mock('../request-client', () => ({
     fetch: mockFetch,
     fetchCustomPath: mockFetchCustomPath,
   })),
-  CLIENT_SOURCE: 'GHINcom',
-  OMIT_HEADER: '__omit__',
 }))
 
 describe('GhinClient', () => {
@@ -111,11 +109,10 @@ describe('GhinClient', () => {
       const result = await ghinClient.courses.getCountries()
 
       expect(result._unsafeUnwrap()).toEqual(mockCountries.countries)
+      // No query string at all — `source` was the only parameter this endpoint
+      // ever carried (#1178).
       expect(mockFetch).toHaveBeenCalledWith({
         entity: 'course_countries',
-        options: expect.objectContaining({
-          searchParams: expect.any(URLSearchParams),
-        }),
         schema: expect.anything(),
       })
     })
@@ -302,11 +299,10 @@ describe('GhinClient', () => {
       const result = await ghinClient.courses.getTeeSetRatingsForScorePosting({ course_id: 2539 })
 
       expect(result._unsafeUnwrap()).toEqual(mockResponse)
+      // No query string at all — `source` was the only parameter this endpoint
+      // ever carried (#1178).
       expect(mockFetchCustomPath).toHaveBeenCalledWith({
         path: '/Courses/2539/TeeSetRatingsForScorePosting.json',
-        options: expect.objectContaining({
-          searchParams: expect.any(URLSearchParams),
-        }),
         schema: expect.anything(),
       })
     })
@@ -1210,7 +1206,7 @@ describe('GhinClient', () => {
       expect(searchParams.get('page')).toBe('1')
       expect(searchParams.get('sorting_criteria')).toBe('last_name_first_name')
       expect(searchParams.get('order')).toBe('asc')
-      expect(searchParams.get('source')).toBe('GHINcom')
+      expect(searchParams.has('source')).toBe(false)
     })
 
     // #83: this used to send `status=Active`, which made `undefined` mean "no
