@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import { number } from '../../../../models'
-import { CLIENT_SOURCE } from '../../../request-client'
 
 const schemaTeeSetSide = z.enum(['All 18', 'F9', 'B9'])
 
@@ -37,7 +36,6 @@ const schemaCourseHandicapsRequest = z.object({
         golfer_id: number.optional(),
       }),
   ),
-  source: z.literal(CLIENT_SOURCE).default(CLIENT_SOURCE).optional(),
 })
 
 type CourseHandicapsRequest = z.infer<typeof schemaCourseHandicapsRequest>

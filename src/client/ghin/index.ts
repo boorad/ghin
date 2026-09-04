@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { ConfigurationError, type GhinError, ValidationError, toGhinError } from '../../errors'
 import { type ClientConfig, number, reportDegradation, schemaClientConfig } from '../../models'
 import { InMemoryCacheClient } from '../in-memory-cache-client'
-import { CLIENT_SOURCE, OMIT_HEADER, RequestClient } from '../request-client'
+import { RequestClient } from '../request-client'
 import {
   type CourseCountriesResponse,
   type CourseCountry,
@@ -239,14 +239,8 @@ export class GhinClient {
 
   private async coursesGetCountries(): Promise<Result<CourseCountry[], GhinError>> {
     try {
-      const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
-      const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
-        searchParams,
-      }
-
       const result = await this.httpClient.fetch<CourseCountriesResponse>({
         entity: 'course_countries',
-        options,
         schema: schemaCourseCountriesResponse,
       })
 
@@ -265,7 +259,7 @@ export class GhinClient {
       }
 
       const validRequest = parsedRequest.data
-      const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
+      const searchParams = new URLSearchParams()
 
       for (const [key, value] of Object.entries(validRequest)) {
         // A present-but-`undefined` key survives zod `.optional()` — a caller
@@ -315,7 +309,7 @@ export class GhinClient {
       }
 
       const validRequest = parsedRequest.data
-      const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
+      const searchParams = new URLSearchParams()
 
       if (validRequest.include_altered_tees !== undefined) {
         searchParams.set('include_altered_tees', validRequest.include_altered_tees.toString())
@@ -352,17 +346,10 @@ export class GhinClient {
       }
 
       const validRequest = parsedRequest.data
-      const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
-
       const path = `/Courses/${validRequest.course_id}/TeeSetRatingsForScorePosting.json`
-
-      const options: Parameters<typeof this.httpClient.fetchCustomPath>[0]['options'] = {
-        searchParams,
-      }
 
       const result = await this.httpClient.fetchCustomPath<TeeSetRatingsForScorePostingResponse>({
         path,
-        options,
         schema: schemaTeeSetRatingsForScorePostingResponse,
       })
 
@@ -392,7 +379,7 @@ export class GhinClient {
       }
 
       const validRequest = parsedRequest.data
-      const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
+      const searchParams = new URLSearchParams()
 
       for (const [key, value] of Object.entries(validRequest)) {
         // A present-but-`undefined` key survives zod `.optional()` — a caller
@@ -443,7 +430,7 @@ export class GhinClient {
       }
 
       const validRequest = parsedRequest.data
-      const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
+      const searchParams = new URLSearchParams()
 
       for (const [key, value] of Object.entries(validRequest)) {
         // A present-but-`undefined` key survives zod `.optional()` — a caller
@@ -658,10 +645,7 @@ export class GhinClient {
 
       const searchParams = new URLSearchParams()
 
-      const courseHandicapRequest: CourseHandicapsRequest = {
-        golfers,
-        source: CLIENT_SOURCE,
-      }
+      const courseHandicapRequest: CourseHandicapsRequest = { golfers }
 
       const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
         body: JSON.stringify(courseHandicapRequest),
@@ -705,7 +689,7 @@ export class GhinClient {
       }
 
       const validRequest = parsedRequest.data
-      const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
+      const searchParams = new URLSearchParams()
 
       // No guard for a present-but-`undefined` key here, unlike the other query
       // loops: every field of `schemaCourseHandicapGetRequest` is required, so
@@ -778,7 +762,7 @@ export class GhinClient {
       // `''` is already `null` by the time it gets here and has always reached
       // the wire as `key=`.
       const { status, ...params } = parsedRequest.data
-      const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
+      const searchParams = new URLSearchParams()
 
       const searchDefaults = {
         page: 1,
@@ -847,7 +831,7 @@ export class GhinClient {
       }
 
       const { ghin, ...rest } = parsedRequest.data
-      const searchParams = new URLSearchParams([['source', CLIENT_SOURCE]])
+      const searchParams = new URLSearchParams()
 
       const searchDefaults = {
         from_ghin: true,
@@ -1094,10 +1078,7 @@ export class GhinClient {
       const validRequest = parsedRequest.data ?? {}
       const ghin = parsedGhin.data
 
-      const searchParams = new URLSearchParams([
-        [searchParameters.GOLFER_ID, ghin.toString()],
-        ['source', CLIENT_SOURCE],
-      ])
+      const searchParams = new URLSearchParams([[searchParameters.GOLFER_ID, ghin.toString()]])
 
       for (const [key, value] of Object.entries(validRequest)) {
         // A present-but-`undefined` key survives zod `.partial()` — a caller
@@ -1159,15 +1140,9 @@ export class GhinClient {
         return err(new ValidationError(`Invalid hole-by-hole score request: ${parsedRequest.error.message}`))
       }
 
-      // USGA read the `source` header as the origin of the score, so our
-      // default `source: GHINcom` filed every post as a manual GHIN.com entry
-      // (#1178). They stamp the real source server-side, so send no `source`
-      // header at all here — not a blank one. GETs and `playing_handicaps`
-      // still send it; GHIN may key off it there and that API is not ours.
       const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
         method: 'POST',
         body: JSON.stringify(parsedRequest.data),
-        headers: { source: OMIT_HEADER },
       }
 
       const result = await this.httpClient.fetch<{ score: ScorePostResponse }>({
@@ -1190,15 +1165,9 @@ export class GhinClient {
         return err(new ValidationError(`Invalid adjusted score request: ${parsedRequest.error.message}`))
       }
 
-      // USGA read the `source` header as the origin of the score, so our
-      // default `source: GHINcom` filed every post as a manual GHIN.com entry
-      // (#1178). They stamp the real source server-side, so send no `source`
-      // header at all here — not a blank one. GETs and `playing_handicaps`
-      // still send it; GHIN may key off it there and that API is not ours.
       const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
         method: 'POST',
         body: JSON.stringify(parsedRequest.data),
-        headers: { source: OMIT_HEADER },
       }
 
       const result = await this.httpClient.fetch<{ score: ScorePostResponse }>({
@@ -1221,15 +1190,9 @@ export class GhinClient {
         return err(new ValidationError(`Invalid 18h 9-and-9 score request: ${parsedRequest.error.message}`))
       }
 
-      // USGA read the `source` header as the origin of the score, so our
-      // default `source: GHINcom` filed every post as a manual GHIN.com entry
-      // (#1178). They stamp the real source server-side, so send no `source`
-      // header at all here — not a blank one. GETs and `playing_handicaps`
-      // still send it; GHIN may key off it there and that API is not ours.
       const options: Parameters<typeof this.httpClient.fetch>[0]['options'] = {
         method: 'POST',
         body: JSON.stringify(parsedRequest.data),
-        headers: { source: OMIT_HEADER },
       }
 
       const result = await this.httpClient.fetch<{ score: ScorePostResponse }>({
