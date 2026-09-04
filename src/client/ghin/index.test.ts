@@ -22,6 +22,7 @@ vi.mock('../request-client', () => ({
     fetchCustomPath: mockFetchCustomPath,
   })),
   CLIENT_SOURCE: 'GHINcom',
+  OMIT_HEADER: '__omit__',
 }))
 
 describe('GhinClient', () => {
