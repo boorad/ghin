@@ -1,5 +1,5 @@
 ---
-'@spicygolf/ghin': patch
+'@spicygolf/ghin': minor
 ---
 
 Score posts no longer send the `source: GHINcom` header
