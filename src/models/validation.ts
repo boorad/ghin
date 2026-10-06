@@ -108,9 +108,10 @@ export const gender = z.enum(['M', 'F'])
 
 /**
  * A Handicap Index value carrying a WHS status suffix, e.g. `19.1M` (modified by
- * the Handicap Committee) or `12.4WD` (withdrawn). GHIN returns these in
- * `handicap_index`, and only `hi_display` is guaranteed to be a display string —
- * so the numeric field has to cope with them too.
+ * the Handicap Committee). GHIN returns these in `handicap_index`, and only
+ * `hi_display` is guaranteed to be a display string — so the numeric field has to
+ * cope with them too. A withdrawn index is not suffixed: GHIN sends a bare `"WD"`
+ * (see `NULL_HANDICAP_MARKERS`).
  */
 const HANDICAP_WITH_SUFFIX = /^([+-]?\d+(?:\.\d+)?)[A-Za-z]+$/
 
@@ -135,6 +136,14 @@ const HANDICAP_WITH_SUFFIX = /^([+-]?\d+(?:\.\d+)?)[A-Za-z]+$/
  */
 const NO_HANDICAP_SENTINEL = 999
 
+/**
+ * String markers GHIN sends in place of a Handicap Index; all map to `null`. `NH` is
+ * no handicap, `-` is a blank display, `WD` is a withdrawn index (issue #91 — GHIN sends a bare `"WD"` with
+ * `hi_value: 999` and `hi_withdrawn: true`). Exact match only, so an unknown marker
+ * still fails validation and surfaces through `onDegraded`.
+ */
+const NULL_HANDICAP_MARKERS = new Set(['NH', 'WD', '-'])
+
 // `z.null()` and the blank-string branch are ordered ahead of `float` on purpose:
 // `float` is `z.coerce.number()` and `Number(null) === Number('') === Number('  ') === 0`,
 // so with `float` first a no-handicap golfer parsed as scratch (issue #63). Unions
@@ -147,7 +156,7 @@ export const handicap = z
       return true
     }
 
-    if (value === 'NH' || value === '-') {
+    if (NULL_HANDICAP_MARKERS.has(value)) {
       return true
     }
 
@@ -157,7 +166,7 @@ export const handicap = z
     return typeof value === 'string' && HANDICAP_WITH_SUFFIX.test(value)
   })
   .transform((value) => {
-    if (value === null || value === '' || value === 'NH' || value === '-') {
+    if (value === null || value === '' || (typeof value === 'string' && NULL_HANDICAP_MARKERS.has(value))) {
       return null
     }
 

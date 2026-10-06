@@ -148,6 +148,7 @@ describe('Validation', () => {
       expect(handicap.safeParse('-10').success).toBe(true)
       expect(handicap.safeParse('54.0').success).toBe(true)
       expect(handicap.safeParse('NH').success).toBe(true)
+      expect(handicap.safeParse('WD').success).toBe(true)
     })
 
     it('should reject invalid handicap values', () => {
@@ -386,6 +387,12 @@ describe('Validation', () => {
       expect(handicap.parse('-')).toBe(null)
     })
 
+    // Issue #91: GHIN sends a bare "WD" for a withdrawn Handicap Index.
+    it('maps the withdrawn marker to null', () => {
+      expect(handicap.parse('WD')).toBe(null)
+      expect(handicap.nullish().parse('WD')).toBe(null)
+    })
+
     it('still parses a plain numeric index', () => {
       expect(handicap.parse('19.1')).toBe(19.1)
       expect(handicap.parse(19.1)).toBe(19.1)
@@ -394,6 +401,9 @@ describe('Validation', () => {
     it('still rejects a string that is not a handicap at all', () => {
       expect(handicap.safeParse('not a handicap').success).toBe(false)
       expect(handicap.safeParse('M').success).toBe(false)
+      // Markers are an exact match, so an unknown one still surfaces via `onDegraded`.
+      expect(handicap.safeParse('wd').success).toBe(false)
+      expect(handicap.safeParse('W').success).toBe(false)
     })
   })
 })

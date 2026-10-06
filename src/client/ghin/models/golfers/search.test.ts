@@ -43,6 +43,32 @@ describe('Golfer Search Schema', () => {
       }
     })
 
+    // Issue #91: a withdrawn Handicap Index comes back as a bare "WD" (with
+    // `hi_value: 999` and `hi_withdrawn: true`), observed on api-uat.ghin.com.
+    it('should map a withdrawn "WD" handicap to null and keep the display', () => {
+      const result = schemaGolfer.safeParse({
+        ...minimalGolfer,
+        handicap_index: 'WD',
+        low_hi: 'WD',
+        hi_display: 'WD',
+        low_hi_display: 'WD',
+        hi_value: 999,
+        low_hi_value: 999,
+        hi_withdrawn: true,
+      })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.handicap_index).toBe(null)
+        expect(result.data.low_hi).toBe(null)
+        expect(result.data.hi_value).toBe(null)
+        expect(result.data.low_hi_value).toBe(null)
+        expect(result.data.hi_display).toBe('WD')
+        expect(result.data.low_hi_display).toBe('WD')
+        expect(result.data).toMatchObject({ hi_withdrawn: true })
+      }
+    })
+
     // Production, 2026-09-03: a 23-row `golfers.search` came back 22 valid + 1
     // invalid because the dropped golfer had no recorded low index, which GHIN
     // reports as `low_hi_value: 999` plus a *blank* `low_hi_display` — and
@@ -221,6 +247,32 @@ describe('Golfer Search Schema', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data.golfers.map((g) => g.ghin)).toEqual([1234567, 13362874])
+        expect(result.data.invalid).toEqual([])
+      }
+    })
+
+    // Issue #91: UAT golfer 13374361, whose withdrawn index GHIN sends as "WD",
+    // was dropped into `invalid` and read as "not on GHIN".
+    it('should keep a golfer with a withdrawn "WD" handicap in the valid partition', () => {
+      const withdrawn = {
+        last_name: 'Test',
+        gender: 'M',
+        status: 'Active',
+        ghin: '13374361',
+        handicap_index: 'WD',
+        association_name: 'Test GPA Golf Association',
+        low_hi: 'WD',
+        hi_value: 999,
+        hi_display: 'WD',
+        hi_withdrawn: true,
+        low_hi_value: 999,
+        low_hi_display: 'WD',
+      }
+      const result = schemaGolfersSearchResponse.safeParse({ golfers: [minimalGolfer, withdrawn] })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.golfers.map((g) => g.ghin)).toEqual([1234567, 13374361])
         expect(result.data.invalid).toEqual([])
       }
     })

@@ -79,7 +79,7 @@ if (result.isErr()) {
   console.error(result.error.code, result.error.statusCode, result.error.message)
 } else {
   // `undefined` when no golfer matches, and `handicap_index` is `null`
-  // for a golfer with no established index (GHIN sends `"NH"` on the wire)
+  // for a golfer with no established index (GHIN sends `"NH"`, or `"WD"` when withdrawn, on the wire)
   const golfer = result.value
   console.log(`Golfer ${ghinNumber} has a handicap of ${golfer?.handicap_index}`)
 }
