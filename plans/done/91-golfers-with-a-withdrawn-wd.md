@@ -12,7 +12,7 @@ Handicap Index is withdrawn (with `hi_value: 999`, `hi_withdrawn: true`). The sh
 
 - [x] Phase 1: accept `"WD"` in `handicap` (→ `null`), fix the `12.4WD` JSDoc, tests in
       `validation.test.ts` and `golfers/search.test.ts`
-- [ ] Verify against UAT (golfer 13374361)
+- [x] Verify against UAT (golfer 13374361) — search/getOne/getMany keep him with `handicap_index: null`, `hi_display: "WD"`; `main` drops him (DEGRADED 1 of 1)
 
 ## Decisions
 
@@ -27,3 +27,6 @@ None asked — no structural forks.
 - Only the golfer record carries `"WD"` (scores, course handicaps and course-player handicaps send `"NH"` for the
   same golfer on UAT); they share `handicap`, so they're covered anyway.
 - Changeset bump: `patch` (matches #56, #85 validator-loosening precedent).
+- Review: renamed `NO_HANDICAP_DISPLAYS` → `NULL_HANDICAP_MARKERS` (it now holds a withdrawn marker). Skipped the
+  README line-length nit (under the 120 limit). UAT golfer 13373258 is no longer NH (UAT data drifted to 11.4);
+  the recorded fixtures that cite it are snapshots and stay as-is.
