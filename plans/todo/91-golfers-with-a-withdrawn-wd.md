@@ -10,7 +10,7 @@ Handicap Index is withdrawn (with `hi_value: 999`, `hi_withdrawn: true`). The sh
 
 ## Live tracker
 
-- [ ] Phase 1: accept `"WD"` in `handicap` (→ `null`), fix the `12.4WD` JSDoc, tests in
+- [x] Phase 1: accept `"WD"` in `handicap` (→ `null`), fix the `12.4WD` JSDoc, tests in
       `validation.test.ts` and `golfers/search.test.ts`
 - [ ] Verify against UAT (golfer 13374361)
 
